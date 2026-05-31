@@ -1,6 +1,6 @@
 ## Why
 
-Freelancers in emerging markets lose $600+/year on fees from banks and payment processors, and many providers have poor local coverage or freeze accounts arbitrarily. Woosh V1 removes friction on both sides: recipients register once and share a payment link, senders pay USDC directly from any wallet — no bank, no gas token, no seed phrases required.
+Anyone expecting payment loses money on bank fees, poor local coverage, and frozen accounts. Woosh V1 removes friction on both sides: recipients register once and share a payment link, senders pay USDC directly from any wallet — no bank, no gas token, no seed phrases required.
 
 ## What Changes
 

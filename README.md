@@ -1,83 +1,70 @@
 # Woosh
 
-Cross-border USDC payments via a simple link. No bank, no ETH, no crypto knowledge required on either side.
+Send a payment link. Get paid in seconds. No bank required.
 
-> Send a link. Get paid in seconds. No bank required.
+> Built on [Arc](https://arc.network) — the only chain where USDC is the native gas token.
 
-Built for freelancers in emerging markets (UA, AR, NG, PK) who lose hundreds per year to traditional payment fees, poor bank coverage, or tools that require both sides to already be in crypto.
+## What it does
 
-## How it works
+- **Recipient** signs up with email → gets an embedded wallet and a personal payment link (`woosh.app/pay/username`)
+- **Sender** opens the link, connects any EVM wallet, and sends USDC on Arc testnet
+- **Onboarding guide** for senders who need a wallet or USDC — 3-step, no crypto jargon
 
-**Freelancer (once)**
-Sign up with email → embedded wallet is created automatically → share a personal payment link (`/pay/username`).
+## Stack
 
-**Client (each payment)**
-Open the link → enter amount → pay with USDC from any wallet → done.
+| Layer | Tech |
+|---|---|
+| Framework | Next.js 14 (App Router) |
+| Wallets (recipients) | Circle User-Controlled Wallets + email OTP |
+| Wallets (senders) | Wagmi + Viem (Injected, Coinbase, WalletConnect) |
+| Chain | Arc testnet (chainId 3693, native USDC) |
+| Styling | Tailwind CSS |
 
-**No wallet? No problem.**
-Clients who are new to crypto can follow a built-in onboarding guide:
-- Create a Woosh account → embedded wallet by email, no seed phrases
-- Get USDC → testnet faucet (one click), or fiat on-ramp in V2
-- Return to the payment page and pay
+## Getting started
 
-**Behind the scenes**
-USDC settles on Arc in under a second and appears in a simple dashboard — like a bank balance, not a wallet UI.
+```bash
+yarn install
+cp .env.local.example .env.local
+# fill in .env.local (see below)
+yarn dev
+```
 
-## Why Arc
+## Environment variables
 
-- USDC is native gas — recipients never need ETH or a second token
-- Embedded wallets run entirely on USDC with no paymaster surcharges
-- Sub-second finality fits a "paid → balance updated" experience
+```bash
+# Arc Network (defaults work for testnet)
+NEXT_PUBLIC_ARC_CHAIN_ID=3693
+NEXT_PUBLIC_ARC_RPC_URL=https://rpc-testnet.arc.network
+NEXT_PUBLIC_ARC_EXPLORER_URL=https://explorer-testnet.arc.network
+NEXT_PUBLIC_ARC_FAUCET_URL=https://faucet-testnet.arc.network/api/claim
 
-On typical EVM alternatives, gas abstraction adds cost or operational burden — a poor fit for non-crypto users.
+# WalletConnect — https://cloud.walletconnect.com
+NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=
+
+# Circle — https://console.circle.com
+CIRCLE_API_KEY=                   # Project Settings → API Keys
+NEXT_PUBLIC_CIRCLE_APP_ID=        # Wallets → User Controlled → Configurator
+```
+
+### Circle setup (required)
+
+1. [console.circle.com](https://console.circle.com) → create a project
+2. Copy **API Key** → `CIRCLE_API_KEY`
+3. **Wallets → User Controlled → Configurator** → copy **App ID** → `NEXT_PUBLIC_CIRCLE_APP_ID`
+4. Same page → **Authentication Methods → Email OTP** → configure SMTP ([Resend](https://resend.com) recommended)
+
+## Routes
+
+| Route | Description |
+|---|---|
+| `/` | Landing page |
+| `/signup` | Email registration — creates Circle embedded wallet |
+| `/dashboard` | Balance, transaction history, payment link |
+| `/pay/[slug]` | Public payment page for senders |
 
 ## Roadmap
 
-| Version | Focus |
-|---------|-------|
-| **V1** | Payment links, embedded wallet, crypto-to-crypto |
-| **V2** | Fiat on-ramp (Transak), fiat off-ramp, CCTP bridge |
-| **V3** | Yield on idle USDC balance (Aave / USYC) |
-
-Not in V1: fiat on/off-ramp, invoice PDFs, recurring or multi-recipient flows.
-
-## Tech stack
-
-| Layer | Choice |
-|-------|--------|
-| Frontend | Next.js (App Router), Tailwind CSS |
-| Language | TypeScript |
-| Web3 | Wagmi, Viem |
-| Wallets | Circle Programmable Wallets (email → embedded wallet) |
-| On-ramp | Transak — V2 only |
-| Network | Arc testnet → Arc mainnet |
-
-## Development
-
-```bash
-git clone <repo-url>
-cd woosh
-cp .env.example .env.local
-npm install
-npm run dev
-```
-
-Required environment variables:
-
-- Circle Programmable Wallets API credentials
-- Arc RPC URL (testnet: see [Arc docs](https://docs.arc.network))
-- Transak API key (V2)
-
-## Docs & links
-
-- [Arc documentation](https://docs.arc.network)
-- [Circle Wallets SDK](https://developers.circle.com/w3s/docs)
-- [Transak docs](https://docs.transak.com)
-
-## Project context
-
-[`CLAUDE.md`](./CLAUDE.md) holds full product context for contributors and AI assistants: user flows, V1 scope, competitive framing, and visual style.
-
-## License
-
-TBD.
+- **V1** (now) — crypto-to-crypto, Arc testnet
+- **V2** — agentic payments API (REST + webhooks for AI agents), Supabase for payment metadata
+- **V3** — yield on idle USDC (Aave / USYC)
+- **V4** — fiat on-ramp via Transak

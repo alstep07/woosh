@@ -2,10 +2,11 @@
 
 ## What We're Building
 
-**Woosh** — a cross-border USDC payment platform for freelancers
-from emerging markets (UA, AR, NG, PK) where recipients get paid
-instantly via a payment link, and senders can pay with USDC from
-any wallet. No bank, no ETH, no friction.
+**Woosh** — a USDC payment platform for humans and AI agents.
+Send a payment link, get paid instantly. No bank, no ETH, no friction.
+Built on Arc — the only network where USDC is native gas.
+
+Designed from day one to serve both humans and AI agents.
 
 ---
 
@@ -17,12 +18,12 @@ any wallet. No bank, no ETH, no friction.
 
 ## Problem
 
-Freelancers in emerging markets lose $600+/year on fees from
-traditional payment providers. Many providers have poor coverage
-for local banks or freeze accounts without warning. Crypto
-invoicing tools require both sides to already be in crypto.
+Sending money across borders is slow, expensive, and broken.
+Traditional providers charge 2–5%, take days, and freeze accounts.
+Crypto payment tools require both sides to already be in crypto.
+AI agents have no payment infrastructure at all.
 
-Woosh removes the barrier on both sides.
+Woosh fixes all three.
 
 ---
 
@@ -34,68 +35,86 @@ Arc is the only network where:
 - Sub-second finality
 - Circle full-stack integration (Wallets, CCTP, USYC)
 
-For a payment product targeting non-crypto users,
-"no second token ever" is the killer feature.
+"No second token ever" is the killer feature for any user
+who isn't already deep in crypto.
 
 ---
 
 ## Roadmap
 
 ### V1 — Web3 Payments (now)
-Crypto-to-crypto. Recipient registers with email, gets embedded
-wallet and payment link. Sender pays USDC from any wallet.
+Crypto-to-crypto. User registers with email, gets a
+User-Controlled embedded wallet (Circle UCW — PIN or email OTP,
+no entity secret, user holds their own keys) and a payment link.
+Sender pays USDC from any wallet.
 Onboarding guide for senders who need help getting started.
 
-### V2 — Web2 Integrations
-Fiat on-ramp via Transak — client pays by card, USDC arrives on Arc.
-Full no-crypto UX for sender.
+### V2 — Agentic Payments
+Woosh as payment infrastructure for AI agents.
+REST API for programmatic payments, webhooks on confirmation,
+agent wallets, spending limits. See section below.
 
 ### V3 — Yield on Balance
 Idle USDC earns yield via Aave or USYC (Circle tokenized treasury).
 User opts in, withdraw anytime.
 
+### V4 — Web2 Integrations
+Fiat on-ramp via Transak — sender pays by card, USDC arrives on Arc.
+CCTP bridge from Base/Ethereum for users coming from other chains.
+Full no-crypto UX for sender.
+
+---
+
+## Wallet Architecture
+
+Using **User-Controlled Wallets (UCW)** — not Developer-Controlled.
+
+- User holds their own keys (encrypted by their PIN)
+- No entity secret required in backend
+- Circle SDK renders a secure iframe for PIN entry —
+  Woosh never sees the secret
+- On receiving payments: no PIN needed, funds arrive automatically
+- On sending payments: user enters PIN or email OTP once per tx
+- Woosh is never a custodian of user funds
+
 ---
 
 ## User Flows
 
-### Recipient (freelancer)
-1. Signs up with email
-2. Circle creates embedded wallet automatically
-3. Gets personal payment link → woosh.app/pay/username
-4. Shares link with client
+### Recipient
+1. Signs up with email, sets PIN
+2. Circle creates User-Controlled embedded wallet
+3. Gets personal payment link → woosh.app/pay/slug
+4. Shares link
 5. Sees balance + transaction history in dashboard
+6. Receiving USDC requires no PIN — funds arrive automatically
 
-### Sender (client) — happy path
-1. Opens /pay/username
+### Sender — has wallet (external)
+1. Opens /pay/slug
 2. Enters amount
-3. Connects wallet (MetaMask, Coinbase Wallet, WalletConnect)
+3. Connects wallet via WalletConnect
 4. Pays USDC on Arc
 5. Done — recipient gets funds in <1 second
 
+### Sender — has Woosh account
+1. Opens /pay/slug
+2. Enters amount
+3. Clicks Pay → Circle SDK shows secure PIN iframe
+4. Enters PIN → transaction signed and sent
+5. Done
+
 ### Sender — needs help (no wallet or no USDC)
-1. Opens /pay/username
-2. Sees payment form
-3. Clicks "I don't know where to start"
-4. Onboarding guide appears (3 steps, single path):
-   - Step 1: Create a Woosh account → embedded wallet
-             created by email, no MetaMask, no seed phrases
+1. Opens /pay/slug
+2. Clicks "I don't know where to start"
+3. Onboarding guide (non-blocking, dismissible, single path):
+   - Step 1: Create Woosh account → UCW wallet by email + PIN
    - Step 2: Get USDC
              → Testnet: one-click Arc faucet built into guide
              → Mainnet (V2): Transak fiat on-ramp or
                CCTP bridge from Base/Ethereum
-               (direct Binance→Arc not available until
-               Arc is listed as withdrawal network on exchanges)
-   - Step 3: Return to payment page and pay
-5. Guide is non-blocking — dismissible at any time
-6. Only one path shown — no wallet choices, no confusion
-
-### Sender — has wallet, no USDC
-1. Opens /pay/username
-2. Connects wallet
-3. App detects zero USDC balance on Arc
-4. Shows inline banner: "You need USDC on Arc to pay.
-   Here's how to get some →"
-5. Same guide, jumps directly to Step 2
+   - Step 3: Return and pay
+4. If wallet connected but zero USDC on Arc →
+   inline banner shown automatically → links to Step 2
 
 ---
 
@@ -103,11 +122,11 @@ User opts in, withdraw anytime.
 
 ```
 Frontend:     Next.js 14 (App Router)
-Language:     TypeScript
+Language:     TypeScript (strict)
 Styling:      Tailwind CSS
 Web3:         Wagmi + Viem
-Wallets:      Circle Programmable Wallets SDK
-              (embedded wallet by email for recipients)
+Wallets:      Circle User-Controlled Wallets SDK (UCW)
+              email signup + PIN, secure iframe for signing
 On-ramp:      Transak SDK (V2 only)
 Network:      Arc testnet → Arc mainnet (summer 2026)
 DB:           Supabase (V2, for payment metadata)
@@ -122,7 +141,7 @@ type User = {
   id: string
   email: string
   walletId: string        // Circle wallet ID
-  walletAddress: string   // onchain address
+  walletAddress: string   // onchain address on Arc
   paymentSlug: string     // e.g. "alex" → /pay/alex
   createdAt: string
 }
@@ -131,7 +150,7 @@ type Payment = {
   id: string
   fromAddress: string
   toAddress: string
-  amount: string          // in USDC, e.g. "100.00"
+  amount: string          // USDC, full precision e.g. "100.000000"
   txHash: string
   timestamp: string
   status: 'pending' | 'confirmed' | 'failed'
@@ -140,7 +159,7 @@ type Payment = {
 type PaymentLink = {
   slug: string
   ownerAddress: string
-  label: string           // display name
+  label: string
   createdAt: string
 }
 ```
@@ -152,20 +171,22 @@ type PaymentLink = {
 | Route | Description |
 |-------|-------------|
 | `/` | Landing page |
-| `/signup` | Email registration, creates embedded wallet |
-| `/dashboard` | Balance, transaction history, payment link |
-| `/pay/[slug]` | Public payment page for clients |
+| `/signup` | Email + PIN registration, creates UCW wallet |
+| `/dashboard` | Balance, tx history, payment link |
+| `/pay/[slug]` | Public payment page |
 
 ---
 
 ## V1 What's Explicitly Out of Scope
 
-- Transak fiat on-ramp (V2)
+- Agentic API / webhooks (V2)
 - Yield on balance (V3)
+- Transak fiat on-ramp (V4)
+- CCTP bridge (V4)
 - Invoice PDF export
 - Recurring payments
 - Multi-recipient / payroll
-- Off-ramp to local bank/card
+- Off-ramp to bank/card
 
 ---
 
@@ -174,7 +195,7 @@ type PaymentLink = {
 V1: read directly from Arc via Viem — no database needed.
 `useTransactionHistory(address)` hook fetches onchain data.
 V2: add Supabase to store payment metadata (sender name,
-description, amount label) matched to txHash.
+description, memo) matched to txHash.
 
 ---
 
@@ -201,28 +222,58 @@ description, amount label) matched to txHash.
 - No MetaMask prompts, no seed phrases, no network switching
 - All amounts shown in USD, USDC under the hood
 - Instant tx confirmation feedback
-- Onboarding guide is always accessible, never blocking
+- Onboarding guide always accessible, never blocking
+- PIN entry via Circle's secure iframe — never in Woosh UI directly
+
+---
+
+## API Design Principles (applies from V1)
+
+Woosh serves both humans and AI agents as first-class users.
+Keep this in mind when building every API route:
+
+- All API routes must be stateless and Bearer token ready
+- Payment confirmation must be emittable as a webhook —
+  design the event now, wire delivery in V2
+- All amounts stored and returned with full USDC precision
+  (no rounding, no float arithmetic — use string or bigint)
+- No assumptions that a human is in the loop in
+  business logic — keep UI concerns out of API handlers
+
+---
+
+## V2 — Agentic Payments (future reference)
+
+**What gets added:**
+- `POST /api/pay` — programmatic endpoint for agents
+  (Bearer token, amount, recipient slug, memo)
+- Webhook on tx confirmed → agent continues autonomously
+- Agent wallets — UCW or DCW created for AI agents
+- Spending limits — per-wallet USDC cap via smart contract
+
+**Scenarios:**
+- Agent hires someone → pays on task completion automatically
+- Agent manages payroll → distributes USDC without human input
+- Agent pays another agent → micro-payments per subtask
 
 ---
 
 ## Key APIs & Docs
 
-- Arc testnet RPC: check `docs.arc.network`
-- Circle Wallets SDK: `developers.circle.com/w3s/docs`
+- Arc testnet RPC: `docs.arc.network`
+- Circle UCW SDK: `developers.circle.com/w3s/docs`
+- Circle Console: `console.circle.com`
 - Transak SDK: `docs.transak.com` (V2)
-- Arc docs: `docs.arc.network`
-- Arc House: `community.arc.io`
+- WalletConnect: `cloud.walletconnect.com`
+- Supabase: `supabase.com` (V2)
 
 ---
 
-## Competitive Position
+## Environment Variables
 
-| | Card payment | No wallet needed | Works in UA |
-|---|---|---|---|
-| Coinbase Commerce | ❌ | ❌ | ✅ |
-| Request Network | ❌ | ❌ | ✅ |
-| Payoneer | ✅ | ✅ | ⚠️ |
-| **Woosh V1** | ❌ | ✅ recipient | ✅ |
-| **Woosh V2** | ✅ | ✅ both | ✅ |
-
----
+```
+CIRCLE_API_KEY=                       # backend only
+NEXT_PUBLIC_CIRCLE_CLIENT_KEY=        # frontend (UCW SDK)
+NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=
+NEXT_PUBLIC_ARC_RPC_URL=              # Arc testnet RPC
+```

@@ -1,0 +1,20 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #0A0F1E;
+  --foreground: #F1F5F9;
+}
+
+body {
+  color: var(--foreground);
+  background: var(--background);
+  font-family: Inter, sans-serif;
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}
