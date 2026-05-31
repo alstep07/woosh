@@ -1,37 +1,28 @@
-# CLAUDE.md — Project Context
+# CLAUDE.md — Woosh Project Context
 
 ## What We're Building
 
-**Woosh** — a payment tool for freelancers from emerging markets (UA, AR, NG, PK) where a client pays with a card as usual, and the recipient receives USDC in under a second — no wallet setup, no bank, no ETH.
-
-The core insight: the only network where an embedded wallet works entirely on USDC (gas included) without a second token or developer gas subsidies is Arc.
+**Woosh** — a cross-border USDC payment platform for freelancers
+from emerging markets (UA, AR, NG, PK) where recipients get paid
+instantly via a payment link, and senders can pay with USDC from
+any wallet. No bank, no ETH, no friction.
 
 ---
 
 ## One-liner
 
-> "The first payment tool where a client pays by card and a freelancer in Ukraine receives USDC instantly — without ever touching a crypto wallet."
+> "Send a link. Get paid in seconds. No bank required."
 
 ---
 
 ## Problem
 
-Freelancers in emerging markets lose $600+/year on fees from traditional payment providers. Many providers have poor coverage for local banks or freeze accounts without warning. Crypto invoicing tools require both sides to already be in crypto.
+Freelancers in emerging markets lose $600+/year on fees from
+traditional payment providers. Many providers have poor coverage
+for local banks or freeze accounts without warning. Crypto
+invoicing tools require both sides to already be in crypto.
 
 Woosh removes the barrier on both sides.
-
----
-
-## How It Works
-
-**Recipient (freelancer, once):**
-Signs up with email → Circle creates an embedded wallet under the hood → gets a personal payment link
-
-**Sender (client, each time):**
-Opens the link → enters amount → pays by card via Transak → done
-
-**Under the hood:**
-Transak converts fiat to USDC → sends to Arc → freelancer sees balance in a dashboard like a normal bank account
 
 ---
 
@@ -40,112 +31,198 @@ Transak converts fiat to USDC → sends to Arc → freelancer sees balance in a 
 Arc is the only network where:
 - USDC is native gas — no ETH needed ever
 - Embedded wallet works fully on USDC with zero surcharge
-- On other EVM networks: paymasters often add a surcharge OR the developer subsidizes gas
-- Sub-second finality vs multi-second confirmation on typical alternatives
+- Sub-second finality
+- Circle full-stack integration (Wallets, CCTP, USYC)
 
-For a payment product targeting non-crypto users, "no second token ever" is the killer feature.
+For a payment product targeting non-crypto users,
+"no second token ever" is the killer feature.
+
+---
+
+## Roadmap
+
+### V1 — Web3 Payments (now)
+Crypto-to-crypto. Recipient registers with email, gets embedded
+wallet and payment link. Sender pays USDC from any wallet.
+Onboarding guide for senders who need help getting started.
+
+### V2 — Web2 Integrations
+Fiat on-ramp via Transak — client pays by card, USDC arrives on Arc.
+Full no-crypto UX for sender.
+
+### V3 — Yield on Balance
+Idle USDC earns yield via Aave or USYC (Circle tokenized treasury).
+User opts in, withdraw anytime.
+
+---
+
+## User Flows
+
+### Recipient (freelancer)
+1. Signs up with email
+2. Circle creates embedded wallet automatically
+3. Gets personal payment link → woosh.app/pay/username
+4. Shares link with client
+5. Sees balance + transaction history in dashboard
+
+### Sender (client) — happy path
+1. Opens /pay/username
+2. Enters amount
+3. Connects wallet (MetaMask, Coinbase Wallet, WalletConnect)
+4. Pays USDC on Arc
+5. Done — recipient gets funds in <1 second
+
+### Sender — needs help (no wallet or no USDC)
+1. Opens /pay/username
+2. Sees payment form
+3. Clicks "I don't know where to start"
+4. Onboarding guide appears (3 steps, single path):
+   - Step 1: Create a Woosh account → embedded wallet
+             created by email, no MetaMask, no seed phrases
+   - Step 2: Get USDC
+             → Testnet: one-click Arc faucet built into guide
+             → Mainnet (V2): Transak fiat on-ramp or
+               CCTP bridge from Base/Ethereum
+               (direct Binance→Arc not available until
+               Arc is listed as withdrawal network on exchanges)
+   - Step 3: Return to payment page and pay
+5. Guide is non-blocking — dismissible at any time
+6. Only one path shown — no wallet choices, no confusion
+
+### Sender — has wallet, no USDC
+1. Opens /pay/username
+2. Connects wallet
+3. App detects zero USDC balance on Arc
+4. Shows inline banner: "You need USDC on Arc to pay.
+   Here's how to get some →"
+5. Same guide, jumps directly to Step 2
 
 ---
 
 ## Tech Stack
 
 ```
-Frontend:     Next.js (App Router)
-Web3:         Wagmi + Viem
-Wallets:      Circle Programmable Wallets SDK (embedded wallet by email)
-On-ramp:      Transak SDK (card → USDC for client)
-Network:      Arc testnet → Arc mainnet (summer 2026)
+Frontend:     Next.js 14 (App Router)
+Language:     TypeScript
 Styling:      Tailwind CSS
+Web3:         Wagmi + Viem
+Wallets:      Circle Programmable Wallets SDK
+              (embedded wallet by email for recipients)
+On-ramp:      Transak SDK (V2 only)
+Network:      Arc testnet → Arc mainnet (summer 2026)
+DB:           Supabase (V2, for payment metadata)
 ```
 
 ---
 
-## Roadmap
+## Core TypeScript Types
 
-| Version | What | Timeline |
-|---------|------|----------|
-| **V1** | Payment Link — email signup, embedded wallet, card payment, USDC settlement | Now (1-2 weeks) |
-| **V2** | Invoicing — invoice with description, amount, deadline, PDF export, payment history | Next |
-| **V3** | Recurring Payments — smart contract for retainers and subscriptions | After V2 |
-| **V4** | Payroll — one sender → multiple recipients in one transaction | After V3 |
-| **V5** | Full Payment OS — fiat off-ramp to local cards/banks, country localization | Long-term |
+```typescript
+type User = {
+  id: string
+  email: string
+  walletId: string        // Circle wallet ID
+  walletAddress: string   // onchain address
+  paymentSlug: string     // e.g. "alex" → /pay/alex
+  createdAt: string
+}
+
+type Payment = {
+  id: string
+  fromAddress: string
+  toAddress: string
+  amount: string          // in USDC, e.g. "100.00"
+  txHash: string
+  timestamp: string
+  status: 'pending' | 'confirmed' | 'failed'
+}
+
+type PaymentLink = {
+  slug: string
+  ownerAddress: string
+  label: string           // display name
+  createdAt: string
+}
+```
 
 ---
 
-## V1 Scope (Build This First)
+## Pages & Routes
 
-### Core User Stories
+| Route | Description |
+|-------|-------------|
+| `/` | Landing page |
+| `/signup` | Email registration, creates embedded wallet |
+| `/dashboard` | Balance, transaction history, payment link |
+| `/pay/[slug]` | Public payment page for clients |
 
-1. **Freelancer registers** with email → embedded wallet created automatically
-2. **Freelancer gets a payment link** → `/pay/username` or unique slug
-3. **Client opens link** → sees amount field + "Pay with card" button
-4. **Client pays by card** via Transak widget → USDC sent to freelancer's Arc wallet
-5. **Freelancer sees balance** and transaction history in dashboard
+---
 
-### What's NOT in V1
-- Off-ramp (fiat withdrawal) — user manages this themselves
-- Invoice PDF
+## V1 What's Explicitly Out of Scope
+
+- Transak fiat on-ramp (V2)
+- Yield on balance (V3)
+- Invoice PDF export
 - Recurring payments
-- Multi-recipient
+- Multi-recipient / payroll
+- Off-ramp to local bank/card
+
+---
+
+## Transaction History
+
+V1: read directly from Arc via Viem — no database needed.
+`useTransactionHistory(address)` hook fetches onchain data.
+V2: add Supabase to store payment metadata (sender name,
+description, amount label) matched to txHash.
+
+---
+
+## Visual Style
+
+- Minimal fintech — Stripe meets Linear
+- Dark background: `#0A0F1E` (deep navy)
+- Primary accent: `#0EA5E9` (electric blue)
+- Secondary accent: `#06B6D4` (cyan)
+- Text primary: `#F1F5F9`
+- Text secondary: `#64748B`
+- Cards: `#111827` with 1px border `#1E293B`
+- Border radius: 12px cards, 8px inputs
+- Font: Inter
+- No gradients on UI elements
+- Subtle blue glow on primary CTA only
+- Mobile-first, lots of whitespace
+
+---
+
+## Key UX Principles
+
+- Zero crypto jargon visible to end user
+- No MetaMask prompts, no seed phrases, no network switching
+- All amounts shown in USD, USDC under the hood
+- Instant tx confirmation feedback
+- Onboarding guide is always accessible, never blocking
 
 ---
 
 ## Key APIs & Docs
 
-- Arc testnet RPC: `https://rpc.arc.network` (check docs.arc.network)
-- Circle Wallets SDK: `https://developers.circle.com/w3s/docs`
-- Transak SDK: `https://docs.transak.com`
-- Arc docs: `https://docs.arc.network`
-- Arc House (community): `https://community.arc.io`
+- Arc testnet RPC: check `docs.arc.network`
+- Circle Wallets SDK: `developers.circle.com/w3s/docs`
+- Transak SDK: `docs.transak.com` (V2)
+- Arc docs: `docs.arc.network`
+- Arc House: `community.arc.io`
 
 ---
 
 ## Competitive Position
 
-| | Client pays by card | Recipient needs no wallet | Works in UA |
+| | Card payment | No wallet needed | Works in UA |
 |---|---|---|---|
-| Crypto invoicing tools | ❌ | ❌ | ✅ |
-| Traditional payment providers | ✅ | ✅ | ⚠️ partial |
-| **Woosh** | ✅ | ✅ | ✅ |
+| Coinbase Commerce | ❌ | ❌ | ✅ |
+| Request Network | ❌ | ❌ | ✅ |
+| Payoneer | ✅ | ✅ | ⚠️ |
+| **Woosh V1** | ❌ | ✅ recipient | ✅ |
+| **Woosh V2** | ✅ | ✅ both | ✅ |
 
 ---
-
-## Content / Architects Program (Twitter Threads)
-
-Each build milestone = one thread. No hype, no rockets, no price talk. Arc's amplification guide rules:
-
-1. **"Why freelancers from UA lose $600/year on fees — and what I'm building instead"** → project kickoff
-2. **"Deployed first embedded wallet on Arc — here's how it works without a browser wallet"** → technical progress
-3. **"Client paid by card, I received USDC in 0.8 seconds — live demo"** → MVP shipped
-4. **"Arc vs other networks for a payment product — honest comparison with numbers"** → educational
-5. **"$1000 via a traditional provider vs Woosh — real cost breakdown"** → viral potential
-
-Thread style: builder-first, specific numbers, active voice, one emoji max, no financial language.
-
----
-
-## Architects Program Notes
-
-- Platform: `community.arc.io` (Arc House)
-- Points for: reading articles (5pts), forum posts (10pts), guest post (200pts), hackathon participation (200pts), hackathon win (500pts)
-- Content guide: `community.arc.io/en/public/resources/arc-engagement-amplification-guide`
-- Use "onchain" (not on-chain), avoid "web3", prefer "stablecoin finance" / "programmable dollars"
-- Tag: `@arc` not `@ARC` or `@arcnetwork`
-
----
-
-## Arc Brand Rules (for Twitter content)
-
-**Use:** onchain, stablecoin finance, programmable dollars, Internet Financial System, sub-second finality
-**Avoid:** 🚀📈🐂, "alpha", "100x", APR/yield/ROI language, token speculation, "revolutionary", "best", "guaranteed"
-**Do:** specific numbers, screenshots, code snippets, demo clips, active voice
-**Don't:** tag @arc in the post itself (put it in replies for amplification), add links (hurts reach)
-
----
-
-## Personal Context
-
-- Builder location: Odesa, Ukraine
-- Personal pain point: receiving international payments as a freelancer
-- Program: Arc Architects (currently earning points via content reading)
-- Goal: ship V1, document the build publicly, grow in Architects tiers

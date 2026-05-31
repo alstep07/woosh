@@ -1,85 +1,82 @@
 # Woosh
 
-Card payments in. USDC on Arc in under a second. No wallet setup for the freelancer, no crypto knowledge for the client.
+Cross-border USDC payments via a simple link. No bank, no ETH, no crypto knowledge required on either side.
 
-> The first payment tool where a client pays by card and a freelancer receives USDC instantly — without ever touching a crypto wallet.
+> Send a link. Get paid in seconds. No bank required.
 
 Built for freelancers in emerging markets (UA, AR, NG, PK) who lose hundreds per year to traditional payment fees, poor bank coverage, or tools that require both sides to already be in crypto.
 
 ## How it works
 
-**Freelancer (once)**  
-Sign up with email → embedded wallet is created automatically → share a personal payment link (`/pay/username` or slug).
+**Freelancer (once)**
+Sign up with email → embedded wallet is created automatically → share a personal payment link (`/pay/username`).
 
-**Client (each payment)**  
-Open the link → enter amount → pay by card → done.
+**Client (each payment)**
+Open the link → enter amount → pay with USDC from any wallet → done.
 
-**Behind the scenes**  
-Fiat is converted to USDC via an on-ramp, settled on [Arc](https://docs.arc.network), and shown in a simple dashboard — like a bank balance, not a wallet UI.
+**No wallet? No problem.**
+Clients who are new to crypto can follow a built-in onboarding guide:
+- Create a Woosh account → embedded wallet by email, no seed phrases
+- Get USDC → testnet faucet (one click), or fiat on-ramp in V2
+- Return to the payment page and pay
+
+**Behind the scenes**
+USDC settles on Arc in under a second and appears in a simple dashboard — like a bank balance, not a wallet UI.
 
 ## Why Arc
 
-Arc is the network this product is built on because:
-
 - USDC is native gas — recipients never need ETH or a second token
-- Embedded wallets can run entirely on USDC without paymaster surcharges or developer gas subsidies
-- Sub-second finality fits a “paid → balance updated” experience
+- Embedded wallets run entirely on USDC with no paymaster surcharges
+- Sub-second finality fits a "paid → balance updated" experience
 
-On typical EVM alternatives, gas abstraction often means extra cost or operational burden — a poor fit for non-crypto users.
+On typical EVM alternatives, gas abstraction adds cost or operational burden — a poor fit for non-crypto users.
 
-## Status
-
-**V1 in progress** — payment links, email signup, embedded wallet, card on-ramp, USDC settlement, and a basic dashboard.
+## Roadmap
 
 | Version | Focus |
-|---------|--------|
-| **V1** | Payment link, card pay, USDC settlement |
-| **V2** | Invoicing, PDF export, payment history |
-| **V3** | Recurring payments |
-| **V4** | Multi-recipient payroll |
-| **V5** | Off-ramp, localization |
+|---------|-------|
+| **V1** | Payment links, embedded wallet, crypto-to-crypto |
+| **V2** | Fiat on-ramp (Transak), fiat off-ramp, CCTP bridge |
+| **V3** | Yield on idle USDC balance (Aave / USYC) |
 
-Not in V1: fiat off-ramp, invoice PDFs, recurring or multi-recipient flows.
+Not in V1: fiat on/off-ramp, invoice PDFs, recurring or multi-recipient flows.
 
 ## Tech stack
 
 | Layer | Choice |
 |-------|--------|
 | Frontend | Next.js (App Router), Tailwind CSS |
+| Language | TypeScript |
 | Web3 | Wagmi, Viem |
 | Wallets | Circle Programmable Wallets (email → embedded wallet) |
-| On-ramp | Transak (card → USDC) |
+| On-ramp | Transak — V2 only |
 | Network | Arc testnet → Arc mainnet |
 
 ## Development
 
-The app scaffold is not in this repo yet. When it lands, setup will look roughly like:
-
 ```bash
-# clone, install, configure env, run dev server
 git clone <repo-url>
 cd woosh
-cp .env.example .env.local   # Circle, Transak, Arc RPC keys
+cp .env.example .env.local
 npm install
 npm run dev
 ```
 
-Required configuration (names may change with the scaffold):
+Required environment variables:
 
 - Circle Programmable Wallets API credentials
-- Transak API key / partner setup
 - Arc RPC URL (testnet: see [Arc docs](https://docs.arc.network))
+- Transak API key (V2)
 
 ## Docs & links
 
 - [Arc documentation](https://docs.arc.network)
 - [Circle Wallets SDK](https://developers.circle.com/w3s/docs)
 - [Transak docs](https://docs.transak.com)
-- [Arc House community](https://community.arc.io)
 
 ## Project context
 
-[`CLAUDE.md`](./CLAUDE.md) holds full product context for contributors and AI assistants: roadmap detail, V1 user stories, competitive framing, and Arc Architects notes.
+[`CLAUDE.md`](./CLAUDE.md) holds full product context for contributors and AI assistants: user flows, V1 scope, competitive framing, and visual style.
 
 ## License
 
