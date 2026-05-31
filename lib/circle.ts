@@ -35,9 +35,12 @@ export async function initializeUser(userToken: string) {
     return { challengeId: res.data!.challengeId! };
   } catch (err: unknown) {
     const code =
-      (err as { response?: { data?: { code?: number } } })?.response?.data
-        ?.code;
-    if (code === 155106) return { alreadyExists: true as const };
+      (err as { response?: { data?: { code?: number } } })?.response?.data?.code
+      ?? (err as { code?: number })?.code;
+    const msg = err instanceof Error ? err.message : "";
+    if (code === 155106 || msg.toLowerCase().includes("already been initialized")) {
+      return { alreadyExists: true as const };
+    }
     throw err;
   }
 }

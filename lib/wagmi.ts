@@ -1,19 +1,9 @@
-import { createConfig, http } from "wagmi";
-import { injected, coinbaseWallet, walletConnect } from "wagmi/connectors";
+import { getDefaultConfig } from "@rainbow-me/rainbowkit";
 import { arcTestnet } from "./arc";
 
-const projectId =
-  process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID ?? "";
-
-export const wagmiConfig = createConfig({
+export const wagmiConfig = getDefaultConfig({
+  appName: "Woosh",
+  projectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID ?? "",
   chains: [arcTestnet],
-  connectors: [
-    injected(),
-    coinbaseWallet({ appName: "Woosh" }),
-    walletConnect({ projectId }),
-  ],
-  transports: {
-    [arcTestnet.id]: http(),
-  },
   ssr: true,
 });

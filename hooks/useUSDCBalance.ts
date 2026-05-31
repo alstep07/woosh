@@ -14,10 +14,11 @@ export function useUSDCBalance(address?: `0x${string}`) {
   return useQuery<BalanceResult, Error>({
     queryKey: ["usdc-balance", address],
     enabled: !!address,
-    refetchInterval: 10_000,
+    retry: 1,
+    refetchInterval: 15_000,
     queryFn: async () => {
       const raw = await arcPublicClient.getBalance({ address: address! });
-      const formatted = parseFloat(formatUnits(raw, 6)).toFixed(2);
+      const formatted = parseFloat(formatUnits(raw, 18)).toFixed(2);
       const display = `$${formatted}`;
       return { raw, formatted, display };
     },

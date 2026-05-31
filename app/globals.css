@@ -18,3 +18,34 @@ body {
     text-wrap: balance;
   }
 }
+
+/* Full-screen animated background layer */
+.woosh-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+@keyframes woosh-pulse {
+  0%, 100% { opacity: 0.04; }
+  50%       { opacity: 0.18; }
+}
+
+.woosh-dot {
+  position: absolute;
+  width: 3px;
+  height: 3px;
+  border-radius: 9999px;
+  background-color: #0EA5E9;
+  animation: woosh-pulse 3s ease-in-out infinite;
+  will-change: opacity;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .woosh-dot {
+    animation: none;
+    opacity: 0.06;
+  }
+}

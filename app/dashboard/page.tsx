@@ -5,10 +5,11 @@ import { useRouter } from "next/navigation";
 import { useUSDCBalance } from "@/hooks/useUSDCBalance";
 import { useTransactionHistory } from "@/hooks/useTransactionHistory";
 import { formatDistanceToNow } from "@/lib/time";
+import BrandHeader from "@/components/BrandHeader";
+import { arcTestnet } from "@/lib/arc";
 
 type Session = {
   email: string;
-  slug: string;
   walletAddress: `0x${string}`;
 };
 
@@ -30,17 +31,23 @@ export default function DashboardPage() {
     }
   }, [router]);
 
-  const { data: balance, isError: balanceError } = useUSDCBalance(
+  const { data: balance, isLoading: balanceLoading, isError: balanceError } = useUSDCBalance(
     session?.walletAddress
   );
-  const { data: txs, isError: txError } = useTransactionHistory(
+  const { data: txs, isLoading: txsLoading, isError: txError } = useTransactionHistory(
     session?.walletAddress
   );
 
-  const paymentLink = session ? `woosh.app/pay/${session.slug}` : "";
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:3000";
+  const paymentLink = session ? `${baseUrl}/pay/${session.walletAddress}` : "";
+
+  function handleLogout() {
+    localStorage.removeItem("woosh_session");
+    router.replace("/");
+  }
 
   async function copyLink() {
-    await navigator.clipboard.writeText(`https://${paymentLink}`);
+    await navigator.clipboard.writeText(paymentLink);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }
@@ -54,31 +61,38 @@ export default function DashboardPage() {
   }
 
   return (
-    <main className="min-h-screen bg-navy px-6 py-10 max-w-2xl mx-auto">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-10">
-        <span className="text-xl font-bold">woosh</span>
-        <span className="text-sm text-text-secondary">{session.email}</span>
-      </div>
+    <main className="min-h-screen bg-navy">
+      <BrandHeader rightSlot={
+        <div className="flex items-center gap-4">
+          <span className="text-sm text-text-secondary hidden sm:block">{session.email}</span>
+          <button
+            onClick={handleLogout}
+            className="text-sm text-text-secondary hover:text-text-primary transition-colors"
+          >
+            Log out
+          </button>
+        </div>
+      } />
+      <div className="px-6 py-6 max-w-2xl mx-auto">
 
       {/* Balance */}
       <div className="bg-card border border-border rounded-card p-6 mb-4">
         <p className="text-xs font-semibold text-text-secondary uppercase tracking-widest mb-1">
-          Your balance
+          Balance
         </p>
-        {balanceError ? (
-          <p className="text-text-secondary text-sm">Balance unavailable</p>
-        ) : balance ? (
-          <p className="text-4xl font-bold text-text-primary">{balance.display}</p>
-        ) : (
+        {balanceLoading ? (
           <div className="h-10 w-32 bg-border rounded animate-pulse" />
+        ) : balanceError ? (
+          <p className="text-text-secondary text-sm">Balance unavailable</p>
+        ) : (
+          <p className="text-4xl font-bold text-text-primary">{balance?.display ?? "$0.00"}</p>
         )}
       </div>
 
       {/* Payment link */}
       <div className="bg-card border border-border rounded-card p-6 mb-8">
         <p className="text-xs font-semibold text-text-secondary uppercase tracking-widest mb-3">
-          Your payment link
+          Payment link
         </p>
         <div className="flex items-center gap-3">
           <span className="text-blue-primary text-sm font-mono flex-1 truncate">
@@ -99,11 +113,7 @@ export default function DashboardPage() {
           Recent payments
         </p>
 
-        {txError ? (
-          <div className="bg-card border border-border rounded-card p-6 text-text-secondary text-sm">
-            Could not load transactions. Check your connection and refresh.
-          </div>
-        ) : !txs ? (
+        {txsLoading ? (
           <div className="space-y-3">
             {[1, 2, 3].map((i) => (
               <div
@@ -112,7 +122,11 @@ export default function DashboardPage() {
               />
             ))}
           </div>
-        ) : txs.length === 0 ? (
+        ) : txError ? (
+          <div className="bg-card border border-border rounded-card p-6 text-text-secondary text-sm">
+            Could not load transactions. Check your connection and refresh.
+          </div>
+        ) : !txs || txs.length === 0 ? (
           <div className="bg-card border border-border rounded-card p-8 text-center">
             <p className="text-text-secondary text-sm">
               No payments yet. Share your link to get started.
@@ -121,9 +135,12 @@ export default function DashboardPage() {
         ) : (
           <div className="space-y-2">
             {txs.map((tx) => (
-              <div
+              <a
                 key={tx.hash}
-                className="bg-card border border-border rounded-card px-4 py-3 flex items-center justify-between"
+                href={`${arcTestnet.blockExplorers.default.url}/tx/${tx.hash}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="bg-card border border-border rounded-card px-4 py-3 flex items-center justify-between hover:border-blue-primary/50 transition-colors"
               >
                 <div>
                   <p className="text-sm font-mono text-text-secondary">
@@ -136,10 +153,11 @@ export default function DashboardPage() {
                 <span className="text-text-primary font-semibold text-sm">
                   +${tx.amount}
                 </span>
-              </div>
+              </a>
             ))}
           </div>
         )}
+      </div>
       </div>
     </main>
   );

@@ -11,14 +11,15 @@ export type TxRecord = {
   timestamp: number; // unix seconds
 };
 
-const SCAN_BLOCKS = 50n;
+const SCAN_BLOCKS = 10n;
 
 /** Fetches incoming native USDC transfers to `address` from Arc. */
 export function useTransactionHistory(address?: `0x${string}`) {
   return useQuery<TxRecord[], Error>({
     queryKey: ["tx-history", address],
     enabled: !!address,
-    refetchInterval: 15_000,
+    retry: 1,
+    refetchInterval: 30_000,
     queryFn: async () => {
       const latest = await arcPublicClient.getBlockNumber();
       const fromBlock = latest > SCAN_BLOCKS ? latest - SCAN_BLOCKS : 0n;
@@ -47,7 +48,7 @@ export function useTransactionHistory(address?: `0x${string}`) {
           txs.push({
             hash: tx.hash,
             from: tx.from,
-            amount: parseFloat(formatUnits(tx.value, 6)).toFixed(2),
+            amount: parseFloat(formatUnits(tx.value, 18)).toFixed(2),
             timestamp: Number(block.timestamp),
           });
           if (txs.length >= 20) break;

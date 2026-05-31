@@ -3,12 +3,12 @@
 import { useState, useCallback, useEffect, useRef, FormEvent } from "react";
 import {
   useAccount,
-  useConnect,
   useDisconnect,
   useSendTransaction,
   useChainId,
   useSwitchChain,
 } from "wagmi";
+import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { parseUnits } from "viem";
 import { W3SSdk } from "@circle-fin/w3s-pw-web-sdk";
 import { useUSDCBalance } from "@/hooks/useUSDCBalance";
@@ -38,7 +38,6 @@ export default function PaymentForm({ recipientAddress, recipientLabel }: Props)
   const [txState, setTxState] = useState<TxState>("idle");
   const [txHash, setTxHash] = useState<`0x${string}` | null>(null);
   const [txError, setTxError] = useState<string | null>(null);
-  const [showConnectors, setShowConnectors] = useState(false);
 
   // Woosh payment state
   const [wooshMode, setWooshMode] = useState(false);
@@ -56,7 +55,6 @@ export default function PaymentForm({ recipientAddress, recipientLabel }: Props)
   // Wagmi
   const { address, isConnected } = useAccount();
   const chainId = useChainId();
-  const { connect, connectors } = useConnect();
   const { disconnect } = useDisconnect();
   const { switchChain } = useSwitchChain();
   const { sendTransactionAsync } = useSendTransaction();
@@ -108,17 +106,17 @@ export default function PaymentForm({ recipientAddress, recipientLabel }: Props)
     try {
       const hash = await sendTransactionAsync({
         to: recipientAddress,
-        value: parseUnits(parsedAmount.toString(), 6),
-        chainId: arcTestnet.id,
+        value: parseUnits(parsedAmount.toString(), 18),
       });
       setTxHash(hash);
       setTxState("success");
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "";
-      if (msg.includes("User rejected") || msg.includes("user rejected") || msg.includes("denied")) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error("[pay]", msg);
+      if (msg.includes("User rejected") || msg.includes("user rejected") || msg.includes("denied") || msg.includes("cancelled")) {
         setTxState("idle");
       } else {
-        setTxError("Transaction failed. Please try again.");
+        setTxError(`Transaction failed: ${msg.slice(0, 120)}`);
         setTxState("error");
       }
     }
@@ -152,6 +150,7 @@ export default function PaymentForm({ recipientAddress, recipientLabel }: Props)
         },
       });
       setWooshStep("verify");
+      sdkRef.current?.verifyOtp();
     } catch (err) {
       setWooshError(err instanceof Error ? err.message : "Failed to send code.");
     } finally {
@@ -229,8 +228,7 @@ export default function PaymentForm({ recipientAddress, recipientLabel }: Props)
 
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <span className="text-xl font-bold">woosh</span>
-          <p className="text-text-secondary text-sm mt-1">
+          <p className="text-text-secondary text-sm">
             Pay <span className="text-text-primary font-medium">{recipientLabel}</span>
           </p>
         </div>
@@ -285,14 +283,14 @@ export default function PaymentForm({ recipientAddress, recipientLabel }: Props)
               {wooshStep === "verify" && (
                 <div className="space-y-3">
                   <p className="text-xs text-text-secondary">
-                    Code sent to <span className="text-text-primary">{wooshEmail}</span>
+                    Code sent to <span className="text-text-primary">{wooshEmail}</span>. Enter it in the window that just opened.
                   </p>
                   {wooshError && <p className="text-sm text-red-400">{wooshError}</p>}
                   <button
                     onClick={handleWooshVerifyOtp}
-                    className="w-full bg-blue-primary hover:bg-blue-secondary text-white font-semibold py-3 rounded-input transition-colors shadow-glow min-h-[44px]"
+                    className="w-full bg-white/5 hover:bg-white/10 border border-white/10 text-text-secondary hover:text-text-primary font-medium py-3 rounded-input transition-colors min-h-[44px] text-sm"
                   >
-                    Enter verification code
+                    Re-open code entry
                   </button>
                 </div>
               )}
@@ -366,42 +364,24 @@ export default function PaymentForm({ recipientAddress, recipientLabel }: Props)
             </div>
           ) : (
             /* ── NOT CONNECTED — two options ── */
-            <div className="space-y-2">
-              {!showConnectors ? (
+            <ConnectButton.Custom>
+              {({ openConnectModal }) => (
                 <div className="grid grid-cols-2 gap-2">
-                  <button
-                    onClick={() => setShowConnectors(true)}
-                    className="bg-card border border-border hover:border-blue-primary text-text-primary font-medium py-3 rounded-input transition-colors min-h-[44px] text-sm"
-                  >
-                    Connect Wallet
-                  </button>
                   <button
                     onClick={() => setWooshMode(true)}
                     className="bg-blue-primary hover:bg-blue-secondary text-white font-semibold py-3 rounded-input transition-colors shadow-glow min-h-[44px] text-sm"
                   >
                     Pay with Woosh
                   </button>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {connectors.map((connector) => (
-                    <button
-                      key={connector.uid}
-                      onClick={() => { connect({ connector }); setShowConnectors(false); }}
-                      className="w-full bg-card border border-border hover:border-blue-primary text-text-primary font-medium py-3 rounded-input transition-colors min-h-[44px] text-sm"
-                    >
-                      {connector.name}
-                    </button>
-                  ))}
                   <button
-                    onClick={() => setShowConnectors(false)}
-                    className="w-full text-xs text-text-secondary hover:text-text-primary py-1 transition-colors"
+                    onClick={openConnectModal}
+                    className="bg-card border border-border hover:border-blue-primary text-text-primary font-medium py-3 rounded-input transition-colors min-h-[44px] text-sm"
                   >
-                    Cancel
+                    Connect Wallet
                   </button>
                 </div>
               )}
-            </div>
+            </ConnectButton.Custom>
           )}
         </div>
 

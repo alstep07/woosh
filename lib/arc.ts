@@ -1,17 +1,17 @@
 import { createPublicClient, http, defineChain } from "viem";
 
 export const arcTestnet = defineChain({
-  id: parseInt(process.env.NEXT_PUBLIC_ARC_CHAIN_ID ?? "3693"),
+  id: parseInt(process.env.NEXT_PUBLIC_ARC_CHAIN_ID ?? "5042002"),
   name: "Arc Testnet",
   nativeCurrency: {
     name: "USD Coin",
     symbol: "USDC",
-    decimals: 6,
+    decimals: 18,
   },
   rpcUrls: {
     default: {
       http: [
-        process.env.NEXT_PUBLIC_ARC_RPC_URL ?? "https://rpc-testnet.arc.network",
+        process.env.NEXT_PUBLIC_ARC_RPC_URL ?? "https://rpc.testnet.arc.network",
       ],
     },
   },
@@ -26,7 +26,7 @@ export const arcTestnet = defineChain({
 
 export const arcPublicClient = createPublicClient({
   chain: arcTestnet,
-  transport: http(process.env.NEXT_PUBLIC_ARC_RPC_URL ?? "https://rpc-testnet.arc.network"),
+  transport: http(process.env.NEXT_PUBLIC_ARC_RPC_URL ?? "https://rpc.testnet.arc.network"),
 });
 
 /** Arc testnet faucet — POST {address} to claim USDC */

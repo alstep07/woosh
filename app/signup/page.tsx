@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { W3SSdk } from "@circle-fin/w3s-pw-web-sdk";
+import BrandHeader from "@/components/BrandHeader";
 
 type Step = "email" | "verify" | "creating";
 
@@ -32,6 +33,13 @@ export default function SignupPage() {
   const emailRef = useRef("");
 
   const circleAppId = process.env.NEXT_PUBLIC_CIRCLE_APP_ID ?? "";
+  const [alreadySignedIn, setAlreadySignedIn] = useState(false);
+
+  useEffect(() => {
+    if (localStorage.getItem("woosh_session")) {
+      setAlreadySignedIn(true);
+    }
+  }, []);
 
   useEffect(() => {
     const onLoginComplete = (err: unknown, result: unknown) => {
@@ -84,6 +92,7 @@ export default function SignupPage() {
       });
 
       setStep("verify");
+      sdkRef.current?.verifyOtp();
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Failed to send code. Please try again."
@@ -140,7 +149,7 @@ export default function SignupPage() {
       const res = await fetch("/api/wallet/complete", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userToken, email: emailRef.current }),
+        body: JSON.stringify({ userToken }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Failed to complete setup");
@@ -149,7 +158,6 @@ export default function SignupPage() {
         "woosh_session",
         JSON.stringify({
           email: emailRef.current,
-          slug: data.slug,
           walletAddress: data.walletAddress,
         })
       );
@@ -162,12 +170,41 @@ export default function SignupPage() {
     }
   }
 
+  if (alreadySignedIn) {
+    return (
+      <main className="min-h-screen bg-navy flex flex-col">
+        <BrandHeader />
+        <div className="flex-1 flex flex-col items-center justify-center px-6">
+          <div className="w-full max-w-md text-center">
+            <h1 className="text-2xl font-bold text-text-primary mb-2">
+              You&apos;re already signed in
+            </h1>
+            <p className="text-text-secondary text-sm mb-8">
+              Head to your dashboard to see your balance and payment link.
+            </p>
+            <Link
+              href="/dashboard"
+              className="inline-flex items-center justify-center bg-blue-primary hover:bg-blue-secondary text-white font-semibold px-8 py-3 rounded-input transition-colors shadow-glow min-h-[44px]"
+            >
+              Go to dashboard →
+            </Link>
+            <button
+              onClick={() => setAlreadySignedIn(false)}
+              className="mt-4 block w-full text-sm text-text-secondary hover:text-text-primary transition-colors"
+            >
+              Sign up with a different account
+            </button>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
   return (
-    <main className="min-h-screen bg-navy flex flex-col items-center justify-center px-6">
+    <main className="min-h-screen bg-navy flex flex-col">
+      <BrandHeader />
+      <div className="flex-1 flex flex-col items-center justify-center px-6">
       <div className="w-full max-w-md">
-        <Link href="/" className="block mb-8 text-xl font-bold text-text-primary">
-          woosh
-        </Link>
 
         {step === "email" && (
           <>
@@ -215,17 +252,17 @@ export default function SignupPage() {
               Check your email
             </h1>
             <p className="text-text-secondary text-sm mb-8">
-              We sent a verification code to{" "}
-              <span className="text-text-primary">{email}</span>.
+              We sent a code to{" "}
+              <span className="text-text-primary">{email}</span>. Enter it in the window that just opened.
             </p>
             {error && (
               <p className="mb-4 text-sm text-red-400">{error}</p>
             )}
             <button
               onClick={handleVerifyOtp}
-              className="w-full bg-blue-primary hover:bg-blue-secondary text-white font-semibold py-3 rounded-input transition-colors shadow-glow min-h-[44px]"
+              className="w-full bg-white/5 hover:bg-white/10 border border-white/10 text-text-secondary hover:text-text-primary font-medium py-3 rounded-input transition-colors min-h-[44px] text-sm"
             >
-              Enter verification code
+              Re-open code entry
             </button>
             <button
               onClick={() => {
@@ -252,6 +289,7 @@ export default function SignupPage() {
             )}
           </>
         )}
+      </div>
       </div>
     </main>
   );
