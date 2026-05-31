@@ -13,7 +13,7 @@ export async function GET(
     // Blockscout v2 API — single request, returns up to 50 txs
     const res = await fetch(
       `${EXPLORER_BASE}/api/v2/addresses/${address}/transactions?filter=to`,
-      { next: { revalidate: 15 } }
+      { cache: "no-store" }
     );
 
     if (!res.ok) throw new Error(`Explorer returned ${res.status}`);

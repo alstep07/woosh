@@ -17,6 +17,7 @@ export default function DashboardPage() {
   const router = useRouter();
   const [session, setSession] = useState<Session | null>(null);
   const [copied, setCopied] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   useEffect(() => {
     const raw = localStorage.getItem("woosh_session");
@@ -38,9 +39,10 @@ export default function DashboardPage() {
     session?.walletAddress
   );
 
-  function handleRefresh() {
-    void refetchBalance();
-    void refetchTxs();
+  async function handleRefresh() {
+    setIsRefreshing(true);
+    await Promise.all([refetchBalance(), refetchTxs()]);
+    setIsRefreshing(false);
   }
 
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:3000";
@@ -92,12 +94,12 @@ export default function DashboardPage() {
           </p>
           <button
             onClick={handleRefresh}
-            disabled={balanceLoading || txsFetching}
+            disabled={isRefreshing}
             className="text-text-secondary/50 hover:text-text-secondary transition-colors disabled:opacity-30"
             title="Refresh"
           >
             <svg
-              className={`w-3.5 h-3.5 ${txsFetching ? "animate-spin" : ""}`}
+              className={`w-3.5 h-3.5 ${isRefreshing ? "animate-spin" : ""}`}
               fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
             >
               <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />

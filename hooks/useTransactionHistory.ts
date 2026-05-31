@@ -14,6 +14,7 @@ export function useTransactionHistory(address?: `0x${string}`) {
     queryKey: ["tx-history", address],
     enabled: !!address,
     retry: 1,
+    refetchInterval: 15_000,
     refetchOnWindowFocus: false,
     queryFn: async () => {
       const res = await fetch(`/api/transactions/${address}`);

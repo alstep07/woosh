@@ -39,7 +39,17 @@ export async function initializeUser(userToken: string) {
       ?? (err as { code?: number })?.code;
     const msg = err instanceof Error ? err.message : "";
     if (code === 155106 || msg.toLowerCase().includes("already been initialized")) {
-      return { alreadyExists: true as const };
+      // User has a PIN but may not have a wallet (e.g. closed PIN window on first signup)
+      const wallets = await getUserWallets(userToken);
+      if (wallets.length > 0) return { alreadyExists: true as const };
+
+      // No wallet — create one (requires PIN challenge client-side)
+      const res = await client.createUserWallet(userToken, {
+        idempotencyKey: crypto.randomUUID(),
+        blockchains: [Blockchain.ArcTestnet],
+        accountType: "EOA",
+      });
+      return { challengeId: res.data!.data!.challengeId! };
     }
     throw err;
   }
@@ -67,7 +77,7 @@ export async function createPaymentChallenge(
     userToken,
     walletId,
     destinationAddress,
-    amounts: [amount],
+    amounts: [parseFloat(amount).toFixed(2)],
     blockchain: Blockchain.ArcTestnet,
     tokenAddress: "", // native USDC on Arc — no contract address
     fee: { type: "level", config: { feeLevel: "MEDIUM" } },
