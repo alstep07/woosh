@@ -158,7 +158,7 @@ export default function Home() {
       </div>
 
       {/* Middle area: hero + how-it-works share remaining space on desktop */}
-      <div className="relative z-10 md:flex-1 md:flex md:flex-col md:justify-between">
+      <div className="relative z-10 md:flex-1 md:flex md:flex-col md:justify-around">
 
       {/* Hero */}
       <section className="flex flex-col items-center justify-center text-center px-6 pt-16 pb-6 md:pt-10 md:pb-0 max-w-2xl mx-auto w-full">
