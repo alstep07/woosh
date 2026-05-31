@@ -209,10 +209,10 @@ export default function SignupPage() {
         {step === "email" && (
           <>
             <h1 className="text-2xl font-bold text-text-primary mb-2">
-              Create your account
+              Sign in with email
             </h1>
             <p className="text-text-secondary text-sm mb-8">
-              Enter your email and we&apos;ll send you a verification code.
+              We&apos;ll send you a one-time code. No password needed.
             </p>
             <form onSubmit={handleSendOtp} noValidate className="space-y-4">
               <div>

@@ -6,7 +6,7 @@ import Providers from "@/components/Providers";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Woosh — Get paid in seconds",
+  title: "Woosh | Get paid in seconds",
   description:
     "Send a payment link. Get paid in seconds. No bank required.",
   icons: {
