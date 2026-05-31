@@ -19,6 +19,34 @@ body {
   }
 }
 
+/* Liquid glass card */
+.glass-card {
+  position: relative;
+  overflow: hidden;
+  /* Truly transparent — content behind shows through */
+  background: rgba(255, 255, 255, 0.006);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+  /* Brighter border — visible glass edge */
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.45),
+    /* top rim highlight — the signature glass shine */
+    inset 0 1px 0 rgba(255, 255, 255, 0.28);
+}
+
+/* Subtle top highlight only */
+.glass-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.18);
+  pointer-events: none;
+}
+
 /* Full-screen animated background layer */
 .woosh-bg {
   position: fixed;
@@ -29,8 +57,9 @@ body {
 }
 
 @keyframes woosh-pulse {
-  0%, 100% { opacity: 0.04; }
-  50%       { opacity: 0.18; }
+  0%   { opacity: 0; }
+  50%  { opacity: 0.85; }
+  100% { opacity: 0; }
 }
 
 .woosh-dot {
@@ -39,13 +68,15 @@ body {
   height: 3px;
   border-radius: 9999px;
   background-color: #0EA5E9;
-  animation: woosh-pulse 3s ease-in-out infinite;
-  will-change: opacity;
+  opacity: 0;
+  animation: woosh-pulse 4s ease-in-out infinite;
+  animation-fill-mode: both;
+  will-change: transform, opacity;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .woosh-dot {
     animation: none;
-    opacity: 0.06;
+    opacity: 0.05;
   }
 }

@@ -31,12 +31,17 @@ export default function DashboardPage() {
     }
   }, [router]);
 
-  const { data: balance, isLoading: balanceLoading, isError: balanceError } = useUSDCBalance(
+  const { data: balance, isLoading: balanceLoading, isError: balanceError, refetch: refetchBalance } = useUSDCBalance(
     session?.walletAddress
   );
-  const { data: txs, isLoading: txsLoading, isError: txError } = useTransactionHistory(
+  const { data: txs, isLoading: txsLoading, isError: txError, refetch: refetchTxs, isFetching: txsFetching } = useTransactionHistory(
     session?.walletAddress
   );
+
+  function handleRefresh() {
+    void refetchBalance();
+    void refetchTxs();
+  }
 
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:3000";
   const paymentLink = session ? `${baseUrl}/pay/${session.walletAddress}` : "";
@@ -61,7 +66,10 @@ export default function DashboardPage() {
   }
 
   return (
-    <main className="min-h-screen bg-navy">
+    <main className="min-h-screen bg-navy relative">
+      {/* Subtle background so glass cards have something to blur */}
+      <div className="woosh-bg" aria-hidden="true" />
+      <div className="relative z-10">
       <BrandHeader rightSlot={
         <div className="flex items-center gap-4">
           <span className="text-sm text-text-secondary hidden sm:block">{session.email}</span>
@@ -73,13 +81,29 @@ export default function DashboardPage() {
           </button>
         </div>
       } />
-      <div className="px-6 py-6 max-w-2xl mx-auto">
+      </div>
+      <div className="relative z-10 px-6 py-6 max-w-2xl mx-auto">
 
       {/* Balance */}
-      <div className="bg-card border border-border rounded-card p-6 mb-4">
-        <p className="text-xs font-semibold text-text-secondary uppercase tracking-widest mb-1">
-          Balance
-        </p>
+      <div className="glass-card rounded-card p-6 mb-4">
+        <div className="flex items-center justify-between mb-1">
+          <p className="text-xs font-semibold text-text-secondary uppercase tracking-widest">
+            Balance
+          </p>
+          <button
+            onClick={handleRefresh}
+            disabled={balanceLoading || txsFetching}
+            className="text-text-secondary/50 hover:text-text-secondary transition-colors disabled:opacity-30"
+            title="Refresh"
+          >
+            <svg
+              className={`w-3.5 h-3.5 ${txsFetching ? "animate-spin" : ""}`}
+              fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+          </button>
+        </div>
         {balanceLoading ? (
           <div className="h-10 w-32 bg-border rounded animate-pulse" />
         ) : balanceError ? (
@@ -90,21 +114,19 @@ export default function DashboardPage() {
       </div>
 
       {/* Payment link */}
-      <div className="bg-card border border-border rounded-card p-6 mb-8">
-        <p className="text-xs font-semibold text-text-secondary uppercase tracking-widest mb-3">
+      <div className="glass-card rounded-card p-6 mb-8">
+        <p className="text-xs font-semibold text-text-secondary uppercase tracking-widest mb-1">
           Payment link
         </p>
-        <div className="flex items-center gap-3">
-          <span className="text-blue-primary text-sm font-mono flex-1 truncate">
-            {paymentLink}
-          </span>
-          <button
-            onClick={copyLink}
-            className="flex-shrink-0 text-xs bg-blue-primary/10 hover:bg-blue-primary/20 text-blue-primary px-3 py-1.5 rounded-input transition-colors min-h-[44px] min-w-[64px]"
-          >
-            {copied ? "Copied!" : "Copy"}
-          </button>
-        </div>
+        <p className="text-xs text-text-secondary/60 font-mono mb-4">
+          {session.walletAddress.slice(0, 10)}…{session.walletAddress.slice(-8)}
+        </p>
+        <button
+          onClick={copyLink}
+          className="w-full bg-blue-primary hover:bg-blue-secondary text-white font-semibold py-3 rounded-input transition-colors shadow-glow min-h-[44px] text-sm"
+        >
+          {copied ? "Copied!" : "Copy payment link"}
+        </button>
       </div>
 
       {/* Transaction history */}
@@ -118,16 +140,16 @@ export default function DashboardPage() {
             {[1, 2, 3].map((i) => (
               <div
                 key={i}
-                className="h-14 bg-card border border-border rounded-card animate-pulse"
+                className="h-14 glass-card rounded-card animate-pulse"
               />
             ))}
           </div>
         ) : txError ? (
-          <div className="bg-card border border-border rounded-card p-6 text-text-secondary text-sm">
+          <div className="glass-card rounded-card p-6 text-text-secondary text-sm">
             Could not load transactions. Check your connection and refresh.
           </div>
         ) : !txs || txs.length === 0 ? (
-          <div className="bg-card border border-border rounded-card p-8 text-center">
+          <div className="glass-card rounded-card p-8 text-center">
             <p className="text-text-secondary text-sm">
               No payments yet. Share your link to get started.
             </p>
@@ -140,7 +162,7 @@ export default function DashboardPage() {
                 href={`${arcTestnet.blockExplorers.default.url}/tx/${tx.hash}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="bg-card border border-border rounded-card px-4 py-3 flex items-center justify-between hover:border-blue-primary/50 transition-colors"
+                className="glass-card rounded-card px-4 py-3 flex items-center justify-between hover:border-blue-primary/50 transition-colors"
               >
                 <div>
                   <p className="text-sm font-mono text-text-secondary">

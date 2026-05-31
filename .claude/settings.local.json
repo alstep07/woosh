@@ -3,7 +3,10 @@
     "allow": [
       "Bash(openspec status:*)",
       "Bash(openspec instructions:*)",
-      "Bash(openspec new:*)"
+      "Bash(openspec new:*)",
+      "WebSearch",
+      "WebFetch(domain:dev.to)",
+      "WebFetch(domain:therobbiedavis.com)"
     ]
   }
 }

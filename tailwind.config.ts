@@ -18,8 +18,8 @@ const config: Config = {
         border: "#1E293B",
       },
       borderRadius: {
-        card: "12px",
-        input: "8px",
+        card: "8px",
+        input: "6px",
       },
       fontFamily: {
         sans: ["Inter", "sans-serif"],

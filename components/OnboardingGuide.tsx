@@ -46,7 +46,7 @@ export default function OnboardingGuide({ initialStep = 1, onDismiss }: Props) {
       className="fixed inset-0 z-50 bg-navy/80 backdrop-blur-sm flex items-center justify-center px-4"
       onClick={(e) => { if (e.target === e.currentTarget) onDismiss(); }}
     >
-      <div className="w-full max-w-md bg-card border border-border rounded-card p-6 relative">
+      <div className="w-full max-w-md glass-card rounded-card p-6 relative">
         {/* Close */}
         <button
           onClick={onDismiss}

@@ -206,7 +206,7 @@ export default function PaymentForm({ recipientAddress, recipientLabel }: Props)
   // ── Success ──
   if (txState === "success") {
     return (
-      <div className="w-full max-w-md bg-card border border-border rounded-card p-8 text-center">
+      <div className="w-full max-w-md glass-card rounded-card p-8 text-center">
         <div className="w-12 h-12 rounded-full bg-green-400/10 flex items-center justify-center mx-auto mb-4 text-2xl">
           ✓
         </div>
@@ -233,7 +233,7 @@ export default function PaymentForm({ recipientAddress, recipientLabel }: Props)
           </p>
         </div>
 
-        <div className="bg-card border border-border rounded-card p-6 space-y-5">
+        <div className="glass-card rounded-card p-6 space-y-5">
           {/* Amount */}
           <div>
             <label htmlFor="amount" className="block text-sm font-medium text-text-secondary mb-1.5">
@@ -324,19 +324,7 @@ export default function PaymentForm({ recipientAddress, recipientLabel }: Props)
                 </div>
               )}
 
-              {hasInsufficientBalance && (
-                <div className="bg-blue-primary/10 border border-blue-primary/20 rounded-input px-4 py-3 text-sm text-text-secondary flex items-center justify-between gap-3">
-                  <span>You need USDC on Arc to pay.</span>
-                  <button
-                    onClick={() => setGuide({ open: true, step: 2 })}
-                    className="text-xs font-semibold text-blue-primary whitespace-nowrap"
-                  >
-                    Here&apos;s how to get some →
-                  </button>
-                </div>
-              )}
-
-              {txState === "error" && txError && (
+{txState === "error" && txError && (
                 <p className="text-sm text-red-400">{txError}</p>
               )}
 
@@ -394,6 +382,20 @@ export default function PaymentForm({ recipientAddress, recipientLabel }: Props)
             I don&apos;t know where to start
           </button>
         </p>
+
+        {arcTestnet.testnet && (
+          <p className="text-center mt-3 text-xs text-text-secondary/50">
+            Testnet · Get free USDC at{" "}
+            <a
+              href="https://faucet.circle.com/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-text-secondary/70 hover:text-text-secondary underline"
+            >
+              faucet.circle.com
+            </a>
+          </p>
+        )}
       </div>
     </>
   );
