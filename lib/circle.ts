@@ -44,7 +44,8 @@ export async function initializeUser(userToken: string) {
       if (wallets.length > 0) return { alreadyExists: true as const };
 
       // No wallet — create one (requires PIN challenge client-side)
-      const res = await client.createUserWallet(userToken, {
+      const res = await client.createWallet({
+        userToken,
         idempotencyKey: crypto.randomUUID(),
         blockchains: [Blockchain.ArcTestnet],
         accountType: "EOA",
