@@ -167,15 +167,18 @@ export default function DashboardPage() {
                 className="glass-card rounded-card px-4 py-3 flex items-center justify-between hover:border-blue-primary/50 transition-colors"
               >
                 <div>
+                  <p className="text-xs text-text-secondary/50 mb-0.5">
+                    {tx.direction === "received" ? "Received from" : "Sent to"}
+                  </p>
                   <p className="text-sm font-mono text-text-secondary">
-                    {tx.from.slice(0, 6)}…{tx.from.slice(-4)}
+                    {tx.counterparty.slice(0, 6)}…{tx.counterparty.slice(-4)}
                   </p>
                   <p className="text-xs text-text-secondary/60 mt-0.5">
                     {formatDistanceToNow(tx.timestamp)}
                   </p>
                 </div>
-                <span className="text-text-primary font-semibold text-sm">
-                  +${tx.amount}
+                <span className={`font-semibold text-sm ${tx.direction === "received" ? "text-green-400" : "text-text-secondary"}`}>
+                  {tx.direction === "received" ? "+" : "-"}${tx.amount}
                 </span>
               </a>
             ))}

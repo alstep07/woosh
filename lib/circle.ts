@@ -50,7 +50,7 @@ export async function initializeUser(userToken: string) {
         blockchains: [Blockchain.ArcTestnet],
         accountType: "EOA",
       });
-      return { challengeId: res.data!.data!.challengeId! };
+      return { challengeId: res.data!.challengeId! };
     }
     throw err;
   }
