@@ -69,7 +69,7 @@ export default function DashboardPage() {
   }
 
   return (
-    <main className="min-h-screen bg-navy relative">
+    <main className="min-h-screen bg-navy relative flex flex-col">
       {/* Subtle background so glass cards have something to blur */}
       <div className="woosh-bg" aria-hidden="true" />
       <div className="relative z-10">
@@ -85,7 +85,7 @@ export default function DashboardPage() {
         </div>
       } />
       </div>
-      <div className="relative z-10 px-6 py-6 max-w-2xl mx-auto">
+      <div className="relative z-10 flex-1 px-6 py-6 max-w-2xl mx-auto w-full">
 
       {/* Balance */}
       <div className="glass-card rounded-card p-6 mb-4">
