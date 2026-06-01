@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef } from "react";
 import BrandHeader from "@/components/BrandHeader";
+import Footer from "@/components/Footer";
 
 // 320 dots: 20×16 grid with per-dot jitter for organic look
 const COLS = 34;
@@ -158,7 +159,7 @@ export default function Home() {
       </div>
 
       {/* Middle area: hero + how-it-works share remaining space on desktop */}
-      <div className="relative z-10 md:flex-1 md:flex md:flex-col md:justify-around">
+      <div className="relative z-10 md:flex-1 md:flex md:flex-col md:justify-center">
 
       {/* Hero */}
       <section className="flex flex-col items-center justify-center text-center px-6 pt-16 pb-6 md:pt-10 md:pb-0 max-w-2xl mx-auto w-full">
@@ -178,7 +179,7 @@ export default function Home() {
       </section>
 
       {/* How it works */}
-      <section className="px-6 pb-20 md:pb-8 max-w-5xl mx-auto w-full shrink-0">
+      <section className="mt-8 md:mt-12 px-6 pb-20 md:pb-8 max-w-5xl mx-auto w-full shrink-0">
         <h2 className="text-2xl font-semibold text-center mb-8 md:mb-4">
           How it works
         </h2>
@@ -208,10 +209,7 @@ export default function Home() {
 
       </div>{/* end middle */}
 
-      {/* Footer */}
-      <footer className="relative z-10 border-t border-white/10 px-6 py-4 text-center text-text-secondary text-sm shrink-0">
-        {new Date().getFullYear()} Woosh. Instant payments without borders.
-      </footer>
+      <Footer />
     </main>
   );
 }

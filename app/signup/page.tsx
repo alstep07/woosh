@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { W3SSdk } from "@circle-fin/w3s-pw-web-sdk";
 import BrandHeader from "@/components/BrandHeader";
+import Footer from "@/components/Footer";
 
 type Step = "email" | "verify" | "creating";
 
@@ -28,6 +29,8 @@ export default function SignupPage() {
   const [step, setStep] = useState<Step>("email");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [deviceIdError, setDeviceIdError] = useState(false);
+  const [deviceIdLoading, setDeviceIdLoading] = useState(true);
 
   // Keep email accessible inside SDK callbacks without stale closure
   const emailRef = useRef("");
@@ -48,6 +51,7 @@ export default function SignupPage() {
         setStep("verify");
         return;
       }
+      setStep("creating");
       const res = result as LoginResult;
       void handleCreateWallet(res.userToken, res.encryptionKey);
     };
@@ -58,7 +62,14 @@ export default function SignupPage() {
     );
     sdkRef.current = sdk;
 
-    void sdk.getDeviceId().then(setDeviceId);
+    void sdk.getDeviceId().then((id) => {
+      if (id) setDeviceId(id);
+      else setDeviceIdError(true);
+      setDeviceIdLoading(false);
+    }).catch(() => {
+      setDeviceIdError(true);
+      setDeviceIdLoading(false);
+    });
   }, [circleAppId]);
 
   async function handleSendOtp(e: FormEvent) {
@@ -170,6 +181,38 @@ export default function SignupPage() {
     }
   }
 
+  if (deviceIdLoading) {
+    return (
+      <main className="min-h-screen bg-navy flex flex-col">
+        <BrandHeader />
+        <div className="flex-1 flex items-center justify-center">
+          <div className="w-8 h-8 border-2 border-blue-primary border-t-transparent rounded-full animate-spin" />
+        </div>
+        <Footer />
+      </main>
+    );
+  }
+
+  if (deviceIdError) {
+    return (
+      <main className="min-h-screen bg-navy flex flex-col">
+        <BrandHeader />
+        <div className="flex-1 flex flex-col items-center justify-center px-6">
+          <div className="w-full max-w-md">
+            <h1 className="text-2xl font-bold text-text-primary mb-2">
+              Service not available in your region
+            </h1>
+            <p className="text-text-secondary text-sm">
+              We&apos;re sorry. Woosh relies on Circle&apos;s wallet infrastructure,
+              which is currently unavailable in your country due to regulatory restrictions.
+            </p>
+          </div>
+        </div>
+        <Footer />
+      </main>
+    );
+  }
+
   if (alreadySignedIn) {
     return (
       <main className="min-h-screen bg-navy flex flex-col">
@@ -196,6 +239,7 @@ export default function SignupPage() {
             </button>
           </div>
         </div>
+        <Footer />
       </main>
     );
   }
@@ -238,7 +282,7 @@ export default function SignupPage() {
               <button
                 type="submit"
                 disabled={loading || !deviceId}
-                className="w-full bg-blue-primary hover:bg-blue-secondary disabled:opacity-50 text-white font-semibold py-3 rounded-input transition-colors shadow-glow min-h-[44px]"
+                className="w-full bg-blue-primary hover:enabled:bg-blue-secondary disabled:opacity-50 text-white font-semibold py-3 rounded-input transition-colors shadow-glow min-h-[44px]"
               >
                 {loading ? "Sending code…" : "Send verification code"}
               </button>
@@ -278,10 +322,10 @@ export default function SignupPage() {
 
         {step === "creating" && (
           <>
-            <h1 className="text-2xl font-bold text-text-primary mb-2">
-              Setting up your wallet…
+            <h1 className="text-2xl font-bold text-text-primary mb-2 text-center">
+              Almost there…
             </h1>
-            <p className="text-text-secondary text-sm">
+            <p className="text-text-secondary text-sm text-center">
               This takes just a moment.
             </p>
             {error && (
@@ -291,6 +335,7 @@ export default function SignupPage() {
         )}
       </div>
       </div>
+      <Footer />
     </main>
   );
 }

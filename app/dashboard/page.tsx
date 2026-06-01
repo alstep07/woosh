@@ -6,6 +6,7 @@ import { useUSDCBalance } from "@/hooks/useUSDCBalance";
 import { useTransactionHistory } from "@/hooks/useTransactionHistory";
 import { formatDistanceToNow } from "@/lib/time";
 import BrandHeader from "@/components/BrandHeader";
+import Footer from "@/components/Footer";
 import { arcTestnet } from "@/lib/arc";
 
 type Session = {
@@ -186,6 +187,7 @@ export default function DashboardPage() {
         )}
       </div>
       </div>
+      <Footer />
     </main>
   );
 }
