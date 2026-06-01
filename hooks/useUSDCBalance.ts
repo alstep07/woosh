@@ -14,7 +14,7 @@ export function useUSDCBalance(address?: `0x${string}`) {
   return useQuery<BalanceResult, Error>({
     queryKey: ["usdc-balance", address],
     enabled: !!address,
-    retry: 1,
+    retry: 0,
     refetchInterval: 15_000,
     queryFn: async () => {
       const raw = await arcPublicClient.getBalance({ address: address! });

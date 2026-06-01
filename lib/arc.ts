@@ -26,7 +26,9 @@ export const arcTestnet = defineChain({
 
 export const arcPublicClient = createPublicClient({
   chain: arcTestnet,
-  transport: http(process.env.NEXT_PUBLIC_ARC_RPC_URL ?? "https://rpc.testnet.arc.network"),
+  transport: http(process.env.NEXT_PUBLIC_ARC_RPC_URL ?? "https://rpc.testnet.arc.network", {
+    timeout: 5_000,
+  }),
 });
 
 /** Arc testnet faucet — POST {address} to claim USDC */

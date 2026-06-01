@@ -15,7 +15,7 @@ export function useTransactionHistory(address?: `0x${string}`) {
   return useQuery<TxRecord[], Error>({
     queryKey: ["tx-history", address],
     enabled: !!address,
-    retry: 1,
+    retry: 0,
     refetchInterval: 15_000,
     refetchOnWindowFocus: false,
     queryFn: async () => {

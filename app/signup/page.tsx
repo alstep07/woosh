@@ -62,14 +62,20 @@ export default function SignupPage() {
     );
     sdkRef.current = sdk;
 
-    void sdk.getDeviceId().then((id) => {
-      if (id) setDeviceId(id);
-      else setDeviceIdError(true);
-      setDeviceIdLoading(false);
-    }).catch(() => {
-      setDeviceIdError(true);
-      setDeviceIdLoading(false);
-    });
+    const timeout = new Promise<null>((resolve) =>
+      setTimeout(() => resolve(null), 4000)
+    );
+
+    void Promise.race([sdk.getDeviceId(), timeout])
+      .then((id) => {
+        if (id) setDeviceId(id);
+        else setDeviceIdError(true);
+        setDeviceIdLoading(false);
+      })
+      .catch(() => {
+        setDeviceIdError(true);
+        setDeviceIdLoading(false);
+      });
   }, [circleAppId]);
 
   async function handleSendOtp(e: FormEvent) {
