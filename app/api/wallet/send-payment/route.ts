@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createPaymentChallenge, getUserWallets } from "@/lib/circle";
+import { createPaymentChallenge, getUserWallets } from "@/shared/lib/circle";
 
 export async function POST(req: NextRequest) {
   try {

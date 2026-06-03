@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requestOtp } from "@/lib/circle";
+import { requestOtp } from "@/shared/lib/circle";
 
 export async function POST(req: NextRequest) {
   try {
