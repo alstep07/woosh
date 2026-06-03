@@ -25,10 +25,10 @@ export async function POST(req: NextRequest) {
     );
     return NextResponse.json(result);
   } catch (err) {
-    console.error("[send-payment]", err);
-    return NextResponse.json(
-      { error: "Failed to create payment" },
-      { status: 500 }
-    );
+    const msg =
+      (err as { response?: { data?: { message?: string } } })?.response?.data?.message
+      ?? (err instanceof Error ? err.message : "Failed to create payment");
+    console.error("[send-payment]", msg, err);
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 }
