@@ -101,9 +101,9 @@ export async function createPaymentChallenge(
     userToken,
     walletId,
     destinationAddress,
-    amounts: [String(parseFloat(amount))],
+    amounts: [parseFloat(amount).toFixed(2)],
     blockchain: Blockchain.ArcTestnet,
-    tokenAddress: "0x3600000000000000000000000000000000000000", // native USDC on Arc Testnet
+    tokenAddress: "", // native USDC on Arc — no contract address
     fee: { type: "level", config: { feeLevel: "MEDIUM" } },
   });
   return { challengeId: res.data!.challengeId! };
