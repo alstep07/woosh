@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTransactionHistory } from "@/entities/payment/hooks/useTransactionHistory";
 import BrandHeader from "@/widgets/BrandHeader/ui/BrandHeader";
+import Footer from "@/widgets/Footer/ui/Footer";
 import TransactionList from "@/widgets/TransactionList/ui/TransactionList";
 import { Spinner } from "@/shared/ui/Spinner";
 import type { Session } from "@/entities/user/model/types";
@@ -60,6 +61,7 @@ export default function DashboardHistoryPage() {
         <h1 className="text-lg font-semibold text-text-primary mb-6">Transactions</h1>
         <TransactionList txs={txs} isLoading={isLoading} isError={isError} onRefresh={handleRefresh} isRefreshing={isRefreshing} />
       </div>
+      <Footer />
     </main>
   );
 }

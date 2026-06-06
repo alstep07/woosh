@@ -1,4 +1,4 @@
-import { env } from "@/shared/config/env";
+import { env, APP_VERSION } from "@/shared/config/env";
 
 export default function Footer() {
   return (
@@ -30,7 +30,7 @@ export default function Footer() {
           >
             GitHub
           </a>
-          <span className="text-text-secondary/40">v1.5</span>
+          <span className="text-text-secondary/40">v{APP_VERSION}</span>
         </div>
       </div>
     </footer>

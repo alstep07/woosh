@@ -9,6 +9,7 @@ import BrandHeader from "@/widgets/BrandHeader/ui/BrandHeader";
 import AccountBar from "@/widgets/AccountBar/ui/AccountBar";
 import ChatPanel from "@/widgets/ChatPanel/ui/ChatPanel";
 import TransactionList from "@/widgets/TransactionList/ui/TransactionList";
+import Footer from "@/widgets/Footer/ui/Footer";
 import { Spinner } from "@/shared/ui/Spinner";
 import { env } from "@/shared/config/env";
 import type { Session } from "@/entities/user/model/types";
@@ -117,6 +118,9 @@ export default function DashboardPage() {
             </div>
           )}
         </div>
+      </div>
+      <div className="relative z-10 shrink-0">
+        <Footer />
       </div>
     </main>
   );
