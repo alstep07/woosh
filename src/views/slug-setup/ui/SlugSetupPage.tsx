@@ -189,7 +189,7 @@ export default function SlugSetupPage() {
                 href="/dashboard"
                 className="block w-full text-sm text-blue-primary/60 hover:text-blue-primary transition-colors mb-6"
               >
-                ← Back to dashboard
+                Back to dashboard
               </Link>
               <h1 className="text-2xl font-bold text-text-primary mb-2">
                 Choose your payment link
@@ -346,7 +346,7 @@ export default function SlugSetupPage() {
                 onClick={() => { setPhase("slug"); setRegError(null); }}
                 className="mt-4 w-full text-sm text-blue-primary/60 hover:text-blue-primary transition-colors"
               >
-                ← Back to link selection
+                Back to link selection
               </button>
             </>
           )}

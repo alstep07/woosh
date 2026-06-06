@@ -100,6 +100,12 @@ body {
   background: rgba(14, 165, 233, 0.45);
 }
 
+::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
 * {
   scrollbar-width: thin;
   scrollbar-color: rgba(14, 165, 233, 0.25) transparent;

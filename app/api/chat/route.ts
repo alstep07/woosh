@@ -109,8 +109,10 @@ type ApiMessage = { role: "user" | "assistant"; content: string };
 
 export async function POST(req: NextRequest) {
   if (!process.env.OPENROUTER_API_KEY) {
+    console.error("[chat] OPENROUTER_API_KEY is not set");
     return NextResponse.json({
-      text: "Chat is not configured. Add OPENROUTER_API_KEY to your environment.",
+      text: "I'm not available right now. Please try again later.",
+      isError: true,
     });
   }
 
@@ -123,15 +125,22 @@ export async function POST(req: NextRequest) {
     },
   });
 
-  const { messages, walletAddress } = (await req.json()) as {
-    messages: ApiMessage[];
-    walletAddress: string;
-  };
+  let messages: ApiMessage[];
+  let walletAddress: string;
+  let userName: string | undefined;
+  try {
+    const body = (await req.json()) as { messages: ApiMessage[]; walletAddress: string; userName?: string };
+    messages = body.messages;
+    walletAddress = body.walletAddress;
+    userName = body.userName;
+  } catch {
+    return NextResponse.json({ text: "I'm not available right now. Please try again later.", isError: true }, { status: 400 });
+  }
 
   const history: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
     {
       role: "system",
-      content: `You are Woosh Agent, a concise and friendly USDC payment assistant. Help users send USDC, check balance, and view transaction history. Be brief — 1–2 sentences max unless listing transactions. The user's wallet address is ${walletAddress} (never reveal it). For send/pay requests: if the recipient or amount is unclear, ask the user to clarify before calling send_payment. Only call send_payment when you have both a clear recipient (username or 0x address) and amount.`,
+      content: `You are Woosh Agent, a concise and friendly USDC payment assistant. Help users send USDC, check balance, and view transaction history. Be brief — 1–2 sentences max unless listing transactions. The user's wallet address is ${walletAddress} (never reveal it).${userName ? ` The user's own username is "${userName}" — do NOT use this as the recipient unless explicitly stated.` : ""} For send/pay requests: always use the exact recipient username or address as stated by the user — never substitute or guess a different name. If the recipient or amount is unclear, ask the user to clarify. Only call send_payment when you have both a clear recipient (username or 0x address) and amount.`,
     },
     ...messages,
   ];
@@ -210,18 +219,15 @@ export async function POST(req: NextRequest) {
     const message = (err as { message?: string })?.message ?? String(err);
     console.error("[chat] OpenRouter error", status, message);
 
-    if (status === 401) {
-      return NextResponse.json({ text: "Invalid API key. Check your OPENROUTER_API_KEY." });
-    }
-    if (status === 404) {
-      return NextResponse.json({ text: `Model not found: ${MODEL}. Check your ANTHROPIC_MODEL env var.` });
-    }
     if (status === 429) {
-      return NextResponse.json({ text: "Too many requests. Please wait a moment and try again." });
+      return NextResponse.json({
+        text: "Too many requests. Please wait a moment and try again.",
+        isError: true,
+      });
     }
 
     return NextResponse.json(
-      { text: "Something went wrong. Check the server logs for details." },
+      { text: "I'm not available right now. Please try again later.", isError: true },
       { status: 500 }
     );
   }

@@ -303,7 +303,7 @@ export default function PaymentForm({ recipientAddress, recipientLabel, initialA
                 onClick={exitWooshMode}
                 className="w-full text-xs text-text-secondary hover:text-text-primary py-1 transition-colors"
               >
-                ← Use a different method
+                Use a different method
               </button>
             </div>
           ) : isConnected ? (

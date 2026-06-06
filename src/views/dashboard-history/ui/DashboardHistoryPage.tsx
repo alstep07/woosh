@@ -55,7 +55,7 @@ export default function DashboardHistoryPage() {
           onClick={() => router.back()}
           className="text-sm text-blue-primary/60 hover:text-blue-primary transition-colors mb-4 inline-block"
         >
-          ← Back
+          Back
         </button>
         <h1 className="text-lg font-semibold text-text-primary mb-6">Transactions</h1>
         <TransactionList txs={txs} isLoading={isLoading} isError={isError} onRefresh={handleRefresh} isRefreshing={isRefreshing} />

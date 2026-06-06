@@ -51,6 +51,11 @@ export default function DashboardPage() {
 
   function handleLogout() {
     localStorage.removeItem("woosh_session");
+    try {
+      sessionStorage.removeItem("woosh_session_token");
+      sessionStorage.removeItem("woosh_session_enc_key");
+      sessionStorage.removeItem("woosh_chat_history");
+    } catch {}
     router.replace("/");
   }
 
@@ -93,7 +98,7 @@ export default function DashboardPage() {
             paymentLink={paymentLink}
             slug={session.slug}
           />
-          <ChatPanel name={session.slug} walletAddress={session.walletAddress} />
+          <ChatPanel name={session.slug} walletAddress={session.walletAddress} userEmail={session.email} />
           <TransactionList
             txs={txs?.slice(0, 3)}
             isLoading={txsLoading}
