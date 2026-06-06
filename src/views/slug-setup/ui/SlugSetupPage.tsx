@@ -187,7 +187,7 @@ export default function SlugSetupPage() {
             <>
               <Link
                 href="/dashboard"
-                className="block w-full text-sm text-text-secondary hover:text-text-primary transition-colors mb-6"
+                className="block w-full text-sm text-blue-primary/60 hover:text-blue-primary transition-colors mb-6"
               >
                 ← Back to dashboard
               </Link>
@@ -329,13 +329,13 @@ export default function SlugSetupPage() {
                   )}
                   <button
                     onClick={auth.verifyOtp}
-                    className="text-sm text-text-secondary hover:text-text-primary transition-colors underline"
+                    className="text-sm text-blue-primary/60 hover:text-blue-primary transition-colors underline"
                   >
                     Didn&apos;t open? Re-open window
                   </button>
                   <button
                     onClick={() => auth.resetToEmail()}
-                    className="mt-3 block w-full text-sm text-text-secondary hover:text-text-primary transition-colors"
+                    className="mt-3 block w-full text-sm text-blue-primary/60 hover:text-blue-primary transition-colors"
                   >
                     Use a different email
                   </button>
@@ -344,7 +344,7 @@ export default function SlugSetupPage() {
 
               <button
                 onClick={() => { setPhase("slug"); setRegError(null); }}
-                className="mt-4 w-full text-sm text-text-secondary hover:text-text-primary transition-colors"
+                className="mt-4 w-full text-sm text-blue-primary/60 hover:text-blue-primary transition-colors"
               >
                 ← Back to link selection
               </button>
