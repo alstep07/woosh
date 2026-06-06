@@ -42,6 +42,9 @@ export default function SignupPage() {
     try {
       sessionStorage.setItem("woosh_pending_token", userToken);
       sessionStorage.setItem("woosh_pending_enc_key", encryptionKey);
+      // Persist for dashboard-level re-use (payments without re-auth)
+      sessionStorage.setItem("woosh_session_token", userToken);
+      sessionStorage.setItem("woosh_session_enc_key", encryptionKey);
     } catch { /* noop */ }
     setWalletPhase("creating");
     void createWallet(userToken, encryptionKey);
@@ -180,7 +183,7 @@ export default function SignupPage() {
               href="/dashboard"
               className="inline-flex items-center justify-center bg-blue-primary hover:bg-blue-secondary text-white font-semibold px-8 py-3 rounded-input transition-colors shadow-glow min-h-[44px]"
             >
-              Go to dashboard →
+              Go to dashboard
             </Link>
             <button
               onClick={() => {
@@ -191,7 +194,7 @@ export default function SignupPage() {
                 } catch { /* noop */ }
                 setAlreadySignedIn(false);
               }}
-              className="mt-4 block w-full text-sm text-text-secondary hover:text-text-primary transition-colors"
+              className="mt-4 block w-full text-sm text-blue-primary/60 hover:text-blue-primary transition-colors"
             >
               Sign up with a different account
             </button>
@@ -257,13 +260,13 @@ export default function SignupPage() {
               )}
               <button
                 onClick={auth.verifyOtp}
-                className="text-sm text-text-secondary hover:text-text-primary transition-colors underline"
+                className="text-sm text-blue-primary/60 hover:text-blue-primary transition-colors underline"
               >
                 Didn&apos;t open? Re-open verification window
               </button>
               <button
                 onClick={resetToEmail}
-                className="mt-3 block w-full text-sm text-text-secondary hover:text-text-primary transition-colors"
+                className="mt-3 block w-full text-sm text-blue-primary/60 hover:text-blue-primary transition-colors"
               >
                 Use a different email
               </button>
@@ -292,7 +295,7 @@ export default function SignupPage() {
               <p className="text-sm text-red-400 mb-6">{walletError}</p>
               <button
                 onClick={resetToEmail}
-                className="text-sm text-text-secondary hover:text-text-primary transition-colors underline"
+                className="text-sm text-blue-primary/60 hover:text-blue-primary transition-colors underline"
               >
                 Try again
               </button>

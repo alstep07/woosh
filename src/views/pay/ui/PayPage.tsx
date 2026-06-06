@@ -5,9 +5,10 @@ import Footer from "@/widgets/Footer/ui/Footer";
 interface Props {
   slug: string;
   address: `0x${string}` | null;
+  initialAmount?: string;
 }
 
-export function PayPage({ slug, address }: Props) {
+export function PayPage({ slug, address, initialAmount }: Props) {
   if (!address) {
     return (
       <main className="min-h-screen bg-navy flex flex-col">
@@ -40,6 +41,7 @@ export function PayPage({ slug, address }: Props) {
         <PaymentForm
           recipientAddress={address}
           recipientLabel={recipientLabel}
+          initialAmount={initialAmount}
         />
       </div>
       <Footer />

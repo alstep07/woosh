@@ -20,13 +20,14 @@ import type { OtpTokens } from "@/entities/user/model/types";
 interface Props {
   recipientAddress: `0x${string}`;
   recipientLabel: string;
+  initialAmount?: string;
 }
 
 type TxState = "idle" | "pending" | "success" | "error";
 type WooshStep = "email" | "verify" | "paying";
 
-export default function PaymentForm({ recipientAddress, recipientLabel }: Props) {
-  const [amount, setAmount] = useState("");
+export default function PaymentForm({ recipientAddress, recipientLabel, initialAmount }: Props) {
+  const [amount, setAmount] = useState(initialAmount ?? "");
   const [amountError, setAmountError] = useState<string | null>(null);
   const [guide, setGuide] = useState<{ open: false } | { open: true; step: 1 | 2 | 3 }>({ open: false });
 
@@ -302,7 +303,7 @@ export default function PaymentForm({ recipientAddress, recipientLabel }: Props)
                 onClick={exitWooshMode}
                 className="w-full text-xs text-text-secondary hover:text-text-primary py-1 transition-colors"
               >
-                ← Use a different method
+                Use a different method
               </button>
             </div>
           ) : isConnected ? (

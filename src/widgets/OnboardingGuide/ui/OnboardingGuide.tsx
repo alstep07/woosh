@@ -72,7 +72,7 @@ export default function OnboardingGuide({ initialStep = 1, onDismiss }: Props) {
               onClick={() => setStep(2)}
               className="mt-3 w-full text-sm text-text-secondary hover:text-text-primary text-center transition-colors py-2 min-h-[44px]"
             >
-              I already have an account →
+              I already have an account
             </button>
           </div>
         )}
@@ -103,7 +103,7 @@ export default function OnboardingGuide({ initialStep = 1, onDismiss }: Props) {
               onClick={() => setStep(3)}
               className="mt-3 w-full text-sm text-text-secondary hover:text-text-primary text-center transition-colors py-2 min-h-[44px]"
             >
-              I&apos;ve got USDC →
+              I&apos;ve got USDC
             </button>
           </div>
         )}

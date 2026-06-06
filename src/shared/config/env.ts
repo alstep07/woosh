@@ -1,3 +1,5 @@
+export const APP_VERSION = "2.0";
+
 export const env = {
   circleAppId: process.env.NEXT_PUBLIC_CIRCLE_APP_ID ?? "",
   walletConnectProjectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID ?? "",

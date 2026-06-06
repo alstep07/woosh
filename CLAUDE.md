@@ -81,7 +81,37 @@ isAvailable(string slug)    // read-only availability check
 **Route:** `/pay/[slug]` — resolver calls `slugToAddress[slug]` server-side.
 If param is a 0x address, passes through directly (backwards compat).
 
-### V2 — Agentic Payments + Payment Requests
+### V2a — Woosh Agent Chat (implemented)
+
+Natural language interface in the dashboard. User types in plain English;
+Woosh Agent (Claude via OpenRouter) parses intent, executes safe reads,
+and returns a confirmation card before any send.
+
+**Architecture:**
+- `POST /api/chat` — manual agentic loop (max 4 iters), OpenRouter → Claude
+- Tools: `get_balance` (viem RPC), `get_transaction_history` (Blockscout), `send_payment`
+- `send_payment` never auto-executes — server resolves recipient slug first
+  (unknown slug → Claude asks user to clarify), then returns `{text, pendingAction}` to frontend
+- Confirmation card shows: "Send $10.00 to alex (…a3f2)?" — last 4 chars of resolved address
+- On confirm → `router.push(/pay/${to}?amount=${amount})` — pay page pre-fills amount
+
+**Tool registry (extensible):**
+```typescript
+// src/features/chat/model/registry.ts — side-effect registry
+// src/features/payments/chat-tools.ts — registers payment tool examples
+// Adding a new tool: create a feature file, call registerToolExamples(), import in /api/chat
+```
+
+**Chat state:** Session-only (no persistence). V2b: Supabase.
+
+**Env:** `OPENROUTER_API_KEY`, `ANTHROPIC_MODEL` (default: `anthropic/claude-3-5-sonnet`)
+
+**Pending V2a improvements:**
+- Wire chat confirm directly to Circle SDK (skip pay page redirect) — needs userToken management in dashboard
+- Add `userSlug` to system prompt so Claude knows the user's name
+- Rate limiting on `/api/chat`
+
+### V2b — Payment Requests + Direct Sends
 
 **`WooshPaymentRequest` contract — on-chain invoices:**
 - Creator specifies: `toAddress`, `amount`, `description`, `expiresAt`
@@ -89,6 +119,12 @@ If param is a 0x address, passes through directly (backwards compat).
 - Payer sees amount locked (cannot change)
 - After payment → request marked `paid` on-chain
 - Use cases: freelance invoices, event tickets, one-time fees
+
+**Direct send from dashboard (no redirect):**
+- Initialize Circle UCW SDK in DashboardPage
+- userToken management: request fresh token on send (re-auth by email OTP)
+- Use existing `POST /api/wallet/send-payment` → returns challengeId → execute via SDK
+- Show receipt bubble in chat on success
 
 **Agentic Payments via ERC-8183 (deployed on Arc Testnet):**
 ```
@@ -109,6 +145,8 @@ Integration: `@circle-fin/developer-controlled-wallets` with
 **REST API additions:**
 - `POST /api/pay` — programmatic payment (Bearer token, amount, slug, memo)
 - Webhook on tx confirmed — agent continues without human in the loop
+- Supabase: payment metadata (sender, description, memo) matched to txHash
+- Persist chat history per user
 
 ### V3 — Recurring Payments + Streams
 
@@ -210,10 +248,12 @@ Styling:      Tailwind CSS
 Web3:         Wagmi + Viem
 Wallets:      Circle User-Controlled Wallets SDK (UCW)
               email OTP, secure iframe for signing
-Contracts:    Solidity on Arc (Hardhat or Foundry)
+AI:           Claude via OpenRouter (openai npm pkg, baseURL: openrouter.ai/api/v1)
+              ANTHROPIC_MODEL env var (default: anthropic/claude-3-5-sonnet)
+Contracts:    Solidity on Arc (Foundry)
 Network:      Arc Testnet → Arc Mainnet (summer 2026)
-DB:           None in V1/V1.5 (on-chain is source of truth)
-              Supabase in V2 (payment metadata, memos)
+DB:           None in V1/V1.5/V2a (on-chain is source of truth)
+              Supabase in V2b (payment metadata, chat history)
 ```
 
 ---
@@ -259,29 +299,50 @@ type PaymentRequest = {       // V2
 
 ---
 
+## Dashboard Layout (V2a)
+
+```
+Header (BrandHeader + email + logout)
+└── AccountBar — balance (left), copy payment link + claim username (right)
+└── ChatPanel — Woosh Agent chat with typewriter placeholder
+    └── messages (bottom-aligned), typing indicator (3 bounce dots)
+    └── send_payment: confirmation card with recipient + address suffix
+└── TransactionList — last 3 txs, "View all" link if >3
+/dashboard/history — full transaction list with refresh
+```
+
 ## Pages & Routes
 
 | Route | Description |
 |-------|-------------|
 | `/` | Landing page |
 | `/signup` | Email + OTP registration, creates UCW wallet |
-| `/slug-setup` | One-time slug registration after first login (V1.5) |
-| `/dashboard` | Balance, tx history, payment link |
-| `/pay/[slug]` | Public payment page — slug resolved via SlugRegistry |
+| `/slug-setup` | One-time slug registration (V1.5, voluntary from dashboard) |
+| `/dashboard` | Balance + chat + last 3 txs |
+| `/dashboard/history` | Full transaction history |
+| `/pay/[slug]` | Public payment page — slug resolved via SlugRegistry; supports `?amount=` pre-fill |
 
 ---
 
 ## What's Out of Scope Per Version
 
-**V1 (shipped):**
-- Slugs / SlugRegistry (done in V1.5)
+**V1 (shipped):** Slugs (done in V1.5)
 
-**V1.5 (implemented):**
-- On-chain payment requests (V2)
-- Agentic API / webhooks (V2)
+**V1.5 (implemented):** On-chain payment requests, agentic API, chat (done in V2a)
+
+**V2a (implemented):**
+- Direct send from dashboard without redirect (V2b — needs Circle SDK + userToken in dashboard)
+- Chat history persistence (V2b — Supabase)
+- Rate limiting on `/api/chat`
+- User slug in chat system prompt (minor gap, easy to add)
+
+**V2b (next):**
+- WooshPaymentRequest contract
+- `POST /api/pay` programmatic endpoint
+- Webhook delivery
 - Recurring payments / streams (V3)
 - Fiat on-ramp, CCTP bridge (V4)
-- Yield on balance (deferred indefinitely — too complex without custody)
+- Yield on balance (deferred — too complex without custody)
 - Invoice PDF export, multi-recipient payroll, off-ramp to bank
 
 ---
@@ -353,14 +414,25 @@ Woosh serves both humans and AI agents as first-class users.
 ## Environment Variables
 
 ```
+# Circle
 CIRCLE_API_KEY=                          # backend only
 NEXT_PUBLIC_CIRCLE_APP_ID=               # frontend (UCW SDK)
+
+# WalletConnect
 NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=
+
+# Arc Network
 NEXT_PUBLIC_ARC_RPC_URL=                 # default: https://rpc.testnet.arc.network
-NEXT_PUBLIC_ARC_CHAIN_ID=               # default: 5042002
-NEXT_PUBLIC_ARC_EXPLORER_URL=           # default: https://testnet.arcscan.app
-NEXT_PUBLIC_ARC_FAUCET_URL=             # default: https://faucet-testnet.arc.network
+NEXT_PUBLIC_ARC_CHAIN_ID=                # default: 5042002
+NEXT_PUBLIC_ARC_EXPLORER_URL=            # default: https://testnet.arcscan.app
+NEXT_PUBLIC_ARC_FAUCET_URL=              # default: https://faucet-testnet.arc.network
 NEXT_PUBLIC_BASE_URL=
+
+# Smart Contracts
 NEXT_PUBLIC_SLUG_REGISTRY_ADDRESS=       # WooshSlugRegistry (V1.5, deploy with Foundry)
-NEXT_PUBLIC_PAYMENT_REQUEST_ADDRESS=     # WooshPaymentRequest (V2)
+NEXT_PUBLIC_PAYMENT_REQUEST_ADDRESS=     # WooshPaymentRequest (V2b, not yet deployed)
+
+# Woosh Agent (V2a)
+OPENROUTER_API_KEY=                      # openrouter.ai/keys
+ANTHROPIC_MODEL=                         # default: anthropic/claude-3-5-sonnet
 ```
