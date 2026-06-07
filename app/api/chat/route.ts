@@ -35,6 +35,23 @@ const TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
   {
     type: "function",
     function: {
+      name: "resolve_slug",
+      description: "Resolve a username (slug) to their wallet address. Use this when the user mentions someone by name to look up who they are.",
+      parameters: {
+        type: "object",
+        properties: {
+          slug: {
+            type: "string",
+            description: "The username to resolve, e.g. 'alex'",
+          },
+        },
+        required: ["slug"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "send_payment",
       description: "Send USDC to a recipient. Call this whenever the user wants to pay or send money to someone.",
       parameters: {
@@ -96,7 +113,7 @@ async function getTransactionHistory(address: string, limit = 5): Promise<string
         const cp = (dir === "sent" ? to : from) ?? from;
         const amt = (Number(BigInt(tx.value)) / 1e18).toFixed(2);
         const when = new Date(tx.timestamp).toLocaleDateString();
-        return `${dir === "received" ? "+" : "-"}$${amt} ${dir === "sent" ? "to" : "from"} ${cp.slice(0, 6)}…${cp.slice(-4)} on ${when}`;
+        return `${dir === "received" ? "+" : "-"}$${amt} ${dir === "sent" ? "to" : "from"} ${cp} on ${when}`;
       });
 
     return txs.length ? txs.join("\n") : "No transactions yet";
@@ -147,7 +164,9 @@ Transaction history rules:
 - If the user asks where they spent money or wants a breakdown → group transactions by recipient address/slug and show totals per recipient (e.g. "alex $15.00, 0x12…34 $10.00"). Still no per-transaction detail unless explicitly asked.
 - Only list individual transactions if the user explicitly asks for a transaction list or history.
 
-Send rules: always use the exact recipient name/address as stated — never substitute. If recipient or amount is unclear, ask to clarify. Only call send_payment when both recipient and amount are clear.`,
+Send rules: always use the exact recipient name/address as stated — never substitute. If recipient or amount is unclear, ask to clarify. Only call send_payment when both recipient and amount are clear.
+
+When the user asks if someone paid them (e.g. "did alex pay me?"): first call resolve_slug to get their address, then call get_transaction_history, then check if that address appears in received transactions. Confirm clearly: "Yes, alex sent you $X on [date]" or "No, I don't see any payments from alex."`,
     },
     ...messages,
   ];
@@ -210,6 +229,12 @@ Send rules: always use the exact recipient name/address as stated — never subs
             walletAddress,
             (args.limit as number | undefined) ?? 5
           );
+        } else if (call.function.name === "resolve_slug") {
+          const slug = args.slug as string;
+          const resolved = await resolveSlug(slug);
+          result = resolved
+            ? `"${slug}" resolves to address ${resolved}`
+            : `Username "${slug}" not found`;
         } else {
           result = "Unknown tool";
         }

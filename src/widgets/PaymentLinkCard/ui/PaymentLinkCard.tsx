@@ -9,14 +9,32 @@ interface Props {
   slug?: string;
 }
 
+function CopyIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" className="shrink-0">
+      <rect x="4.5" y="4.5" width="8" height="8" rx="1.5" stroke="currentColor" strokeWidth="1.2" />
+      <path d="M2.5 9.5H2a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1h6.5a1 1 0 0 1 1 1v.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 export default function PaymentLinkCard({ walletAddress, paymentLink, slug }: Props) {
-  const [copied, setCopied] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
+  const [copiedAddress, setCopiedAddress] = useState(false);
 
   async function copyLink() {
     await navigator.clipboard.writeText(paymentLink);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    setCopiedLink(true);
+    setTimeout(() => setCopiedLink(false), 2000);
   }
+
+  async function copyAddress() {
+    await navigator.clipboard.writeText(walletAddress);
+    setCopiedAddress(true);
+    setTimeout(() => setCopiedAddress(false), 2000);
+  }
+
+  const shortAddress = `${walletAddress.slice(0, 6)}…${walletAddress.slice(-4)}`;
 
   const label = slug
     ? slug
@@ -73,9 +91,25 @@ export default function PaymentLinkCard({ walletAddress, paymentLink, slug }: Pr
 
       <button
         onClick={copyLink}
-        className="w-full bg-blue-primary hover:bg-blue-secondary text-white font-semibold py-3 rounded-input transition-colors shadow-glow min-h-[44px] text-sm"
+        className="w-full bg-blue-primary hover:bg-blue-secondary text-white font-semibold py-3 rounded-input transition-colors shadow-glow min-h-[44px] text-sm flex items-center justify-center gap-2"
       >
-        {copied ? "Copied!" : "Copy payment link"}
+        {copiedLink ? (
+          "Copied!"
+        ) : slug ? (
+          <>
+            <span>{slug}</span>
+            <CopyIcon />
+          </>
+        ) : (
+          "Copy payment link"
+        )}
+      </button>
+
+      <button
+        onClick={copyAddress}
+        className="mt-2 w-full text-center text-xs font-mono text-text-secondary/40 hover:text-text-secondary transition-colors"
+      >
+        {copiedAddress ? "Copied!" : shortAddress}
       </button>
     </div>
   );

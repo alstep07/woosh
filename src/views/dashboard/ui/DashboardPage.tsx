@@ -76,7 +76,7 @@ export default function DashboardPage() {
           rightSlot={
             <div className="flex flex-col items-end gap-0.5 sm:flex-row sm:items-center sm:gap-4">
               {session.email && (
-                <span className="text-xs text-text-secondary/50 order-2 sm:order-1">
+                <span className="text-xs text-text-secondary/50 order-2 sm:order-1 truncate max-w-[140px] sm:max-w-none">
                   {session.email}
                 </span>
               )}
@@ -97,6 +97,7 @@ export default function DashboardPage() {
             isLoading={balanceLoading}
             isError={balanceError}
             paymentLink={paymentLink}
+            walletAddress={session.walletAddress}
             slug={session.slug}
           />
           <ChatPanel name={session.slug} walletAddress={session.walletAddress} userEmail={session.email} />
