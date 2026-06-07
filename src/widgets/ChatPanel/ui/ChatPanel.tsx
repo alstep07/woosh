@@ -393,7 +393,7 @@ export default function ChatPanel({ name, walletAddress, userEmail }: Props) {
       </div>
 
       {/* Messages */}
-      <div className="overflow-y-auto h-44 sm:h-56 px-3 sm:px-4 py-3 sm:py-4">
+      <div className="overflow-y-auto h-52 sm:h-56 px-3 sm:px-4 py-3 sm:py-4">
         <div className="flex flex-col justify-end min-h-full space-y-3">
           {messages.map((msg) => (
             <div key={msg.id} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
@@ -520,7 +520,7 @@ export default function ChatPanel({ name, walletAddress, userEmail }: Props) {
           onBlur={() => setFocused(false)}
           placeholder={focused ? "" : hasConversation ? "Write a message..." : (typewriterPlaceholder || "")}
           disabled={isLoading}
-          className="flex-1 bg-transparent text-text-primary text-sm outline-none placeholder:text-text-secondary/50 disabled:opacity-50"
+          className="flex-1 bg-transparent text-text-primary text-base sm:text-sm outline-none placeholder:text-text-secondary/50 disabled:opacity-50"
         />
         <button
           onClick={handleSend}

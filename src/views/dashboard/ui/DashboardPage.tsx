@@ -47,6 +47,12 @@ export default function DashboardPage() {
     setIsTxRefreshing(false);
   }
 
+  function formatEmail(email: string, maxLocal = 6): string {
+    const at = email.indexOf("@");
+    if (at === -1 || at <= maxLocal) return email;
+    return `${email.slice(0, maxLocal)}…${email.slice(at)}`;
+  }
+
   const identifier = session ? (session.slug ?? session.walletAddress) : "";
   const paymentLink = session ? `${env.baseUrl}/pay/${identifier}` : "";
 
@@ -76,8 +82,9 @@ export default function DashboardPage() {
           rightSlot={
             <div className="flex flex-col items-end gap-0.5 sm:flex-row sm:items-center sm:gap-4">
               {session.email && (
-                <span className="text-xs text-text-secondary/50 order-2 sm:order-1 truncate max-w-[140px] sm:max-w-none">
-                  {session.email}
+                <span className="text-xs text-text-secondary/50 order-2 sm:order-1">
+                  <span className="sm:hidden">{formatEmail(session.email)}</span>
+                  <span className="hidden sm:inline">{session.email}</span>
                 </span>
               )}
               <button
