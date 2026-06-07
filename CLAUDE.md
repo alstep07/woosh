@@ -42,7 +42,7 @@ who isn't already deep in crypto.
 
 ## Roadmap
 
-### V1 — Web3 Payments (live)
+### ✅ V1 — Web3 Payments (shipped)
 
 Crypto-to-crypto. User registers with email, gets a
 User-Controlled embedded wallet (Circle UCW — email OTP,
@@ -51,7 +51,7 @@ based on their wallet address (`/pay/0x...`).
 Sender pays USDC from any wallet or from their Woosh account.
 Onboarding guide for senders who need help getting started.
 
-### V1.5 — Slug Registry (implemented, branch: version/1.5)
+### ✅ V1.5 — Slug Registry (shipped)
 
 Human-readable payment links stored on-chain.
 `/pay/0x1a2b…` becomes `/pay/alex`.
@@ -81,7 +81,7 @@ isAvailable(string slug)    // read-only availability check
 **Route:** `/pay/[slug]` — resolver calls `slugToAddress[slug]` server-side.
 If param is a 0x address, passes through directly (backwards compat).
 
-### V2a — Woosh Agent Chat (implemented)
+### ✅ V2a — Woosh Agent Chat (shipped)
 
 Natural language interface in the dashboard. User types in plain English;
 Woosh Agent (Claude via OpenRouter) parses intent, executes safe reads,
@@ -106,19 +106,7 @@ and returns a confirmation card before any send.
 
 **Env:** `OPENROUTER_API_KEY`, `ANTHROPIC_MODEL` (default: `anthropic/claude-3-5-sonnet`)
 
-**Pending V2a improvements:**
-- Wire chat confirm directly to Circle SDK (skip pay page redirect) — needs userToken management in dashboard
-- Add `userSlug` to system prompt so Claude knows the user's name
-- Rate limiting on `/api/chat`
-
-### V2b — Payment Requests + Direct Sends
-
-**`WooshPaymentRequest` contract — on-chain invoices:**
-- Creator specifies: `toAddress`, `amount`, `description`, `expiresAt`
-- Returns `requestId` → link: `/pay/alex?req=0xABC`
-- Payer sees amount locked (cannot change)
-- After payment → request marked `paid` on-chain
-- Use cases: freelance invoices, event tickets, one-time fees
+### 🔄 V2b — Direct Sends + Persistence (next)
 
 **Direct send from dashboard (no redirect):**
 - Initialize Circle UCW SDK in DashboardPage
@@ -126,47 +114,26 @@ and returns a confirmation card before any send.
 - Use existing `POST /api/wallet/send-payment` → returns challengeId → execute via SDK
 - Show receipt bubble in chat on success
 
-**Agentic Payments via ERC-8183 (deployed on Arc Testnet):**
-```
-ERC_8183 = 0x0747EEf0706327138c69792bF28Cd525089e4583
-USDC     = 0x3600000000000000000000000000000000000000
-```
-Job lifecycle: Open → Funded → Submitted → Completed / Rejected / Expired
-- `createJob` — client defines provider, evaluator, expiry, description
-- `setBudget` — provider sets price
-- `approve + fund` — locks USDC in escrow
-- `submit` — provider submits `bytes32` deliverable hash
-- `complete / reject` — evaluator releases payment or triggers refund
-- `claimRefund` — timeout-based refund if job passes `expiredAt`
-
-Integration: `@circle-fin/developer-controlled-wallets` with
-`createContractExecutionTransaction`. Agent wallets = DCW (not UCW).
-
-**REST API additions:**
-- `POST /api/pay` — programmatic payment (Bearer token, amount, slug, memo)
-- Webhook on tx confirmed — agent continues without human in the loop
+**Persistence:**
 - Supabase: payment metadata (sender, description, memo) matched to txHash
 - Persist chat history per user
 
-### V3 — Recurring Payments + Streams
+**Other:**
+- Rate limiting on `/api/chat`
+- User slug in chat system prompt
+
+### 🔮 V3 — Fiat + Bridge
+
+- Fiat on-ramp via Transak — card → USDC on Arc
+- CCTP bridge — USDC from Base/Ethereum (prefer Circle App Kits over LI.FI)
+
+### 🔮 V4 — Recurring Payments
 
 **`WooshSubscription` contract:**
 - Sender pre-authorizes: `maxAmount` + `period` (daily/weekly/monthly)
 - Recipient calls `pull()` each period to collect
 - Sender revokes authorization anytime
 - Use cases: SaaS, memberships, salary
-
-**Payment Streams:**
-- USDC flows per-second, accumulated balance withdrawable at any time
-- Use cases: hourly billing for AI agents, continuous service payment
-
-### V4 — Web2 Integrations + Advanced Contracts
-
-- Fiat on-ramp via Transak — card → USDC on Arc
-- CCTP bridge — USDC from Base/Ethereum (prefer Circle App Kits over LI.FI)
-- Payment splits — one payment divided across multiple addresses
-- Vouchers — USDC gift card with a code, claimable once
-- Milestone escrow — multi-step release tied to deliverable confirmations
 
 ---
 
@@ -191,9 +158,7 @@ programmatic signing, no user interaction required.
 
 | Contract | Address | Version |
 |----------|---------|---------|
-| `WooshSlugRegistry` | set via `NEXT_PUBLIC_SLUG_REGISTRY_ADDRESS` | V1.5 |
-| `WooshPaymentRequest` | TBD (deploy V2) | V2 |
-| ERC-8183 Job Escrow | `0x0747EEf0706327138c69792bF28Cd525089e4583` | V2 |
+| `WooshSlugRegistry` | set via `NEXT_PUBLIC_SLUG_REGISTRY_ADDRESS` | ✅ V1.5 |
 | USDC on Arc Testnet | `0x3600000000000000000000000000000000000000` | all |
 
 ---
@@ -324,26 +289,22 @@ Header (BrandHeader + email + logout)
 
 ---
 
-## What's Out of Scope Per Version
+## What's Out of Scope
 
-**V1 (shipped):** Slugs (done in V1.5)
-
-**V1.5 (implemented):** On-chain payment requests, agentic API, chat (done in V2a)
-
-**V2a (implemented):**
-- Direct send from dashboard without redirect (V2b — needs Circle SDK + userToken in dashboard)
-- Chat history persistence (V2b — Supabase)
-- Rate limiting on `/api/chat`
-- User slug in chat system prompt (minor gap, easy to add)
-
-**V2b (next):**
-- WooshPaymentRequest contract
-- `POST /api/pay` programmatic endpoint
+**Not planned:**
+- ERC-8183 agentic job escrow
+- WooshPaymentRequest on-chain invoices
+- `POST /api/pay` programmatic payment API
 - Webhook delivery
-- Recurring payments / streams (V3)
-- Fiat on-ramp, CCTP bridge (V4)
-- Yield on balance (deferred — too complex without custody)
-- Invoice PDF export, multi-recipient payroll, off-ramp to bank
+- Payment splits, vouchers, milestone escrow
+- Yield on balance (too complex without custody)
+- Invoice PDF export, payroll, off-ramp to bank
+
+**V2b (next):** direct send without redirect, chat persistence in Supabase, rate limiting, user slug in system prompt
+
+**V3 (future):** fiat on-ramp (Transak), CCTP bridge from Base/Ethereum
+
+**V4 (future):** recurring payments / subscriptions
 
 ---
 
@@ -402,12 +363,10 @@ Woosh serves both humans and AI agents as first-class users.
 
 - Arc testnet RPC: `docs.arc.network`
 - Circle UCW SDK: `developers.circle.com/w3s/docs`
-- Circle DCW SDK: `developers.circle.com/w3s/docs/developer-controlled-wallets`
 - Circle Console: `console.circle.com`
-- ERC-8183 on Arc: `0x0747EEf0706327138c69792bF28Cd525089e4583`
-- Transak SDK: `docs.transak.com` (V4)
+- Transak SDK: `docs.transak.com` (V3)
 - WalletConnect: `cloud.walletconnect.com`
-- Supabase: `supabase.com` (V2)
+- Supabase: `supabase.com` (V2b)
 
 ---
 
@@ -430,7 +389,6 @@ NEXT_PUBLIC_BASE_URL=
 
 # Smart Contracts
 NEXT_PUBLIC_SLUG_REGISTRY_ADDRESS=       # WooshSlugRegistry (V1.5, deploy with Foundry)
-NEXT_PUBLIC_PAYMENT_REQUEST_ADDRESS=     # WooshPaymentRequest (V2b, not yet deployed)
 
 # Woosh Agent (V2a)
 OPENROUTER_API_KEY=                      # openrouter.ai/keys
