@@ -90,8 +90,8 @@ export default function DashboardPage() {
           }
         />
       </div>
-      <div className="relative z-10 flex-1 overflow-y-auto">
-        <div className="px-6 max-w-2xl mx-auto w-full pb-8">
+      <div className="relative z-10 flex-1 overflow-y-auto overflow-x-hidden">
+        <div className="px-4 sm:px-6 max-w-2xl mx-auto w-full pb-8 min-w-0">
           <AccountBar
             balance={balance?.display}
             isLoading={balanceLoading}

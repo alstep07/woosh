@@ -370,7 +370,7 @@ export default function ChatPanel({ name, walletAddress, userEmail }: Props) {
   }
 
   return (
-    <div className="flex flex-col glass-card rounded-card overflow-hidden mb-4">
+    <div className="flex flex-col glass-card rounded-card overflow-hidden mb-4 min-w-0 w-full">
       {/* Header */}
       <div className="px-4 py-3 flex items-center gap-2">
         <svg className="w-4 h-4 text-blue-primary/60" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -393,11 +393,11 @@ export default function ChatPanel({ name, walletAddress, userEmail }: Props) {
       </div>
 
       {/* Messages */}
-      <div className="overflow-y-auto h-56 px-4 py-4">
+      <div className="overflow-y-auto h-44 sm:h-56 px-3 sm:px-4 py-3 sm:py-4">
         <div className="flex flex-col justify-end min-h-full space-y-3">
           {messages.map((msg) => (
             <div key={msg.id} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
-              <div className={`max-w-[85%] rounded-2xl px-3.5 py-2 text-sm leading-relaxed ${
+              <div className={`max-w-[85%] rounded-2xl px-3.5 py-2 text-sm leading-relaxed break-words min-w-0 ${
                 msg.role === "user"
                   ? "bg-blue-primary text-white rounded-br-sm"
                   : msg.isError
@@ -511,7 +511,7 @@ export default function ChatPanel({ name, walletAddress, userEmail }: Props) {
       </div>
 
       {/* Input */}
-      <div className={`border-t border-border bg-white/[0.03] px-4 sm:px-6 py-3.5 flex items-center gap-3 transition-colors ${focused ? "border-blue-primary/40" : ""}`}>
+      <div className={`border-t border-border bg-white/[0.03] px-4 py-3 flex items-center gap-3 transition-colors ${focused ? "border-blue-primary/40" : ""}`}>
         <input
           value={input}
           onChange={(e) => setInput(e.target.value)}

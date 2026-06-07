@@ -49,22 +49,22 @@ export default function AccountBar({
       </div>
 
       {/* Right: payment link */}
-      <div className="flex flex-col items-end gap-2 shrink-0 ml-6">
+      <div className="flex flex-col items-end gap-2 min-w-0 ml-4">
         <button
           onClick={copyLink}
-          className="text-sm bg-blue-primary/10 hover:bg-blue-primary/20 text-blue-primary px-4 py-2 rounded-input font-medium transition-colors"
+          className="text-xs sm:text-sm bg-blue-primary/10 hover:bg-blue-primary/20 text-blue-primary px-3 sm:px-4 py-2 rounded-input font-medium transition-colors whitespace-nowrap"
         >
-          {copied ? "Copied!" : "Copy payment link"}
+          {copied ? "Copied!" : "Copy link"}
         </button>
         {!slug ? (
           <Link
             href="/slug-setup"
-            className="text-xs text-blue-primary/60 hover:text-blue-primary transition-colors"
+            className="text-xs text-blue-primary/60 hover:text-blue-primary transition-colors whitespace-nowrap"
           >
             Claim username
           </Link>
         ) : (
-          <span className="text-xs text-text-secondary/60 font-mono">{paymentLink.replace(/^https?:\/\//, "")}</span>
+          <span className="text-xs text-text-secondary/60 font-mono truncate max-w-[130px] sm:max-w-[200px]">{paymentLink.replace(/^https?:\/\//, "")}</span>
         )}
       </div>
     </div>
