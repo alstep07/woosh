@@ -4,7 +4,7 @@ export default function Footer() {
   return (
     <footer className="border-t border-white/10 px-6 py-4 text-text-secondary text-sm shrink-0">
       <div className="max-w-5xl mx-auto flex items-center justify-between gap-4">
-        <span className="text-text-secondary/40 text-xs">© {new Date().getFullYear()} Woosh</span>
+        <span className="text-text-secondary/40 text-xs">© {new Date().getFullYear()} Woosh · v{APP_VERSION}</span>
         <div className="flex items-center gap-4 text-xs">
           <a
             href={env.arcExplorerUrl}
@@ -30,7 +30,6 @@ export default function Footer() {
           >
             GitHub
           </a>
-          <span className="text-text-secondary/40">v{APP_VERSION}</span>
         </div>
       </div>
     </footer>

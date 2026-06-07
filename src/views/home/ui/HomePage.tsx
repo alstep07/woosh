@@ -25,7 +25,7 @@ const HOW_IT_WORKS = [
     steps: [
       "Sign up with email",
       "Get your link: woosh.app/pay/you",
-      "Share it. Get paid from anywhere.",
+      "Share it. Get paid instantly.",
     ],
   },
   {
@@ -33,19 +33,19 @@ const HOW_IT_WORKS = [
     accent: "text-blue-secondary",
     bubble: "bg-blue-secondary/10 text-blue-secondary",
     steps: [
-      "Open the payment link",
-      "Enter amount, confirm",
+      "Open a payment link",
+      "Enter amount and confirm",
       "Arrives in under a second.",
     ],
   },
   {
-    label: "Built for agents",
+    label: "Woosh Agent",
     accent: "text-green-300",
     bubble: "bg-green-300/10 text-green-300",
     steps: [
-      "Every payment link is machine-readable",
-      "Payments settle on-chain, verifiable instantly",
-      "Programmatic API in V2",
+      "Chat with your wallet",
+      "Send payments by typing",
+      "Ask for balance, stats, history",
     ],
   },
 ];
@@ -174,7 +174,7 @@ export default function HomePage() {
           href="/dashboard"
           className="inline-flex items-center justify-center bg-blue-primary hover:bg-blue-secondary text-white font-semibold px-8 py-4 rounded-input text-base transition-colors shadow-glow min-w-[200px] min-h-[44px]"
         >
-          Get your payment link
+          Open your wallet
         </Link>
       </section>
 
