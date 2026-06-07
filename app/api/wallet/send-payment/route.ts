@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
       recipientAddress,
       amount
     );
-    return NextResponse.json(result);
+    return NextResponse.json({ ...result, walletId: wallet.id });
   } catch (err) {
     const msg =
       (err as { response?: { data?: { message?: string } } })?.response?.data?.message

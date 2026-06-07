@@ -11,6 +11,7 @@ import { Spinner } from "@/shared/ui/Spinner";
 import { EmailStep } from "@/features/auth/ui/EmailStep";
 import { useAuth } from "@/features/auth/model/useAuth";
 import { useSlugAvailability } from "@/entities/slug/hooks/useSlugAvailability";
+import { useUSDCBalance } from "@/entities/wallet/hooks/useUSDCBalance";
 import { normalizeSlug } from "@/entities/slug/lib/normalizeSlug";
 import { suggestSlugs } from "@/entities/slug/lib/suggestSlugs";
 import { env } from "@/shared/config/env";
@@ -86,6 +87,16 @@ export default function SlugSetupPage() {
   }, [router]);
 
   const availability = useSlugAvailability(slug);
+  const balance = useUSDCBalance(session?.walletAddress as `0x${string}` | undefined);
+  const hasNoFunds = balance.data?.raw === 0n;
+  const [addressCopied, setAddressCopied] = useState(false);
+
+  async function copyWalletAddress() {
+    if (!session?.walletAddress) return;
+    await navigator.clipboard.writeText(session.walletAddress);
+    setAddressCopied(true);
+    setTimeout(() => setAddressCopied(false), 2000);
+  }
 
   // ── Handlers ──────────────────────────────────────────────────────────────
 
@@ -200,6 +211,39 @@ export default function SlugSetupPage() {
                   woosh.app/pay/{slug || "yourname"}
                 </span>
               </p>
+
+              {hasNoFunds && (
+                <div className="mb-6 flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3">
+                  <span className="mt-0.5 text-amber-400">⚠</span>
+                  <div className="flex-1 text-sm">
+                    <p className="text-amber-300 font-medium mb-1">You need a small amount of USDC for gas</p>
+                    <p className="text-amber-400/80 mb-2">
+                      Registering your username is an on-chain transaction. Paste your wallet address into the faucet to get testnet USDC.
+                    </p>
+                    {session?.walletAddress && (
+                      <div className="flex items-center gap-2 mb-3 rounded-lg bg-amber-500/10 border border-amber-500/20 px-3 py-2">
+                        <span className="font-mono text-xs text-amber-200 flex-1 break-all">
+                          {session.walletAddress}
+                        </span>
+                        <button
+                          onClick={copyWalletAddress}
+                          className="shrink-0 text-xs text-amber-300 hover:text-amber-200 transition-colors"
+                        >
+                          {addressCopied ? "Copied!" : "Copy"}
+                        </button>
+                      </div>
+                    )}
+                    <a
+                      href={env.arcFaucetUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-amber-300 hover:text-amber-200 underline underline-offset-2 transition-colors"
+                    >
+                      Open faucet →
+                    </a>
+                  </div>
+                </div>
+              )}
 
               <div className="space-y-4">
                 {regError && <p className="text-sm text-red-400">{regError}</p>}
