@@ -35,16 +35,29 @@ export default function DashboardPage() {
     data: balance,
     isLoading: balanceLoading,
     isError: balanceError,
+    refetch: refetchBalance,
   } = useUSDCBalance(session?.walletAddress);
 
   const [isTxRefreshing, setIsTxRefreshing] = useState(false);
   const { data: txs, isLoading: txsLoading, isError: txsError, refetch: refetchTxs } =
     useTransactionHistory(session?.walletAddress);
 
+  const [pendingTx, setPendingTx] = useState<{ amount: string; counterparty: string } | null>(null);
+
   async function handleTxRefresh() {
     setIsTxRefreshing(true);
     await refetchTxs();
     setIsTxRefreshing(false);
+  }
+
+  function handlePaymentSuccess(amount: string, counterparty: string) {
+    void refetchBalance();
+    setPendingTx({ amount: parseFloat(amount).toFixed(2), counterparty });
+    // Blockscout needs ~1.5s to index; clear optimistic entry after refetch
+    setTimeout(() => {
+      void refetchTxs();
+      setPendingTx(null);
+    }, 2500);
   }
 
   function formatEmail(email: string, maxLocal = 6): string {
@@ -107,13 +120,20 @@ export default function DashboardPage() {
             walletAddress={session.walletAddress}
             slug={session.slug}
           />
-          <ChatPanel name={session.slug} walletAddress={session.walletAddress} userEmail={session.email} />
+          <ChatPanel
+            name={session.slug}
+            walletAddress={session.walletAddress}
+            userEmail={session.email}
+            onPaymentSuccess={handlePaymentSuccess}
+            knownCounterparties={txs?.map((tx) => tx.counterparty)}
+          />
           <TransactionList
             txs={txs?.slice(0, 3)}
             isLoading={txsLoading}
             isError={txsError}
             onRefresh={handleTxRefresh}
             isRefreshing={isTxRefreshing}
+            pendingEntries={pendingTx ? [pendingTx] : undefined}
           />
           {txs && txs.length > 3 && (
             <div className="flex justify-end mt-3">

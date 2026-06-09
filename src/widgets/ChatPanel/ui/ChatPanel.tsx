@@ -96,9 +96,11 @@ interface Props {
   name?: string;
   walletAddress?: string;
   userEmail?: string;
+  onPaymentSuccess?: (amount: string, counterparty: string) => void;
+  knownCounterparties?: string[];
 }
 
-export default function ChatPanel({ name, walletAddress, userEmail }: Props) {
+export default function ChatPanel({ name, walletAddress, userEmail, onPaymentSuccess, knownCounterparties }: Props) {
   const [messages, setMessages] = useState<ChatMessage[]>(() => {
     try {
       const saved = sessionStorage.getItem(CHAT_STORAGE_KEY);
@@ -197,6 +199,7 @@ export default function ChatPanel({ name, walletAddress, userEmail }: Props) {
               : m
           )
         );
+        onPaymentSuccess?.(amount, recipientAddress);
       });
       return "ok";
     } catch (err) {
@@ -413,7 +416,7 @@ export default function ChatPanel({ name, walletAddress, userEmail }: Props) {
                 {/* Pending action confirmation card */}
                 {msg.pendingAction && !msg.actionStatus && (
                   <div className={`${msg.text ? "mt-2 pt-2 border-t border-white/10" : ""}`}>
-                    <p className="text-xs text-text-secondary mb-2">
+                    <p className="text-xs text-text-secondary mb-1">
                       Send ${Number(msg.pendingAction.amount).toFixed(2)} to{" "}
                       <span className="text-text-primary font-medium">{msg.pendingAction.to}</span>
                       {msg.pendingAction.resolvedAddress && (
@@ -422,6 +425,16 @@ export default function ChatPanel({ name, walletAddress, userEmail }: Props) {
                         </span>
                       )}?
                     </p>
+                    <p className="text-xs text-text-secondary/40 mb-2">Fee paid in USDC · Arc network</p>
+                    {msg.pendingAction.resolvedAddress &&
+                      knownCounterparties &&
+                      !knownCounterparties.some(
+                        (a) => a.toLowerCase() === msg.pendingAction!.resolvedAddress!.toLowerCase()
+                      ) && (
+                        <p className="text-xs text-amber-400/70 mb-2">
+                          First time paying this address.
+                        </p>
+                      )}
                     <div className="flex gap-2">
                       <button
                         onClick={() => handleConfirm(msg)}
@@ -456,18 +469,29 @@ export default function ChatPanel({ name, walletAddress, userEmail }: Props) {
                 {/* Paid */}
                 {msg.pendingAction && msg.actionStatus === "paid" && (
                   <div className={`${msg.text ? "mt-2 pt-2 border-t border-white/10" : ""}`}>
-                    <p className="text-xs text-green-400">
-                      Payment sent.{" "}
-                      {msg.txExplorerUrl && (
-                        <a
-                          href={msg.txExplorerUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="underline underline-offset-2 opacity-70 hover:opacity-100 transition-opacity"
-                        >
-                          View on explorer
-                        </a>
-                      )}
+                    <p className="text-xs text-green-400 flex items-center gap-1.5">
+                      <svg
+                        className="w-3.5 h-3.5 shrink-0"
+                        style={{ animation: "scaleIn 0.2s ease-out" }}
+                        viewBox="0 0 16 16"
+                        fill="none"
+                      >
+                        <circle cx="8" cy="8" r="7" fill="currentColor" fillOpacity="0.15" />
+                        <path d="M5 8l2 2 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                      <span>
+                        Confirmed on Arc.{" "}
+                        {msg.txExplorerUrl && (
+                          <a
+                            href={msg.txExplorerUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="underline underline-offset-2 opacity-70 hover:opacity-100 transition-opacity"
+                          >
+                            View on explorer
+                          </a>
+                        )}
+                      </span>
                     </p>
                   </div>
                 )}

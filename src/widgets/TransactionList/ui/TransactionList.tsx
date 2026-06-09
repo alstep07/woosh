@@ -2,7 +2,13 @@
 
 import { arcTestnet } from "@/shared/lib/arc";
 import { formatDistanceToNow } from "@/shared/lib/time";
+import { useSlugMap } from "@/entities/slug/hooks/useSlugMap";
 import type { TxRecord } from "@/entities/payment/model/types";
+
+interface PendingEntry {
+  counterparty: string;
+  amount: string; // formatted, e.g. "10.00"
+}
 
 interface Props {
   txs: TxRecord[] | undefined;
@@ -11,6 +17,7 @@ interface Props {
   onRefresh?: () => void;
   isRefreshing?: boolean;
   skeletonCount?: number;
+  pendingEntries?: PendingEntry[];
 }
 
 export default function TransactionList({
@@ -20,7 +27,14 @@ export default function TransactionList({
   onRefresh,
   isRefreshing,
   skeletonCount = 3,
+  pendingEntries,
 }: Props) {
+  const allCounterparties = [
+    ...(txs?.map((tx) => tx.counterparty) ?? []),
+    ...(pendingEntries?.map((e) => e.counterparty) ?? []),
+  ];
+  const slugMap = useSlugMap(allCounterparties);
+
   return (
     <div>
       <div className="flex items-center justify-between mb-3">
@@ -71,6 +85,29 @@ export default function TransactionList({
         </div>
       ) : (
         <div className="divide-y divide-border/40">
+          {pendingEntries?.map((entry, i) => (
+            <div key={`pending-${i}`} className="flex items-center justify-between px-1 py-2.5">
+              <div>
+                <p className="text-xs text-text-secondary/50">
+                  Sent to{" "}
+                  {slugMap[entry.counterparty.toLowerCase()] ? (
+                    <span className="text-text-secondary/80">
+                      @{slugMap[entry.counterparty.toLowerCase()]}
+                    </span>
+                  ) : (
+                    <span className="font-mono">
+                      {entry.counterparty.slice(0, 6)}…{entry.counterparty.slice(-4)}
+                    </span>
+                  )}
+                  {" · "}just now
+                </p>
+              </div>
+              <div className="flex items-center gap-2 shrink-0 ml-4">
+                <span className="w-1.5 h-1.5 rounded-full bg-blue-primary animate-pulse" />
+                <span className="text-xs text-text-secondary">-${entry.amount}</span>
+              </div>
+            </div>
+          ))}
           {txs.map((tx) => (
             <a
               key={tx.hash}
@@ -82,9 +119,15 @@ export default function TransactionList({
               <div>
                 <p className="text-xs text-text-secondary/50">
                   {tx.direction === "received" ? "Received from" : "Sent to"}{" "}
-                  <span className="font-mono">
-                    {tx.counterparty.slice(0, 6)}…{tx.counterparty.slice(-4)}
-                  </span>
+                  {slugMap[tx.counterparty.toLowerCase()] ? (
+                    <span className="text-text-secondary/80">
+                      @{slugMap[tx.counterparty.toLowerCase()]}
+                    </span>
+                  ) : (
+                    <span className="font-mono">
+                      {tx.counterparty.slice(0, 6)}…{tx.counterparty.slice(-4)}
+                    </span>
+                  )}
                   {" · "}
                   {formatDistanceToNow(tx.timestamp)}
                 </p>

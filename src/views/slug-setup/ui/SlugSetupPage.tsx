@@ -103,12 +103,16 @@ export default function SlugSetupPage() {
   async function handleSubmitSlug() {
     if (availability !== "available" && availability !== "error") return;
 
-    // Fresh signup: tokens cached in sessionStorage → skip re-auth
+    // Skip re-auth if we have a valid cached token from either:
+    // - fresh signup flow (woosh_pending_token)
+    // - a recent payment auth (woosh_session_token)
     let cachedToken: string | null = null;
     let cachedKey: string | null = null;
     try {
-      cachedToken = sessionStorage.getItem("woosh_pending_token");
-      cachedKey = sessionStorage.getItem("woosh_pending_enc_key");
+      cachedToken = sessionStorage.getItem("woosh_pending_token")
+        ?? sessionStorage.getItem("woosh_session_token");
+      cachedKey = sessionStorage.getItem("woosh_pending_enc_key")
+        ?? sessionStorage.getItem("woosh_session_enc_key");
     } catch { /* Safari private mode — treat as no cache */ }
 
     if (cachedToken && cachedKey) {
