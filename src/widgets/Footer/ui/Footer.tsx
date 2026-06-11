@@ -15,7 +15,7 @@ export default function Footer() {
             Explorer
           </a>
           <a
-            href="https://faucet-testnet.arc.network"
+            href={env.arcFaucetUrl}
             target="_blank"
             rel="noopener noreferrer"
             className="hover:text-text-primary transition-colors"

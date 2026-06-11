@@ -210,7 +210,7 @@ export default function SlugSetupPage() {
                   <div className="flex-1 text-sm">
                     <p className="text-amber-300 font-medium mb-1">You need a small amount of USDC for gas</p>
                     <p className="text-amber-400/80 mb-2">
-                      Registering your username is an on-chain transaction. Paste your wallet address into the faucet to get testnet USDC.
+                      Registering your username is an onchain transaction. Paste your wallet address into the faucet to get testnet USDC.
                     </p>
                     {session?.walletAddress && (
                       <div className="flex items-center gap-2 mb-3 rounded-lg bg-amber-500/10 border border-amber-500/20 px-3 py-2">
@@ -387,7 +387,7 @@ export default function SlugSetupPage() {
             </>
           )}
 
-          {/* ── Registering on-chain ───────────────────────────────────────── */}
+          {/* ── Registering onchain ────────────────────────────────────────── */}
           {phase === "registering" && (
             <div className="text-center">
               <div className="flex justify-center mb-4">

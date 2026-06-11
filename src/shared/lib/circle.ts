@@ -64,7 +64,7 @@ export async function getUserWallets(userToken: string) {
 }
 
 /**
- * Creates a contract execution challenge to register a slug on-chain.
+ * Creates a contract execution challenge to register a slug onchain.
  * Returns { challengeId } to be executed client-side via W3SSdk.
  */
 export async function createSlugRegistrationChallenge(

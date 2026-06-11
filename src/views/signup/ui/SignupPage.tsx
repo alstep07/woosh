@@ -308,7 +308,7 @@ export default function SignupPage() {
                 href="/slug-setup"
                 className="flex items-center justify-center w-full bg-blue-primary hover:bg-blue-secondary text-white font-semibold px-8 py-3 rounded-input transition-colors shadow-glow min-h-[44px] mb-3"
               >
-                Claim @{suggestedSlug || "username"}
+                Claim a username
               </Link>
               <button
                 onClick={() => router.push("/dashboard")}

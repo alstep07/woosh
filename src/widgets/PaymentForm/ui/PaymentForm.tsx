@@ -420,7 +420,7 @@ export default function PaymentForm({ recipientAddress, recipientLabel, initialA
               rel="noopener noreferrer"
               className="text-text-secondary/70 hover:text-text-secondary underline"
             >
-              faucet.circle.com
+              the Arc faucet
             </a>
           </p>
         )}
