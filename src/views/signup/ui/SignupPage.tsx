@@ -10,6 +10,7 @@ import { Spinner } from "@/shared/ui/Spinner";
 import { useAuth } from "@/features/auth/model/useAuth";
 import { env } from "@/shared/config/env";
 import { lookupAddressSlug } from "@/entities/slug/lib/lookupAddressSlug";
+import { setCachedTokens, setPendingTokens, setSession, clearAll } from "@/shared/lib/session";
 
 // Local wallet-creation lifecycle — separate from OTP auth lifecycle in useAuth
 type WalletPhase = "idle" | "creating" | "error";
@@ -33,19 +34,12 @@ export default function SignupPage() {
   const [walletError, setWalletError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (localStorage.getItem("woosh_session")) setAlreadySignedIn(true);
+    if (localStorage.getItem("woosh_session")) setAlreadySignedIn(true); // session module reads same key
   }, []);
 
   const onAuthSuccess = (userToken: string, encryptionKey: string) => {
-    // Cache tokens so /slug-setup can skip re-auth.
-    // sessionStorage.setItem throws in Safari private mode — never let it crash here.
-    try {
-      sessionStorage.setItem("woosh_pending_token", userToken);
-      sessionStorage.setItem("woosh_pending_enc_key", encryptionKey);
-      // Persist for dashboard-level re-use (payments without re-auth)
-      sessionStorage.setItem("woosh_session_token", userToken);
-      sessionStorage.setItem("woosh_session_enc_key", encryptionKey);
-    } catch { /* noop */ }
+    setPendingTokens(userToken, encryptionKey); // for /slug-setup to skip re-auth
+    setCachedTokens(userToken, encryptionKey);  // for ChatPanel to skip OTP on first payment
     setWalletPhase("creating");
     void createWallet(userToken, encryptionKey);
   };
@@ -111,14 +105,11 @@ export default function SignupPage() {
         slug = await lookupAddressSlug(data.walletAddress as `0x${string}`);
       } catch { /* RPC failure — fail open, never block the user */ }
 
-      localStorage.setItem(
-        "woosh_session",
-        JSON.stringify({
-          email: auth.emailRef.current,
-          walletAddress: data.walletAddress,
-          ...(slug ? { slug } : {}),
-        })
-      );
+      setSession({
+        email: auth.emailRef.current,
+        walletAddress: data.walletAddress,
+        ...(slug ? { slug } : {}),
+      });
 
       router.push("/dashboard");
     } catch (err) {
@@ -187,11 +178,7 @@ export default function SignupPage() {
             </Link>
             <button
               onClick={() => {
-                localStorage.removeItem("woosh_session");
-                try {
-                  sessionStorage.removeItem("woosh_pending_token");
-                  sessionStorage.removeItem("woosh_pending_enc_key");
-                } catch { /* noop */ }
+                clearAll();
                 setAlreadySignedIn(false);
               }}
               className="mt-4 block w-full text-sm text-blue-primary/60 hover:text-blue-primary transition-colors"

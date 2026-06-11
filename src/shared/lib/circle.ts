@@ -94,14 +94,17 @@ export async function createPaymentChallenge(
   userToken: string,
   walletId: string,
   destinationAddress: string,
-  amount: string // human-readable, e.g. "10.50"
+  amount: string // human-readable decimal string, e.g. "10.50"
 ) {
+  if (!/^\d+(\.\d+)?$/.test(amount) || parseFloat(amount) <= 0) {
+    throw new Error(`Invalid amount: ${amount}`);
+  }
   const client = getClient();
   const res = await client.createTransaction({
     userToken,
     walletId,
     destinationAddress,
-    amounts: [parseFloat(amount).toFixed(2)],
+    amounts: [amount],
     blockchain: Blockchain.ArcTestnet,
     tokenAddress: "", // native USDC on Arc — no contract address
     fee: { type: "level", config: { feeLevel: "MEDIUM" } },

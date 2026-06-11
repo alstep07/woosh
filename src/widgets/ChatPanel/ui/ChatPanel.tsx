@@ -2,10 +2,12 @@
 
 import { useState, useRef, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
-import { W3SSdk } from "@circle-fin/w3s-pw-web-sdk";
+import type { W3SSdk } from "@circle-fin/w3s-pw-web-sdk";
 import "@/features/payments/chat-tools"; // registers examples
 import { getAllExamples } from "@/features/chat/model/registry";
 import { env } from "@/shared/config/env";
+import { getW3SSdk, setLoginHandler } from "@/shared/lib/w3s";
+import { getCachedTokens, setCachedTokens, clearCachedTokens } from "@/shared/lib/session";
 
 const EXAMPLES = getAllExamples();
 const CHAT_STORAGE_KEY = "woosh_chat_history";
@@ -102,16 +104,33 @@ export default function ChatPanel({ name, walletAddress, userEmail }: Props) {
   const [messages, setMessages] = useState<ChatMessage[]>(() => {
     try {
       const saved = sessionStorage.getItem(CHAT_STORAGE_KEY);
-      if (saved) return JSON.parse(saved) as ChatMessage[];
+      if (saved) {
+        const parsed = JSON.parse(saved) as ChatMessage[];
+        const withoutWelcome = parsed.filter((m) => m.id !== "welcome");
+        return [buildWelcome(name), ...withoutWelcome];
+      }
     } catch {}
     return [buildWelcome(name)];
   });
   const [input, setInput] = useState("");
   const [focused, setFocused] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [showScrollBtn, setShowScrollBtn] = useState(false);
   const hasConversation = messages.length > 1;
   const typewriterPlaceholder = useTypewriterPlaceholder(hasConversation ? [] : EXAMPLES);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  function handleScroll() {
+    const el = scrollRef.current;
+    if (!el) return;
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    setShowScrollBtn(distanceFromBottom > 60);
+  }
+
+  function scrollToBottom() {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }
 
   function clearChat() {
     const fresh = buildWelcome(name);
@@ -119,30 +138,16 @@ export default function ChatPanel({ name, walletAddress, userEmail }: Props) {
     try { sessionStorage.removeItem(CHAT_STORAGE_KEY); } catch {}
   }
 
-  // Circle SDK — created lazily on first payment attempt to avoid
-  // conflicting with the signup page's SDK instance
-  const sdkRef = useRef<W3SSdk | null>(null);
+  // Circle SDK — uses shared singleton so only one instance ever exists per tab
   const deviceIdRef = useRef<string>("");
   const payingMsgIdRef = useRef<string | null>(null);
-  const onLoginCompleteRef = useRef<((err: unknown, result: unknown) => void) | null>(null);
 
-  // Persist messages to sessionStorage
+  // Persist messages to sessionStorage — welcome is excluded and rebuilt on load
   useEffect(() => {
     try {
-      sessionStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(messages));
+      sessionStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(messages.filter((m) => m.id !== "welcome")));
     } catch {}
   }, [messages]);
-
-  async function getOrCreateSdk(): Promise<W3SSdk | null> {
-    if (!env.circleAppId) return null;
-    if (sdkRef.current) return sdkRef.current;
-    const onLoginComplete = (err: unknown, result: unknown) => {
-      onLoginCompleteRef.current?.(err, result);
-    };
-    const sdk = new W3SSdk({ appSettings: { appId: env.circleAppId } }, onLoginComplete);
-    sdkRef.current = sdk;
-    return sdk;
-  }
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -220,25 +225,14 @@ export default function ChatPanel({ name, walletAddress, userEmail }: Props) {
     payingMsgIdRef.current = msg.id;
 
     // Try cached session token first — skip OTP entirely
-    let cachedToken: string | null = null;
-    let cachedKey: string | null = null;
-    try {
-      cachedToken = sessionStorage.getItem("woosh_session_token");
-      cachedKey = sessionStorage.getItem("woosh_session_enc_key");
-    } catch {}
-
-    if (cachedToken && cachedKey) {
-      const sdk = await getOrCreateSdk();
-      if (sdk) {
-        const result = await executePay(msg.id, resolvedAddress, amount, cachedToken, cachedKey, sdk);
-        if (result !== "auth_error") return;
-        // Token expired — clear and fall through to OTP
-        try {
-          sessionStorage.removeItem("woosh_session_token");
-          sessionStorage.removeItem("woosh_session_enc_key");
-        } catch {}
-        updateMsgStatus(msg.id, "confirmed");
-      }
+    const cached = getCachedTokens();
+    if (cached) {
+      const sdk = getW3SSdk(env.circleAppId);
+      const result = await executePay(msg.id, resolvedAddress, amount, cached.userToken, cached.encryptionKey, sdk);
+      if (result !== "auth_error") return;
+      // Token expired — clear and fall through to OTP
+      clearCachedTokens();
+      updateMsgStatus(msg.id, "confirmed");
     }
 
     // OTP flow (no cached token or token expired)
@@ -247,24 +241,20 @@ export default function ChatPanel({ name, walletAddress, userEmail }: Props) {
       return;
     }
 
-    onLoginCompleteRef.current = async (err, result) => {
+    setLoginHandler(async (err, result) => {
       const msgId = payingMsgIdRef.current!;
       if (err) {
         updateMsgStatus(msgId, "send_error", "Verification failed. Please try again.");
         return;
       }
       const { userToken, encryptionKey } = result as { userToken: string; encryptionKey: string };
-      try {
-        sessionStorage.setItem("woosh_session_token", userToken);
-        sessionStorage.setItem("woosh_session_enc_key", encryptionKey);
-      } catch {}
-      const sdk = sdkRef.current!;
+      setCachedTokens(userToken, encryptionKey);
+      const sdk = getW3SSdk(env.circleAppId);
       await executePay(msgId, resolvedAddress, amount, userToken, encryptionKey, sdk);
-    };
+    });
 
     try {
-      const sdk = await getOrCreateSdk();
-      if (!sdk) throw new Error("Circle SDK not available.");
+      const sdk = getW3SSdk(env.circleAppId);
 
       let did = deviceIdRef.current;
       if (!did) {
@@ -292,6 +282,7 @@ export default function ChatPanel({ name, walletAddress, userEmail }: Props) {
       sdk.verifyOtp();
     } catch (err) {
       console.error("[ChatPanel] handleConfirm error:", err);
+      setLoginHandler(() => {}); // unregister handler on failure
       const msg2 = err instanceof Error ? err.message : (typeof err === "string" ? err : "Failed to start payment. Check console for details.");
       updateMsgStatus(msg.id, "send_error", msg2);
     }
@@ -370,30 +361,13 @@ export default function ChatPanel({ name, walletAddress, userEmail }: Props) {
   }
 
   return (
-    <div className="flex flex-col glass-card rounded-card overflow-hidden mb-4 min-w-0 w-full">
-      {/* Header */}
-      <div className="px-4 py-3 flex items-center gap-2">
-        <svg className="w-4 h-4 text-blue-primary/60" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-        </svg>
-        <span className="text-xs font-semibold text-text-secondary/40 uppercase tracking-widest flex-1">
-          Woosh Agent
-        </span>
-        {hasConversation && (
-          <button
-            onClick={clearChat}
-            title="Clear chat"
-            className="text-text-secondary/30 hover:text-text-secondary/60 transition-colors"
-          >
-            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-            </svg>
-          </button>
-        )}
-      </div>
-
-      {/* Messages */}
-      <div className="overflow-y-auto h-52 sm:h-56 px-3 sm:px-4 py-3 sm:py-4">
+    <div className="flex flex-col glass-card rounded-card overflow-hidden mb-4 min-w-0 w-full relative">
+      {/* Messages — height includes header zone so content scrolls beneath it */}
+      <div
+        ref={scrollRef}
+        onScroll={handleScroll}
+        className="overflow-y-auto no-scrollbar h-64 sm:h-[17rem] px-3 sm:px-4 pt-12 pb-3 sm:pb-4"
+      >
         <div className="flex flex-col justify-end min-h-full space-y-3">
           {messages.map((msg) => (
             <div key={msg.id} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
@@ -465,7 +439,7 @@ export default function ChatPanel({ name, walletAddress, userEmail }: Props) {
                           rel="noopener noreferrer"
                           className="underline underline-offset-2 opacity-70 hover:opacity-100 transition-opacity"
                         >
-                          View on explorer
+                          View account on explorer
                         </a>
                       )}
                     </p>
@@ -508,6 +482,42 @@ export default function ChatPanel({ name, walletAddress, userEmail }: Props) {
 
           <div ref={bottomRef} />
         </div>
+      </div>
+
+      {/* Scroll-to-bottom button — shown when not at the latest message */}
+      {showScrollBtn && (
+        <button
+          onClick={scrollToBottom}
+          aria-label="Scroll to latest"
+          className="absolute bottom-14 right-3 z-20 w-7 h-7 rounded-full bg-[rgba(8,12,26,0.80)] backdrop-blur-sm border border-white/10 flex items-center justify-center text-text-secondary/50 hover:text-text-primary transition-all"
+        >
+          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+      )}
+
+      {/* Glass header — absolute so messages scroll beneath it */}
+      <div className="absolute top-0 left-0 right-0 z-10 px-4 py-3 flex items-center gap-2
+                      bg-[#0d1222]
+                      border-b border-white/[0.07]">
+        <svg className="w-4 h-4 text-blue-primary/60 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+        </svg>
+        <span className="text-xs font-semibold text-text-secondary/60 uppercase tracking-widest flex-1">
+          Woosh Agent
+        </span>
+        {hasConversation && (
+          <button
+            onClick={clearChat}
+            title="Clear chat"
+            className="text-text-secondary/30 hover:text-text-secondary/60 transition-colors"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+          </button>
+        )}
       </div>
 
       {/* Input */}

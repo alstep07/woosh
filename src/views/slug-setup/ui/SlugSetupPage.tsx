@@ -15,6 +15,7 @@ import { useUSDCBalance } from "@/entities/wallet/hooks/useUSDCBalance";
 import { normalizeSlug } from "@/entities/slug/lib/normalizeSlug";
 import { suggestSlugs } from "@/entities/slug/lib/suggestSlugs";
 import { env } from "@/shared/config/env";
+import { getSession as loadSession, setSession as saveSession, getPendingTokens, clearPendingTokens } from "@/shared/lib/session";
 import type { Session } from "@/entities/user/model/types";
 
 // Page-level lifecycle phases
@@ -64,24 +65,16 @@ export default function SlugSetupPage() {
 
   // ── Session bootstrap ─────────────────────────────────────────────────────
   useEffect(() => {
-    const raw = localStorage.getItem("woosh_session");
-    if (!raw) {
-      router.replace("/signup");
-      return;
+    const s = loadSession();
+    if (!s) { router.replace("/signup"); return; }
+    setSession(s);
+    if (s.email) {
+      const defaultSlug = normalizeSlug(s.email.split("@")[0]);
+      setSlug(defaultSlug);
+      slugRef.current = defaultSlug;
+      auth.setEmail(s.email);
     }
-    try {
-      const s = JSON.parse(raw) as Session;
-      setSession(s);
-      if (s.email) {
-        const defaultSlug = normalizeSlug(s.email.split("@")[0]);
-        setSlug(defaultSlug);
-        slugRef.current = defaultSlug;
-        auth.setEmail(s.email);
-      }
-      setPhase("slug");
-    } catch {
-      router.replace("/signup");
-    }
+    setPhase("slug");
   // auth.setEmail is a stable useState setter; router is stable
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router]);
@@ -104,21 +97,12 @@ export default function SlugSetupPage() {
     if (availability !== "available" && availability !== "error") return;
 
     // Fresh signup: tokens cached in sessionStorage → skip re-auth
-    let cachedToken: string | null = null;
-    let cachedKey: string | null = null;
-    try {
-      cachedToken = sessionStorage.getItem("woosh_pending_token");
-      cachedKey = sessionStorage.getItem("woosh_pending_enc_key");
-    } catch { /* Safari private mode — treat as no cache */ }
-
-    if (cachedToken && cachedKey) {
-      try {
-        sessionStorage.removeItem("woosh_pending_token");
-        sessionStorage.removeItem("woosh_pending_enc_key");
-      } catch { /* noop */ }
+    const pending = getPendingTokens();
+    if (pending) {
+      clearPendingTokens();
       setPhase("registering");
       setRegError(null);
-      await registerSlug(cachedToken, cachedKey);
+      await registerSlug(pending.userToken, pending.encryptionKey);
     } else {
       setPhase("auth");
     }
@@ -168,7 +152,7 @@ export default function SlugSetupPage() {
         }
 
         const updated: Session = { ...currentSession!, slug: currentSlug };
-        localStorage.setItem("woosh_session", JSON.stringify(updated));
+        saveSession(updated);
         router.push("/dashboard");
       });
     } catch {

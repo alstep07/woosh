@@ -12,6 +12,7 @@ import TransactionList from "@/widgets/TransactionList/ui/TransactionList";
 import Footer from "@/widgets/Footer/ui/Footer";
 import { Spinner } from "@/shared/ui/Spinner";
 import { env } from "@/shared/config/env";
+import { getSession as loadSession, clearAll } from "@/shared/lib/session";
 import type { Session } from "@/entities/user/model/types";
 
 export default function DashboardPage() {
@@ -19,16 +20,9 @@ export default function DashboardPage() {
   const [session, setSession] = useState<Session | null>(null);
 
   useEffect(() => {
-    const raw = localStorage.getItem("woosh_session");
-    if (!raw) {
-      router.replace("/signup");
-      return;
-    }
-    try {
-      setSession(JSON.parse(raw) as Session);
-    } catch {
-      router.replace("/signup");
-    }
+    const s = loadSession();
+    if (!s) { router.replace("/signup"); return; }
+    setSession(s);
   }, [router]);
 
   const {
@@ -57,12 +51,7 @@ export default function DashboardPage() {
   const paymentLink = session ? `${env.baseUrl}/pay/${identifier}` : "";
 
   function handleLogout() {
-    localStorage.removeItem("woosh_session");
-    try {
-      sessionStorage.removeItem("woosh_session_token");
-      sessionStorage.removeItem("woosh_session_enc_key");
-      sessionStorage.removeItem("woosh_chat_history");
-    } catch {}
+    clearAll();
     router.replace("/");
   }
 
