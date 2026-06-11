@@ -53,7 +53,7 @@ export default function DashboardHistoryPage() {
           Back
         </button>
         <h1 className="text-lg font-semibold text-text-primary mb-6">Transactions</h1>
-        <TransactionList txs={txs} isLoading={isLoading} isError={isError} onRefresh={handleRefresh} isRefreshing={isRefreshing} />
+        <TransactionList txs={txs} isLoading={isLoading} isError={isError} onRefresh={handleRefresh} isRefreshing={isRefreshing} skeletonCount={5} />
       </div>
       <Footer />
     </main>

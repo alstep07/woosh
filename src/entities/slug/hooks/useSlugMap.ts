@@ -9,12 +9,13 @@ import { env } from "@/shared/config/env";
  * Returns a map of lowercased address → slug for addresses that have one.
  * Deduplicates, caches for 60s, and no-ops if the registry is unconfigured.
  */
-export function useSlugMap(addresses: string[]): Record<string, string> {
+export function useSlugMap(addresses: string[]): { map: Record<string, string>; isLoading: boolean } {
   const unique = [...new Set(addresses.map((a) => a.toLowerCase()))].filter(Boolean);
+  const enabled = unique.length > 0 && !!env.slugRegistryAddress;
 
-  const { data } = useQuery({
+  const { data, isLoading } = useQuery({
     queryKey: ["slug-map", unique.slice().sort().join(",")],
-    enabled: unique.length > 0 && !!env.slugRegistryAddress,
+    enabled,
     staleTime: 60_000,
     retry: 0,
     queryFn: async () => {
@@ -28,5 +29,5 @@ export function useSlugMap(addresses: string[]): Record<string, string> {
     },
   });
 
-  return data ?? {};
+  return { map: data ?? {}, isLoading: enabled && isLoading };
 }

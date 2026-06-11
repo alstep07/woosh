@@ -99,9 +99,9 @@ type Star = {
   a: number;                   // base alpha
   twPhase: number; twSpeed: number;
   color: string;               // "r,g,b"
-  ox: number; oy: number;      // scatter offset in pixels
+  ox: number; oy: number;      // parallax + scatter offset in pixels
   vx: number; vy: number;      // scatter velocity
-  flare: number;               // transient brightness on scatter
+  flare: number;               // transient brightness on hover
 };
 
 // A shooting star — head position + velocity + life 1→0
@@ -115,18 +115,18 @@ type Shoot = {
 
 // ── Star factory ──────────────────────────────────────────────────────────────
 
-const STAR_COUNT  = 340;
+const STAR_COUNT  = 650;
 const STAR_COLORS = ["241,245,249", "210,230,248", "148,210,243", "186,222,247", "255,255,255"];
 
 function makeStars(): Star[] {
   return Array.from({ length: STAR_COUNT }, () => {
-    // Exponent 2.5 → biased heavily toward small far stars
-    const z = 0.3 + Math.pow(Math.random(), 2.5) * 0.7;
+    // Exponent 3.5 → heavy bias toward tiny far stars; near stars rare but bright
+    const z = 0.15 + Math.pow(Math.random(), 3.5) * 0.85;
     return {
       x: Math.random(), y: Math.random(),
       z,
-      r: 0.25 + z * 1.05,
-      a: 0.10 + z * 0.38,
+      r: 0.15 + z * 1.6,
+      a: 0.04 + z * 0.55,
       twPhase: Math.random() * Math.PI * 2,
       twSpeed: 0.4 + Math.random() * 1.2,
       color: STAR_COLORS[Math.floor(Math.random() * STAR_COLORS.length)],
@@ -138,22 +138,20 @@ function makeStars(): Star[] {
 // ── Shooting-star factory ─────────────────────────────────────────────────────
 
 function spawnShoot(vw: number, vh: number): Shoot {
-  // Spawn near the top or upper sides of the viewport
-  const fromTop = Math.random() < 0.65;
-  const sx = fromTop
-    ? Math.random() * vw
-    : Math.random() < 0.5 ? Math.random() * vw * 0.15 : vw * (0.85 + Math.random() * 0.15);
-  const sy = fromTop
-    ? Math.random() * vh * 0.35
-    : Math.random() * vh * 0.40;
+  // Spawn on left/right edges or top strip; direction determines which side makes sense
+  const fromSide = Math.random() < 0.55;
+  const sx = fromSide
+    ? (Math.random() < 0.5 ? Math.random() * vw * 0.08 : vw * (0.92 + Math.random() * 0.08))
+    : Math.random() * vw;
+  const sy = fromSide
+    ? Math.random() * vh * 0.70
+    : Math.random() * vh * 0.25;
 
-  // Direction: mostly downward (roughly 65°–115° from horizontal = "falling" range)
-  // Math.PI * 0.36 ≈ 65°,  Math.PI * 0.64 ≈ 115°
-  const angle = Math.PI * (0.36 + Math.random() * 0.28);
-  // Bias: some go left-ish, some right-ish
+  // Direction: mostly sideways with slight downward drift (20°–55° from horizontal)
+  const angle = Math.PI * (0.11 + Math.random() * 0.19);
   const nx = Math.cos(angle) * (Math.random() < 0.5 ? 1 : -1);
-  const ny = Math.abs(Math.sin(angle)); // always downward
-  const spd = (3.5 + Math.random() * 4.5);
+  const ny = Math.sin(angle); // small downward component
+  const spd = (5.25 + Math.random() * 6.75);
   return {
     x: sx, y: sy,
     vx: nx * spd,
@@ -232,9 +230,7 @@ export default function LiquidHero() {
     window.addEventListener("resize", resize);
 
     // ── Cursor tracking ───────────────────────────────────────────────────────
-    // Raw pixel cursor + velocity → drives scatter impulse
     const mousePx = { x: -9999, y: -9999, vx: 0, vy: 0 };
-    // Normalised cursor 0..1 (CSS space) → drives parallax
     const cursorNorm = { x: 0.5, y: 0.5 };
     let hasPointer = false;
 
@@ -251,17 +247,37 @@ export default function LiquidHero() {
     }
     window.addEventListener("pointermove", onPointerMove, { passive: true });
 
+    function onPointerDown(e: PointerEvent) {
+      // Burst of 5 stars flying into "space" — upper semicircle only (π … 2π).
+      // In canvas coords y increases downward, so sin(π…2π) is negative = upward.
+      const COUNT = 5;
+      for (let i = 0; i < COUNT; i++) {
+        // Spread evenly across upper arc with per-star jitter
+        const base = Math.PI * (1.0 + i / (COUNT - 1));
+        const angle = base + (Math.random() - 0.5) * 0.55;
+        const spd = 8 + Math.random() * 6;
+        shoots.push({
+          x: e.clientX, y: e.clientY,
+          vx: Math.cos(angle) * spd,
+          vy: Math.sin(angle) * spd,
+          life: 1,
+          trailLen: 60 + Math.random() * 70,
+          alpha: 0.65 + Math.random() * 0.35,
+        });
+      }
+    }
+    window.addEventListener("pointerdown", onPointerDown, { passive: true });
+
     // Parallax — smoothly follows cursor, different depth offset per star.
     // par.x/y are in the range -0.5 … +0.5 and lerp slowly toward the cursor.
     const par = { x: 0, y: 0 };
     const PAR_LERP   = 0.025; // how fast parallax catches up (lower = softer)
-    const PAR_MAX_X  = 38;    // max px offset for a near star (z≈1) horizontally
-    const PAR_MAX_Y  = 22;    // max px offset vertically
+    const PAR_MAX_X  = 70;    // max px offset for a near star (z≈1) horizontally
+    const PAR_MAX_Y  = 42;    // max px offset vertically
 
-    // ── Scatter physics ───────────────────────────────────────────────────────
-    const SCATTER_RADIUS = 145;
-    const DAMP = 0.90;
-    const HOME = 0.992;
+    const SCATTER_RADIUS = 130;
+    const DAMP = 0.88;
+    const HOME = 0.993;
 
     function stepStars(t: number, animate: boolean) {
       // Parallax: lerp toward cursor (or back to 0 when no cursor)
@@ -270,7 +286,7 @@ export default function LiquidHero() {
       par.x += (targetPX - par.x) * PAR_LERP;
       par.y += (targetPY - par.y) * PAR_LERP;
 
-      // Scatter impulse — velocity-gated: resting cursor exerts no force
+      // Gentle scatter — glow on hover, very small push (impulse 4× lower than before)
       const cSpeed = Math.hypot(mousePx.vx, mousePx.vy);
       if (animate && cSpeed > 0.5 && mousePx.x > -9000) {
         const boost = Math.min(cSpeed, 36);
@@ -282,9 +298,9 @@ export default function LiquidHero() {
           const d  = Math.hypot(dx, dy);
           if (d < SCATTER_RADIUS && d > 0.001) {
             const k   = 1 - d / SCATTER_RADIUS;
-            const imp = k * k * boost * 0.050 * (0.4 + 0.6 * s.z);
-            s.vx += (dx / d) * imp + mousePx.vx * 0.012 * k;
-            s.vy += (dy / d) * imp + mousePx.vy * 0.012 * k;
+            const imp = k * k * boost * 0.012 * (0.4 + 0.6 * s.z);
+            s.vx += (dx / d) * imp + mousePx.vx * 0.003 * k;
+            s.vy += (dy / d) * imp + mousePx.vy * 0.003 * k;
             s.flare = Math.min(1, s.flare + k * boost * 0.018);
           }
         }
@@ -427,6 +443,7 @@ export default function LiquidHero() {
       cancelAnimationFrame(raf);
       window.removeEventListener("resize", resize);
       window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerdown", onPointerDown);
       document.removeEventListener("visibilitychange", startStop);
       reducedMotion.removeEventListener("change", startStop);
       canvas.removeEventListener("webglcontextlost", onContextLost);

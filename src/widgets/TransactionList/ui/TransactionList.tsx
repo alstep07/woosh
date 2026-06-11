@@ -33,7 +33,7 @@ export default function TransactionList({
     ...(txs?.map((tx) => tx.counterparty) ?? []),
     ...(pendingEntries?.map((e) => e.counterparty) ?? []),
   ];
-  const slugMap = useSlugMap(allCounterparties);
+  const { map: slugMap, isLoading: slugsLoading } = useSlugMap(allCounterparties);
 
   return (
     <div>
@@ -65,11 +65,8 @@ export default function TransactionList({
         <div className="divide-y divide-border/40">
           {Array.from({ length: skeletonCount }).map((_, i) => (
             <div key={i} className="flex items-center justify-between px-1 py-2.5">
-              <div className="space-y-1.5">
-                <div className="h-2.5 w-20 bg-border rounded animate-pulse" />
-                <div className="h-3 w-36 bg-border rounded animate-pulse" />
-              </div>
-              <div className="h-3.5 w-12 bg-border rounded animate-pulse" />
+              <div className="h-4 w-44 bg-border rounded animate-pulse" />
+              <div className="h-4 w-10 bg-border rounded animate-pulse" />
             </div>
           ))}
         </div>
@@ -90,14 +87,12 @@ export default function TransactionList({
               <div>
                 <p className="text-xs text-text-secondary/50">
                   Sent to{" "}
-                  {slugMap[entry.counterparty.toLowerCase()] ? (
-                    <span className="text-text-secondary/80">
-                      @{slugMap[entry.counterparty.toLowerCase()]}
-                    </span>
+                  {slugsLoading ? (
+                    <span className="inline-block h-3 w-16 bg-border rounded animate-pulse align-middle" />
+                  ) : slugMap[entry.counterparty.toLowerCase()] ? (
+                    <span className="text-text-secondary/80">@{slugMap[entry.counterparty.toLowerCase()]}</span>
                   ) : (
-                    <span className="font-mono">
-                      {entry.counterparty.slice(0, 6)}…{entry.counterparty.slice(-4)}
-                    </span>
+                    <span className="font-mono">{entry.counterparty.slice(0, 6)}…{entry.counterparty.slice(-4)}</span>
                   )}
                   {" · "}just now
                 </p>
@@ -119,14 +114,12 @@ export default function TransactionList({
               <div>
                 <p className="text-xs text-text-secondary/50">
                   {tx.direction === "received" ? "Received from" : "Sent to"}{" "}
-                  {slugMap[tx.counterparty.toLowerCase()] ? (
-                    <span className="text-text-secondary/80">
-                      @{slugMap[tx.counterparty.toLowerCase()]}
-                    </span>
+                  {slugsLoading ? (
+                    <span className="inline-block h-3 w-16 bg-border rounded animate-pulse align-middle" />
+                  ) : slugMap[tx.counterparty.toLowerCase()] ? (
+                    <span className="text-text-secondary/80">@{slugMap[tx.counterparty.toLowerCase()]}</span>
                   ) : (
-                    <span className="font-mono">
-                      {tx.counterparty.slice(0, 6)}…{tx.counterparty.slice(-4)}
-                    </span>
+                    <span className="font-mono">{tx.counterparty.slice(0, 6)}…{tx.counterparty.slice(-4)}</span>
                   )}
                   {" · "}
                   {formatDistanceToNow(tx.timestamp)}
