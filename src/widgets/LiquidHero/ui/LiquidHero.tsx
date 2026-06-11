@@ -248,23 +248,17 @@ export default function LiquidHero() {
     window.addEventListener("pointermove", onPointerMove, { passive: true });
 
     function onPointerDown(e: PointerEvent) {
-      // Burst of 5 stars flying into "space" — upper semicircle only (π … 2π).
-      // In canvas coords y increases downward, so sin(π…2π) is negative = upward.
-      const COUNT = 5;
-      for (let i = 0; i < COUNT; i++) {
-        // Spread evenly across upper arc with per-star jitter
-        const base = Math.PI * (1.0 + i / (COUNT - 1));
-        const angle = base + (Math.random() - 0.5) * 0.55;
-        const spd = 8 + Math.random() * 6;
-        shoots.push({
-          x: e.clientX, y: e.clientY,
-          vx: Math.cos(angle) * spd,
-          vy: Math.sin(angle) * spd,
-          life: 1,
-          trailLen: 60 + Math.random() * 70,
-          alpha: 0.65 + Math.random() * 0.35,
-        });
-      }
+      // Single star flying into "space" — upper semicircle (π … 2π), never downward
+      const angle = Math.PI * (1.05 + Math.random() * 0.9);
+      const spd = 8 + Math.random() * 6;
+      shoots.push({
+        x: e.clientX, y: e.clientY,
+        vx: Math.cos(angle) * spd,
+        vy: Math.sin(angle) * spd,
+        life: 1,
+        trailLen: 60 + Math.random() * 70,
+        alpha: 0.65 + Math.random() * 0.35,
+      });
     }
     window.addEventListener("pointerdown", onPointerDown, { passive: true });
 
