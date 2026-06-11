@@ -33,7 +33,10 @@
       "WebFetch(domain:testnet.meridianfinance.net)",
       "WebFetch(domain:arcswap.net)",
       "Bash(rm:*)",
-      "Bash(npm run:*)"
+      "Bash(npm run:*)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git merge *)"
     ]
   }
 }

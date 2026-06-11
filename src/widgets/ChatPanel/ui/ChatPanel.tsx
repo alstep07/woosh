@@ -365,6 +365,28 @@ export default function ChatPanel({ name, walletAddress, userEmail, onPaymentSuc
 
   return (
     <div className="flex flex-col glass-card rounded-card overflow-hidden mb-4 min-w-0 w-full relative">
+      {/* Glass header — absolute so messages scroll beneath it */}
+      <div className="z-10 px-4 py-3 flex items-center gap-2
+                      bg-[#0d1222]
+                      border-b border-white/[0.07]">
+        <svg className="w-4 h-4 text-blue-primary/60 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+        </svg>
+        <span className="text-xs font-semibold text-text-secondary/60 uppercase tracking-widest flex-1">
+          Woosh Agent
+        </span>
+        {hasConversation && (
+          <button
+            onClick={clearChat}
+            title="Clear chat"
+            className="text-text-secondary/30 hover:text-text-secondary/60 transition-colors"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+          </button>
+        )}
+      </div>
       {/* Messages — height includes header zone so content scrolls beneath it */}
       <div
         ref={scrollRef}
@@ -520,29 +542,6 @@ export default function ChatPanel({ name, walletAddress, userEmail, onPaymentSuc
           </svg>
         </button>
       )}
-
-      {/* Glass header — absolute so messages scroll beneath it */}
-      <div className="absolute top-0 left-0 right-0 z-10 px-4 py-3 flex items-center gap-2
-                      bg-[#0d1222]
-                      border-b border-white/[0.07]">
-        <svg className="w-4 h-4 text-blue-primary/60 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-        </svg>
-        <span className="text-xs font-semibold text-text-secondary/60 uppercase tracking-widest flex-1">
-          Woosh Agent
-        </span>
-        {hasConversation && (
-          <button
-            onClick={clearChat}
-            title="Clear chat"
-            className="text-text-secondary/30 hover:text-text-secondary/60 transition-colors"
-          >
-            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-            </svg>
-          </button>
-        )}
-      </div>
 
       {/* Input */}
       <div className={`border-t border-border bg-white/[0.03] px-4 py-3 flex items-center gap-3 transition-colors ${focused ? "border-blue-primary/40" : ""}`}>
