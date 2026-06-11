@@ -10,10 +10,11 @@ import { Spinner } from "@/shared/ui/Spinner";
 import { useAuth } from "@/features/auth/model/useAuth";
 import { env } from "@/shared/config/env";
 import { lookupAddressSlug } from "@/entities/slug/lib/lookupAddressSlug";
+import { normalizeSlug } from "@/entities/slug/lib/normalizeSlug";
 import { setCachedTokens, setPendingTokens, setSession, clearAll } from "@/shared/lib/session";
 
 // Local wallet-creation lifecycle — separate from OTP auth lifecycle in useAuth
-type WalletPhase = "idle" | "creating" | "error";
+type WalletPhase = "idle" | "creating" | "done" | "error";
 
 // Derived step — computed from auth state + walletPhase on every render.
 // Single source of truth: no manual synchronization between states.
@@ -25,6 +26,7 @@ type Step =
   | "sending"         // OTP being sent to email
   | "verifying"       // OTP popup open, user entering code
   | "creating"        // wallet being created/initialized
+  | "ready"           // wallet created — prompt slug claim before dashboard
   | "createError";    // wallet creation failed
 
 export default function SignupPage() {
@@ -32,6 +34,7 @@ export default function SignupPage() {
   const [alreadySignedIn, setAlreadySignedIn] = useState(false);
   const [walletPhase, setWalletPhase] = useState<WalletPhase>("idle");
   const [walletError, setWalletError] = useState<string | null>(null);
+  const [suggestedSlug, setSuggestedSlug] = useState<string>("");
 
   useEffect(() => {
     if (localStorage.getItem("woosh_session")) setAlreadySignedIn(true); // session module reads same key
@@ -51,6 +54,7 @@ export default function SignupPage() {
     if (auth.deviceIdError)   return "deviceError";
     if (alreadySignedIn)      return "alreadySignedIn";
     if (walletPhase === "creating") return "creating";
+    if (walletPhase === "done")     return "ready";
     if (walletPhase === "error")    return "createError";
     if (auth.step === "verify")     return "verifying";
     if (auth.loading)               return "sending";
@@ -111,7 +115,15 @@ export default function SignupPage() {
         ...(slug ? { slug } : {}),
       });
 
-      router.push("/dashboard");
+      if (slug) {
+        // Already has a slug — skip the prompt
+        router.push("/dashboard");
+      } else {
+        // Show slug claim prompt before going to dashboard
+        const email = auth.emailRef.current;
+        if (email) setSuggestedSlug(normalizeSlug(email.split("@")[0]));
+        setWalletPhase("done");
+      }
     } catch (err) {
       setWalletError(err instanceof Error ? err.message : "Setup failed. Please try again.");
       setWalletPhase("error");
@@ -271,6 +283,39 @@ export default function SignupPage() {
               <p className="text-text-secondary text-sm">
                 This takes just a moment.
               </p>
+            </div>
+          )}
+
+          {step === "ready" && (
+            <div className="text-center">
+              <div className="flex justify-center mb-4">
+                <div className="w-12 h-12 rounded-full bg-green-400/10 flex items-center justify-center">
+                  <svg className="w-6 h-6 text-green-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+              </div>
+              <h1 className="text-2xl font-bold text-text-primary mb-2">
+                Your wallet is ready
+              </h1>
+              <p className="text-text-secondary text-sm mb-8">
+                Claim a username to get a clean payment link like{" "}
+                <span className="text-text-primary font-mono">
+                  woosh.app/pay/{suggestedSlug || "yourname"}
+                </span>
+              </p>
+              <Link
+                href="/slug-setup"
+                className="flex items-center justify-center w-full bg-blue-primary hover:bg-blue-secondary text-white font-semibold px-8 py-3 rounded-input transition-colors shadow-glow min-h-[44px] mb-3"
+              >
+                Claim @{suggestedSlug || "username"}
+              </Link>
+              <button
+                onClick={() => router.push("/dashboard")}
+                className="text-sm text-text-secondary/50 hover:text-text-secondary transition-colors"
+              >
+                Skip for now
+              </button>
             </div>
           )}
 

@@ -6,6 +6,21 @@ import { formatUnits } from "viem";
 
 const MODEL = process.env.ANTHROPIC_MODEL ?? "anthropic/claude-3-5-sonnet";
 
+// In-memory rate limiter — 10 requests per minute per wallet address.
+// Good enough for a single-process deployment; swap for Upstash on multi-instance.
+const rlMap = new Map<string, { count: number; resetAt: number }>();
+function checkRateLimit(key: string): boolean {
+  const now = Date.now();
+  const entry = rlMap.get(key);
+  if (!entry || now > entry.resetAt) {
+    rlMap.set(key, { count: 1, resetAt: now + 60_000 });
+    return true;
+  }
+  if (entry.count >= 10) return false;
+  entry.count++;
+  return true;
+}
+
 const TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
   {
     type: "function",
@@ -152,6 +167,15 @@ export async function POST(req: NextRequest) {
     userName = body.userName;
   } catch {
     return NextResponse.json({ text: "I'm not available right now. Please try again later.", isError: true }, { status: 400 });
+  }
+
+  const ip = req.headers.get("x-forwarded-for") ?? req.headers.get("x-real-ip") ?? "unknown";
+  const rlKey = walletAddress ? `${walletAddress}:${ip}` : ip;
+  if (!checkRateLimit(rlKey)) {
+    return NextResponse.json(
+      { text: "Too many requests. Please wait a moment and try again.", isError: true },
+      { status: 429 }
+    );
   }
 
   const history: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [

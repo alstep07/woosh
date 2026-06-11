@@ -65,6 +65,11 @@ body {
   overflow: hidden;
 }
 
+@keyframes scaleIn {
+  from { transform: scale(0); opacity: 0; }
+  to   { transform: scale(1); opacity: 1; }
+}
+
 /* Faint nebula wash behind the starfield (also the loading/no-JS state) */
 .liquid-fallback {
   position: absolute;

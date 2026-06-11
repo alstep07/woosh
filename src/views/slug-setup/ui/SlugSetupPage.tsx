@@ -15,7 +15,7 @@ import { useUSDCBalance } from "@/entities/wallet/hooks/useUSDCBalance";
 import { normalizeSlug } from "@/entities/slug/lib/normalizeSlug";
 import { suggestSlugs } from "@/entities/slug/lib/suggestSlugs";
 import { env } from "@/shared/config/env";
-import { getSession as loadSession, setSession as saveSession, getPendingTokens, clearPendingTokens } from "@/shared/lib/session";
+import { getSession as loadSession, setSession as saveSession, getPendingTokens, clearPendingTokens, getCachedTokens, clearCachedTokens } from "@/shared/lib/session";
 import type { Session } from "@/entities/user/model/types";
 
 // Page-level lifecycle phases
@@ -96,13 +96,14 @@ export default function SlugSetupPage() {
   async function handleSubmitSlug() {
     if (availability !== "available" && availability !== "error") return;
 
-    // Fresh signup: tokens cached in sessionStorage → skip re-auth
+    // Skip re-auth if we have a fresh signup token (pending) or a recent payment token (session)
     const pending = getPendingTokens();
-    if (pending) {
-      clearPendingTokens();
+    const tokens = pending ?? getCachedTokens();
+    if (tokens) {
+      if (pending) clearPendingTokens(); // always consume pending; keep session token
       setPhase("registering");
       setRegError(null);
-      await registerSlug(pending.userToken, pending.encryptionKey);
+      await registerSlug(tokens.userToken, tokens.encryptionKey);
     } else {
       setPhase("auth");
     }
@@ -121,6 +122,13 @@ export default function SlugSetupPage() {
       const data = await res.json() as { challengeId?: string; error?: string };
 
       if (!res.ok) {
+        if (res.status === 401) {
+          // Cached token expired — clear it and fall back to OTP re-auth
+          clearCachedTokens();
+          clearPendingTokens();
+          setPhase("auth");
+          return;
+        }
         setRegError(data.error ?? "Failed to start registration");
         setPhase("regError");
         return;
