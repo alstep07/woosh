@@ -102,30 +102,41 @@ and returns a confirmation card before any send.
 // Adding a new tool: create a feature file, call registerToolExamples(), import in /api/chat
 ```
 
-**Chat state:** Session-only (no persistence). V2b: Supabase.
+**Chat state:** persisted in sessionStorage (`woosh_chat_history`), cleared on logout. Supabase later.
 
 **Env:** `OPENROUTER_API_KEY`, `ANTHROPIC_MODEL` (default: `anthropic/claude-3-5-sonnet`)
 
-### 🔄 V2b — Direct Sends + Persistence (next)
+### ✅ V2b — Direct Sends from Chat (shipped)
 
-**Direct send from dashboard (no redirect):**
-- Initialize Circle UCW SDK in DashboardPage
-- userToken management: request fresh token on send (re-auth by email OTP)
-- Use existing `POST /api/wallet/send-payment` → returns challengeId → execute via SDK
-- Show receipt bubble in chat on success
+ChatPanel executes payments in place — no redirect:
+- On confirm: tries cached Circle userToken from sessionStorage (`woosh_session_token`)
+  → `POST /api/wallet/send-payment` → challengeId → `sdk.execute()` (PIN iframe)
+- If no/expired token: email OTP flow inline in chat, then execute
+- Status bubbles: confirmed → sending → paid (explorer link) / send_error
+- User slug + wallet address passed in chat request body, injected into system prompt
 
-**Persistence:**
-- Supabase: payment metadata (sender, description, memo) matched to txHash
-- Persist chat history per user
+**Unmerged:** branch `temp/improvements` has rate limiting on `/api/chat`,
+slug resolution in TransactionList (`useSlugMap`), optimistic pending tx entries,
+and a post-signup slug claim prompt. Merge after stabilization.
 
-**Other:**
-- Rate limiting on `/api/chat`
-- User slug in chat system prompt
+### 🔄 V2c — Stabilization + Persistence (next)
 
-### 🔮 V3 — Fiat + Bridge
+**See `docs/IMPLEMENTATION_PLAN.md` — execute in order.** Summary:
+- **Phase 0 (bugs):** stale-closure payment details in PaymentForm (PIN window shows
+  previous payment), shared W3SSdk singleton (`src/shared/lib/w3s.ts`), central session
+  module with complete logout cleanup, 401 mapping for expired Circle tokens,
+  string-only amount handling
+- **Phase 1:** merge `temp/improvements` with fixes
+- **Phase 2 (80/20):** Supabase metadata layer → off-chain payment requests (`/r/[id]`)
+  → Woosh MCP server → Gateway/CCTP on PayPage
 
+### 🔮 V3 — Agentic Rail + Fiat
+
+- Woosh MCP server — existing chat tools repackaged for any MCP agent (pulled into V2c Phase 2)
+- Gateway/CCTP bridge on PayPage — sender pays Arc link with USDC from Base/Ethereum
+  (Circle App Kit; pulled into V2c Phase 2)
+- DCW agent wallets + `POST /api/pay` + spend policies (after MCP proves demand)
 - Fiat on-ramp via Transak — card → USDC on Arc
-- CCTP bridge — USDC from Base/Ethereum (prefer Circle App Kits over LI.FI)
 
 ### 🔮 V4 — Recurring Payments
 
@@ -292,19 +303,19 @@ Header (BrandHeader + email + logout)
 ## What's Out of Scope
 
 **Not planned:**
-- ERC-8183 agentic job escrow
-- WooshPaymentRequest on-chain invoices
-- `POST /api/pay` programmatic payment API
+- ERC-8183 agentic job escrow (UI later, only if agent volume appears)
+- WooshPaymentRequest on-chain invoices (off-chain Supabase rows first)
 - Webhook delivery
 - Payment splits, vouchers, milestone escrow
 - Yield on balance (too complex without custody)
-- Invoice PDF export, payroll, off-ramp to bank
+- Invoice PDF export, payroll, off-ramp to bank (HIFI later if demanded)
 
-**V2b (next):** direct send without redirect, chat persistence in Supabase, rate limiting, user slug in system prompt
+**V2c (next):** stabilization fixes + merge `temp/improvements` + Supabase metadata +
+off-chain payment requests + MCP server + Gateway on PayPage — see `docs/IMPLEMENTATION_PLAN.md`
 
-**V3 (future):** fiat on-ramp (Transak), CCTP bridge from Base/Ethereum
+**V3 (future):** DCW agent wallets, `POST /api/pay`, spend policies, fiat on-ramp (Transak)
 
-**V4 (future):** recurring payments / subscriptions
+**V4 (future):** recurring payments / subscriptions, off-ramp, EURC
 
 ---
 

@@ -19,32 +19,41 @@ body {
   }
 }
 
-/* Liquid glass card */
+/* ── Glass card ────────────────────────────────────────────────────────────
+   Key rule: the background must be mostly transparent so the blurred
+   content behind actually shows through. Opaque layers kill the effect.
+   - background: dark semi-transparent tint (~35%) — the blur does the rest
+   - backdrop-filter: blurs + slightly brightens what's behind
+   - ::before: diagonal inner glow, top-left → transparent (light entering)
+   - simple 1px border + inner top highlight for the glass edge */
 .glass-card {
   position: relative;
   overflow: hidden;
-  /* Truly transparent — content behind shows through */
-  background: rgba(255, 255, 255, 0.04);
-  backdrop-filter: blur(2px);
-  -webkit-backdrop-filter: blur(2px);
-  /* Brighter border — visible glass edge */
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(8, 12, 26, 0.38);
+  backdrop-filter: blur(20px) saturate(150%) brightness(1.08);
+  -webkit-backdrop-filter: blur(20px) saturate(150%) brightness(1.08);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   box-shadow:
-    0 8px 32px rgba(0, 0, 0, 0.45),
-    /* top rim highlight — the signature glass shine */
-    inset 0 1px 0 rgba(255, 255, 255, 0.28);
+    0 8px 32px rgba(0, 0, 0, 0.40),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
-/* Subtle top highlight only */
+/* Soft diagonal sheen — light entering from the top-left */
 .glass-card::before {
   content: '';
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 1px;
-  background: rgba(255, 255, 255, 0.18);
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(
+    140deg,
+    rgba(255, 255, 255, 0.07) 0%,
+    transparent 50%
+  );
   pointer-events: none;
+}
+
+.glass-card::after {
+  display: none;
 }
 
 /* Full-screen animated background layer */
@@ -56,30 +65,19 @@ body {
   overflow: hidden;
 }
 
-@keyframes woosh-pulse {
-  0%   { opacity: 0; }
-  50%  { opacity: 0.85; }
-  100% { opacity: 0; }
-}
-
-.woosh-dot {
+/* Faint nebula wash behind the starfield (also the loading/no-JS state) */
+.liquid-fallback {
   position: absolute;
-  width: 3px;
-  height: 3px;
-  border-radius: 9999px;
-  background-color: #0EA5E9;
-  opacity: 0;
-  animation: woosh-pulse 4s ease-in-out infinite;
-  animation-fill-mode: both;
-  will-change: transform, opacity;
+  inset: 0;
+  background:
+    radial-gradient(42% 36% at 22% 72%, rgba(14, 165, 233, 0.07), transparent 70%),
+    radial-gradient(38% 32% at 78% 24%, rgba(6, 182, 212, 0.06), transparent 70%),
+    #0A0F1E;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .woosh-dot {
-    animation: none;
-    opacity: 0.05;
-  }
-}
+/* Hide scrollbar visually while keeping scroll behaviour */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
 /* Custom scrollbar — thin, app-color */
 ::-webkit-scrollbar {
