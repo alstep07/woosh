@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect, useRef, FormEvent } from "react";
+import { useState, useCallback, useRef, useEffect, FormEvent } from "react";
 import {
   useAccount,
   useDisconnect,
@@ -10,11 +10,11 @@ import {
 } from "wagmi";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { parseUnits } from "viem";
-import { W3SSdk } from "@circle-fin/w3s-pw-web-sdk";
 import { useUSDCBalance } from "@/entities/wallet/hooks/useUSDCBalance";
 import OnboardingGuide from "@/widgets/OnboardingGuide/ui/OnboardingGuide";
 import { arcTestnet } from "@/shared/lib/arc";
 import { env } from "@/shared/config/env";
+import { getW3SSdk, setLoginHandler, fetchDeviceId } from "@/shared/lib/w3s";
 import type { OtpTokens } from "@/entities/user/model/types";
 
 interface Props {
@@ -26,8 +26,15 @@ interface Props {
 type TxState = "idle" | "pending" | "success" | "error";
 type WooshStep = "email" | "verify" | "paying";
 
+// Accepts decimals up to 6 places — avoids silent float rounding
+const AMOUNT_RE = /^\d+(\.\d{1,6})?$/;
+
 export default function PaymentForm({ recipientAddress, recipientLabel, initialAmount }: Props) {
   const [amount, setAmount] = useState(initialAmount ?? "");
+  // lockedAmount is set the moment the user enters Woosh mode.
+  // All steps after that point read lockedAmount so the amount can't drift
+  // between OTP entry and PIN signing (the root cause of "previous payment details").
+  const [lockedAmount, setLockedAmount] = useState<string | null>(null);
   const [amountError, setAmountError] = useState<string | null>(null);
   const [guide, setGuide] = useState<{ open: false } | { open: true; step: 1 | 2 | 3 }>({ open: false });
 
@@ -43,11 +50,13 @@ export default function PaymentForm({ recipientAddress, recipientLabel, initialA
   const [wooshOtpTokens, setWooshOtpTokens] = useState<OtpTokens | null>(null);
   const [wooshError, setWooshError] = useState<string | null>(null);
   const [wooshLoading, setWooshLoading] = useState(false);
-
-  // Circle SDK
-  const sdkRef = useRef<W3SSdk | null>(null);
   const [deviceId, setDeviceId] = useState("");
-  const circleAppId = env.circleAppId;
+
+  // Ref-delegate pattern: setLoginHandler captures this once, but the ref always
+  // points to the latest handleWooshPay — which reads the current lockedAmount.
+  const handleWooshPayRef = useRef<(userToken: string, encryptionKey: string) => Promise<void>>(
+    async () => {}
+  );
 
   // Wagmi
   const { address, isConnected } = useAccount();
@@ -58,41 +67,50 @@ export default function PaymentForm({ recipientAddress, recipientLabel, initialA
   const { data: balance } = useUSDCBalance(address);
 
   const isWrongNetwork = isConnected && chainId !== arcTestnet.id;
-  const parsedAmount = parseFloat(amount);
-  const amountValid = !isNaN(parsedAmount) && parsedAmount > 0;
+  const amountTrimmed = amount.trim();
+  const amountValid = AMOUNT_RE.test(amountTrimmed) && parseFloat(amountTrimmed) > 0;
   const hasInsufficientBalance =
     isConnected && !isWrongNetwork && amountValid &&
-    balance !== undefined && parseFloat(balance.formatted) < parsedAmount;
+    balance !== undefined && parseFloat(balance.formatted) < parseFloat(amountTrimmed);
   const canPay =
     isConnected && !isWrongNetwork && amountValid &&
     !hasInsufficientBalance && txState !== "pending";
 
-  // Initialize Circle SDK when entering Woosh mode
+  // Fetch device ID once at mount with the shared 10s timeout helper
   useEffect(() => {
-    if (!wooshMode) return;
+    if (!env.circleAppId) return;
+    void fetchDeviceId(env.circleAppId).then((id) => {
+      if (id) setDeviceId(id);
+    });
+  }, []);
 
-    const onLoginComplete = (err: unknown, result: unknown) => {
+  // When Woosh mode is active, register our OTP completion handler.
+  // The handler delegates to handleWooshPayRef so it always calls the latest closure.
+  useEffect(() => {
+    if (!wooshMode || !env.circleAppId) return;
+    setLoginHandler((err, result) => {
       if (err) {
         setWooshError("Verification failed. Please try again.");
         setWooshStep("verify");
         return;
       }
       const res = result as { userToken: string; encryptionKey: string };
-      void handleWooshPay(res.userToken, res.encryptionKey);
-    };
-
-    const sdk = new W3SSdk({ appSettings: { appId: circleAppId } }, onLoginComplete);
-    sdkRef.current = sdk;
-    void sdk.getDeviceId().then(setDeviceId);
-
-    return () => { sdkRef.current = null; };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [wooshMode, circleAppId]);
+      void handleWooshPayRef.current(res.userToken, res.encryptionKey);
+    });
+    return () => setLoginHandler(() => {});
+  }, [wooshMode]);
 
   function validateAmount() {
-    if (!amount.trim()) return;
+    if (!amountTrimmed) return;
     if (!amountValid) setAmountError("Enter a valid positive amount");
     else setAmountError(null);
+  }
+
+  // Lock the amount and enter Woosh mode in one step
+  function enterWooshMode() {
+    if (!amountValid) { setAmountError("Enter a valid amount first"); return; }
+    setLockedAmount(amountTrimmed);
+    setWooshMode(true);
   }
 
   // ── External wallet pay ──
@@ -103,7 +121,7 @@ export default function PaymentForm({ recipientAddress, recipientLabel, initialA
     try {
       const hash = await sendTransactionAsync({
         to: recipientAddress,
-        value: parseUnits(parsedAmount.toString(), 18),
+        value: parseUnits(amountTrimmed, 18),
       });
       setTxHash(hash);
       setTxState("success");
@@ -138,8 +156,9 @@ export default function PaymentForm({ recipientAddress, recipientLabel, initialA
 
       const tokens = data as OtpTokens;
       setWooshOtpTokens(tokens);
-      sdkRef.current?.updateConfigs({
-        appSettings: { appId: circleAppId },
+      const sdk = getW3SSdk(env.circleAppId);
+      sdk.updateConfigs({
+        appSettings: { appId: env.circleAppId },
         loginConfigs: {
           deviceToken: tokens.deviceToken,
           deviceEncryptionKey: tokens.deviceEncryptionKey,
@@ -147,7 +166,7 @@ export default function PaymentForm({ recipientAddress, recipientLabel, initialA
         },
       });
       setWooshStep("verify");
-      sdkRef.current?.verifyOtp();
+      sdk.verifyOtp();
     } catch (err) {
       setWooshError(err instanceof Error ? err.message : "Failed to send code.");
     } finally {
@@ -157,25 +176,28 @@ export default function PaymentForm({ recipientAddress, recipientLabel, initialA
 
   // ── Woosh pay: Step 2 — verify OTP ──
   function handleWooshVerifyOtp() {
-    if (!sdkRef.current || !wooshOtpTokens) return;
+    if (!wooshOtpTokens) return;
     setWooshError(null);
-    sdkRef.current.verifyOtp();
+    getW3SSdk(env.circleAppId).verifyOtp();
   }
 
   // ── Woosh pay: Step 3 — create & execute payment challenge ──
+  // This function is redefined every render — handleWooshPayRef.current always
+  // points to the latest version so it reads the current lockedAmount.
   async function handleWooshPay(userToken: string, encryptionKey: string) {
+    const amt = lockedAmount ?? amountTrimmed;
     setWooshStep("paying");
     setWooshError(null);
     try {
       const res = await fetch("/api/wallet/send-payment", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userToken, recipientAddress, amount: parsedAmount.toString() }),
+        body: JSON.stringify({ userToken, recipientAddress, amount: amt }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Failed to create payment");
 
-      const sdk = sdkRef.current!;
+      const sdk = getW3SSdk(env.circleAppId);
       sdk.setAuthentication({ userToken, encryptionKey });
       sdk.execute(data.challengeId, (err) => {
         if (err) {
@@ -191,14 +213,22 @@ export default function PaymentForm({ recipientAddress, recipientLabel, initialA
     }
   }
 
+  // Keep ref fresh every render (standard stale-closure fix)
+  handleWooshPayRef.current = handleWooshPay;
+
   function exitWooshMode() {
     setWooshMode(false);
+    setLockedAmount(null);
     setWooshStep("email");
     setWooshError(null);
     setWooshOtpTokens(null);
+    setLoginHandler(() => {});
   }
 
   const dismissGuide = useCallback(() => setGuide({ open: false }), []);
+
+  // Display the locked amount if in woosh flow; otherwise live amount
+  const displayAmount = lockedAmount !== null ? lockedAmount : amountTrimmed;
 
   // ── Success ──
   if (txState === "success") {
@@ -209,7 +239,7 @@ export default function PaymentForm({ recipientAddress, recipientLabel, initialA
         </div>
         <h2 className="text-xl font-bold text-text-primary mb-2">Payment sent!</h2>
         <p className="text-text-secondary text-sm mb-6">
-          ${parsedAmount.toFixed(2)} USDC sent to{" "}
+          ${displayAmount} USDC sent to{" "}
           <span className="font-mono">{recipientLabel}</span>.
         </p>
         {txHash && (
@@ -231,7 +261,7 @@ export default function PaymentForm({ recipientAddress, recipientLabel, initialA
         </div>
 
         <div className="glass-card rounded-card p-6 space-y-5">
-          {/* Amount */}
+          {/* Amount — locked once OTP flow starts */}
           <div>
             <label htmlFor="amount" className="block text-sm font-medium text-text-secondary mb-1.5">
               Amount (USDC)
@@ -241,11 +271,12 @@ export default function PaymentForm({ recipientAddress, recipientLabel, initialA
               type="number"
               min="0"
               step="0.01"
-              value={amount}
-              onChange={(e) => { setAmount(e.target.value); setAmountError(null); }}
+              value={lockedAmount !== null ? lockedAmount : amount}
+              onChange={(e) => { if (lockedAmount === null) { setAmount(e.target.value); setAmountError(null); } }}
               onBlur={validateAmount}
               placeholder="0.00"
-              className="w-full bg-navy border border-border rounded-input px-4 py-3 text-text-primary placeholder-text-secondary/50 focus:outline-none focus:border-blue-primary transition-colors text-xl font-semibold [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+              disabled={lockedAmount !== null}
+              className="w-full bg-navy border border-border rounded-input px-4 py-3 text-text-primary placeholder-text-secondary/50 focus:outline-none focus:border-blue-primary transition-colors text-xl font-semibold [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none disabled:opacity-70 disabled:cursor-not-allowed"
             />
             {amountError && <p className="mt-1.5 text-sm text-red-400">{amountError}</p>}
           </div>
@@ -337,7 +368,7 @@ export default function PaymentForm({ recipientAddress, recipientLabel, initialA
               >
                 {txState === "pending"
                   ? "Confirm in wallet…"
-                  : `Pay $${amountValid ? parsedAmount.toFixed(2) : "0.00"} USDC`}
+                  : `Pay $${amountValid ? parseFloat(amountTrimmed).toFixed(2) : "0.00"} USDC`}
               </button>
 
               <button
@@ -353,7 +384,7 @@ export default function PaymentForm({ recipientAddress, recipientLabel, initialA
               {({ openConnectModal }) => (
                 <div className="grid grid-cols-2 gap-2">
                   <button
-                    onClick={() => setWooshMode(true)}
+                    onClick={enterWooshMode}
                     className="bg-blue-primary hover:bg-blue-secondary text-white font-semibold py-3 rounded-input transition-colors shadow-glow min-h-[44px] text-sm"
                   >
                     Pay with Woosh

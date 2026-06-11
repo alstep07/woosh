@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useUSDCBalance } from "@/entities/wallet/hooks/useUSDCBalance";
@@ -12,6 +12,7 @@ import TransactionList from "@/widgets/TransactionList/ui/TransactionList";
 import Footer from "@/widgets/Footer/ui/Footer";
 import { Spinner } from "@/shared/ui/Spinner";
 import { env } from "@/shared/config/env";
+import { getSession as loadSession, clearAll } from "@/shared/lib/session";
 import type { Session } from "@/entities/user/model/types";
 
 export default function DashboardPage() {
@@ -19,32 +20,54 @@ export default function DashboardPage() {
   const [session, setSession] = useState<Session | null>(null);
 
   useEffect(() => {
-    const raw = localStorage.getItem("woosh_session");
-    if (!raw) {
-      router.replace("/signup");
-      return;
-    }
-    try {
-      setSession(JSON.parse(raw) as Session);
-    } catch {
-      router.replace("/signup");
-    }
+    const s = loadSession();
+    if (!s) { router.replace("/signup"); return; }
+    setSession(s);
   }, [router]);
 
   const {
     data: balance,
     isLoading: balanceLoading,
     isError: balanceError,
+    refetch: refetchBalance,
   } = useUSDCBalance(session?.walletAddress);
 
   const [isTxRefreshing, setIsTxRefreshing] = useState(false);
   const { data: txs, isLoading: txsLoading, isError: txsError, refetch: refetchTxs } =
     useTransactionHistory(session?.walletAddress);
 
+  const [pendingTx, setPendingTx] = useState<{ amount: string; counterparty: string } | null>(null);
+  // Track tx count at payment time so we can detect when new data arrives
+  const txCountAtPaymentRef = useRef<number | null>(null);
+
+  // Clear the optimistic entry the moment a new tx appears in the fetched data —
+  // no gap, no flash. Falls back to 10s safety-net if Blockscout is very slow.
+  useEffect(() => {
+    if (txCountAtPaymentRef.current === null || !pendingTx) return;
+    if ((txs?.length ?? 0) > txCountAtPaymentRef.current) {
+      txCountAtPaymentRef.current = null;
+      setPendingTx(null);
+    }
+  }, [txs, pendingTx]);
+
   async function handleTxRefresh() {
     setIsTxRefreshing(true);
     await refetchTxs();
     setIsTxRefreshing(false);
+  }
+
+  function handlePaymentSuccess(amount: string, counterparty: string) {
+    void refetchBalance();
+    txCountAtPaymentRef.current = txs?.length ?? 0;
+    setPendingTx({ amount: parseFloat(amount).toFixed(2), counterparty });
+    // Poll twice — Blockscout usually indexes within 2–4s
+    setTimeout(() => void refetchTxs(), 2500);
+    setTimeout(() => void refetchTxs(), 5000);
+    // Safety net: always clear after 10s
+    setTimeout(() => {
+      txCountAtPaymentRef.current = null;
+      setPendingTx(null);
+    }, 10_000);
   }
 
   function formatEmail(email: string, maxLocal = 6): string {
@@ -57,12 +80,7 @@ export default function DashboardPage() {
   const paymentLink = session ? `${env.baseUrl}/pay/${identifier}` : "";
 
   function handleLogout() {
-    localStorage.removeItem("woosh_session");
-    try {
-      sessionStorage.removeItem("woosh_session_token");
-      sessionStorage.removeItem("woosh_session_enc_key");
-      sessionStorage.removeItem("woosh_chat_history");
-    } catch {}
+    clearAll();
     router.replace("/");
   }
 
@@ -107,13 +125,20 @@ export default function DashboardPage() {
             walletAddress={session.walletAddress}
             slug={session.slug}
           />
-          <ChatPanel name={session.slug} walletAddress={session.walletAddress} userEmail={session.email} />
+          <ChatPanel
+            name={session.slug}
+            walletAddress={session.walletAddress}
+            userEmail={session.email}
+            onPaymentSuccess={handlePaymentSuccess}
+            knownCounterparties={txs?.map((tx) => tx.counterparty)}
+          />
           <TransactionList
-            txs={txs?.slice(0, 3)}
+            txs={txs?.slice(0, pendingTx ? 2 : 3)}
             isLoading={txsLoading}
             isError={txsError}
             onRefresh={handleTxRefresh}
             isRefreshing={isTxRefreshing}
+            pendingEntries={pendingTx ? [pendingTx] : undefined}
           />
           {txs && txs.length > 3 && (
             <div className="flex justify-end mt-3">

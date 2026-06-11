@@ -7,6 +7,7 @@ import BrandHeader from "@/widgets/BrandHeader/ui/BrandHeader";
 import Footer from "@/widgets/Footer/ui/Footer";
 import TransactionList from "@/widgets/TransactionList/ui/TransactionList";
 import { Spinner } from "@/shared/ui/Spinner";
+import { getSession as loadSession } from "@/shared/lib/session";
 import type { Session } from "@/entities/user/model/types";
 
 export default function DashboardHistoryPage() {
@@ -14,16 +15,9 @@ export default function DashboardHistoryPage() {
   const [session, setSession] = useState<Session | null>(null);
 
   useEffect(() => {
-    const raw = localStorage.getItem("woosh_session");
-    if (!raw) {
-      router.replace("/signup");
-      return;
-    }
-    try {
-      setSession(JSON.parse(raw) as Session);
-    } catch {
-      router.replace("/signup");
-    }
+    const s = loadSession();
+    if (!s) { router.replace("/signup"); return; }
+    setSession(s);
   }, [router]);
 
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -59,7 +53,7 @@ export default function DashboardHistoryPage() {
           Back
         </button>
         <h1 className="text-lg font-semibold text-text-primary mb-6">Transactions</h1>
-        <TransactionList txs={txs} isLoading={isLoading} isError={isError} onRefresh={handleRefresh} isRefreshing={isRefreshing} />
+        <TransactionList txs={txs} isLoading={isLoading} isError={isError} onRefresh={handleRefresh} isRefreshing={isRefreshing} skeletonCount={5} />
       </div>
       <Footer />
     </main>
