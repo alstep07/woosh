@@ -8,52 +8,75 @@ USDC payment platform for humans and AI agents. Built on [Arc](https://arc.netwo
 
 ## What it does
 
-- **Recipient** signs up with email → gets a Circle embedded wallet and a personal payment link (`woosh.app/pay/yourname`)
-- **Sender** opens the link, connects any EVM wallet via WalletConnect, and pays USDC on Arc
-- **Woosh pay** — senders with a Woosh account pay directly via email OTP, no external wallet needed
-- **Onboarding guide** for senders who need a wallet or USDC — 3 steps, no crypto jargon
+- **Recipient** signs up with email → gets a Circle embedded wallet and a human-readable payment link (`woosh.app/pay/yourname`)
+- **Sender** opens the link, enters an amount, and pays USDC — from any EVM wallet via WalletConnect, or from their own Woosh account
+- **Woosh Agent** — natural-language chat in the dashboard: "send $5 to alex" → confirmation card → Circle PIN → paid
+- **Onboarding guide** for senders who need a wallet or USDC — 3 steps, zero crypto jargon
+
+---
+
+## Shipped
+
+### V1 — Web3 Payments
+
+Email sign-in. Circle User-Controlled embedded wallet. Payment link based on wallet address. Send USDC from any wallet or from another Woosh account. Onboarding guide for new senders.
+
+### V1.5 — Slug Registry
+
+Human-readable payment links stored on-chain. `/pay/0x1a2b…` becomes `/pay/alex`.
+
+- `WooshSlugRegistry` smart contract on Arc — slug → address mapping, uniqueness enforced on-chain
+- Voluntary claim from dashboard CTA; `/slug-setup` pre-fills from email with live availability check
+- On-chain registration tx signed via Circle UCW SDK (PIN)
+
+### V2a — Woosh Agent Chat
+
+Natural language interface in the dashboard. Claude (via OpenRouter) parses intent, executes reads, and returns a confirmation card before any send.
+
+- Tools: `get_balance`, `get_transaction_history`, `send_payment`
+- `send_payment` never auto-executes — server resolves recipient slug, returns `{text, pendingAction}` to frontend
+- Confirmation card shows "Send $10.00 to alex (…a3f2)?" before anything moves
+
+### V2b — Direct Sends from Chat
+
+Chat executes payments in place — no redirect to pay page.
+
+- On confirm: cached Circle `userToken` from sessionStorage → `/api/wallet/send-payment` → PIN iframe inline
+- Inline email OTP fallback if token expired
+- Status bubbles: confirmed → sending → paid (explorer link)
+
+### Stabilization (Phase 0 + Phase 1)
+
+- Stale-closure fix in `PaymentForm` — PIN window always shows current payment
+- Shared Circle SDK singleton (`src/shared/lib/w3s.ts`) — no conflicting instances
+- Central session module (`src/shared/lib/session.ts`) — complete logout cleanup
+- Circle token expiry mapped to 401 so chat OTP fallback fires correctly
+- In-memory rate limiting on `/api/chat` (10 req/min per wallet+IP)
+- `useSlugMap` — transaction list resolves addresses to `@slug`
+- Optimistic pending tx entry after chat send
+- Post-signup slug claim prompt
 
 ---
 
 ## Roadmap
 
-### V1 — Web3 Payments (live)
+### V2c — Persistence + Agentic Infrastructure (next)
 
-Email sign-in. Circle User-Controlled embedded wallet. Payment link based on wallet address. Send USDC from any wallet or from another Woosh account.
+1. **Supabase metadata layer** — chat history, tx memos, payment request rows
+2. **Payment requests** — `POST /api/requests` → `/r/[id]` link with locked amount and memo; paid detection via Blockscout polling; chat tool `create_payment_request`
+3. **Woosh MCP server** — repackage chat tools as an MCP server so any Claude agent can pay a Woosh link with one config line
+4. **Gateway/CCTP on PayPage** — Circle App Kit lets senders pay an Arc link with USDC from Base/Ethereum without knowing a bridge exists
 
-### V1.5 — Slug Registry (next)
+### V3 — Agent Wallets + Fiat
 
-Human-readable payment links stored on-chain. `/pay/0x1a2b…` becomes `/pay/alex`.
+- Developer-Controlled Wallets (DCW) for AI agents — programmatic signing, `POST /api/pay`, spend policies
+- Fiat on-ramp via Transak — card → USDC on Arc
 
-- `WooshSlugRegistry` smart contract on Arc — slug → address mapping, uniqueness enforced on-chain
-- After login, if no slug → `/slug-setup` flow with pre-fill from email and live availability check
-- Single on-chain registration tx via Circle UCW SDK
+### V4 — Recurring Payments
 
-### V2 — Agentic Payments + Payment Requests
-
-**Payment Requests** — on-chain invoices via `WooshPaymentRequest` contract:
-- Fixed amount, description, optional expiry
-- Share as `/pay/alex?req=0xABC` — amount locked, marked paid on-chain after settlement
-- Use cases: freelance invoices, event tickets, one-time fees
-
-**Agentic Payments** — Woosh as infrastructure for AI agents:
-- ERC-8183 escrow on Arc: `createJob → fund → submit → complete/reject`
-- `POST /api/pay` endpoint (Bearer token), webhooks on confirmation
-- Agent wallets via Circle Developer-Controlled Wallets (DCW)
-
-### V3 — Recurring Payments + Streams
-
-- `WooshSubscription` — sender pre-authorizes max amount + period, recipient pulls each cycle. Revocable anytime.
-- Payment streams — USDC per-second, recipient withdraws accumulated balance at any time
-- Use cases: SaaS billing, memberships, salary, agent hourly billing
-
-### V4 — Web2 Integrations + Advanced Contracts
-
-- Fiat on-ramp via Transak — pay by card, USDC lands on Arc
-- CCTP bridge — bring USDC from Base or Ethereum
-- Payment splits — one payment divided across multiple recipients
-- Vouchers — USDC gift card redeemable by code
-- Milestone escrow — multi-step release for projects
+- `WooshSubscription` contract — sender pre-authorizes `maxAmount + period`; recipient pulls each cycle; revocable anytime
+- Use cases: SaaS billing, memberships, agent hourly billing
+- Off-ramp, EURC support
 
 ---
 
@@ -66,9 +89,11 @@ Human-readable payment links stored on-chain. `/pay/0x1a2b…` becomes `/pay/ale
 | Styling | Tailwind CSS |
 | Wallets (recipients) | Circle User-Controlled Wallets + email OTP |
 | Wallets (senders) | WalletConnect + Wagmi + Viem |
-| Contracts | Solidity on Arc |
+| AI | Claude via OpenRouter (`ANTHROPIC_MODEL` env, default `anthropic/claude-3-5-sonnet`) |
+| Contracts | Solidity on Arc (Foundry) |
 | Chain | Arc Testnet (chainId 5042002, native USDC, 18 decimals) |
 | Transaction history | Blockscout v2 API (arcscan.app) |
+| DB | None in V1–V2b (on-chain source of truth); Supabase in V2c |
 
 ---
 
@@ -76,9 +101,7 @@ Human-readable payment links stored on-chain. `/pay/0x1a2b…` becomes `/pay/ale
 
 | Contract | Address | Purpose |
 |----------|---------|---------|
-| `WooshSlugRegistry` | TBD | Slug → address mapping |
-| `WooshPaymentRequest` | TBD | On-chain invoices |
-| ERC-8183 | `0x0747EEf0706327138c69792bF28Cd525089e4583` | Agentic job escrow |
+| `WooshSlugRegistry` | set via `NEXT_PUBLIC_SLUG_REGISTRY_ADDRESS` | Slug → address mapping |
 | USDC | `0x3600000000000000000000000000000000000000` | Native stablecoin |
 
 ---
@@ -101,7 +124,7 @@ NEXT_PUBLIC_BASE_URL=http://localhost:3000
 NEXT_PUBLIC_ARC_CHAIN_ID=5042002
 NEXT_PUBLIC_ARC_RPC_URL=https://rpc.testnet.arc.network
 NEXT_PUBLIC_ARC_EXPLORER_URL=https://testnet.arcscan.app
-NEXT_PUBLIC_ARC_FAUCET_URL=https://faucet.testnet.arc.network/api/claim
+NEXT_PUBLIC_ARC_FAUCET_URL=https://faucet-testnet.arc.network
 
 # WalletConnect — https://cloud.walletconnect.com
 NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=
@@ -110,8 +133,12 @@ NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=
 CIRCLE_API_KEY=
 NEXT_PUBLIC_CIRCLE_APP_ID=
 
-# Smart contracts (V1.5+)
+# Smart contracts
 NEXT_PUBLIC_SLUG_REGISTRY_ADDRESS=
+
+# Woosh Agent
+OPENROUTER_API_KEY=
+ANTHROPIC_MODEL=anthropic/claude-3-5-sonnet
 ```
 
 ### Circle setup
@@ -121,14 +148,23 @@ NEXT_PUBLIC_SLUG_REGISTRY_ADDRESS=
 3. **Wallets → User Controlled → Configurator** → copy **App ID** → `NEXT_PUBLIC_CIRCLE_APP_ID`
 4. Same page → **Authentication Methods → Email OTP** → configure SMTP ([Resend](https://resend.com) recommended)
 
+### Slug registry (deploy once)
+
+```bash
+forge create contracts/src/WooshSlugRegistry.sol:WooshSlugRegistry \
+  --rpc-url https://rpc.testnet.arc.network \
+  --private-key $PRIVATE_KEY
+# copy deployed address → NEXT_PUBLIC_SLUG_REGISTRY_ADDRESS
+```
+
 ---
 
 ## Architecture notes
 
-- **Stateless V1** — no database. Wallet address embedded in the payment URL, no server-side user mapping needed.
-- **V1.5+** — slugs stored on-chain in `WooshSlugRegistry`. No off-chain DB still required — contract is the source of truth.
-- **Transaction history** — fetched from Blockscout v2 API server-side (no RPC block scanning).
-- **Native USDC on Arc** — 18 decimals (not 6). All `parseUnits` / `formatUnits` calls use `18`.
+- **No database in V1–V2b** — wallet address in URL + on-chain slug registry + Blockscout for history
+- **UCW, not custodial** — user holds their own keys encrypted by their PIN; Woosh never sees the secret; Circle iframe handles PIN entry
+- **Native USDC on Arc** — 18 decimals (not 6). All `parseUnits` / `formatUnits` calls use `18`
+- **Agentic loop** — `/api/chat` runs a manual tool-use loop (max 4 iters); `send_payment` never auto-executes — always returns a `pendingAction` for the frontend to confirm
 
 ## Routes
 
@@ -136,6 +172,7 @@ NEXT_PUBLIC_SLUG_REGISTRY_ADDRESS=
 |---|---|
 | `/` | Landing page |
 | `/signup` | Email registration — creates Circle embedded wallet |
-| `/slug-setup` | One-time slug registration after first login (V1.5) |
-| `/dashboard` | Balance, transaction history, copy payment link |
-| `/pay/[slug]` | Public payment page — resolved via SlugRegistry contract |
+| `/slug-setup` | Voluntary slug registration (V1.5) |
+| `/dashboard` | Balance + Woosh Agent chat + last 3 transactions |
+| `/dashboard/history` | Full transaction history |
+| `/pay/[slug]` | Public payment page — slug resolved via SlugRegistry contract |
