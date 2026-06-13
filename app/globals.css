@@ -19,6 +19,17 @@ body {
   }
 }
 
+/* Remove the default spinner arrows from all number inputs */
+input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
 /* ── Glass card ────────────────────────────────────────────────────────────
    Key rule: the background must be mostly transparent so the blurred
    content behind actually shows through. Opaque layers kill the effect.

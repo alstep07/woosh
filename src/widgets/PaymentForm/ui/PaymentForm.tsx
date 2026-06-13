@@ -9,8 +9,9 @@ import {
   useSwitchChain,
 } from "wagmi";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
-import { parseUnits } from "viem";
+import { parseUnits, encodeFunctionData } from "viem";
 import { useUSDCBalance } from "@/entities/wallet/hooks/useUSDCBalance";
+import { INVOICE_REGISTRY_ABI } from "@/entities/invoice/model/abi";
 import OnboardingGuide from "@/widgets/OnboardingGuide/ui/OnboardingGuide";
 import { arcTestnet } from "@/shared/lib/arc";
 import { env } from "@/shared/config/env";
@@ -21,6 +22,10 @@ interface Props {
   recipientAddress: `0x${string}`;
   recipientLabel: string;
   initialAmount?: string;
+  // When set, this is an on-chain payment request: amount is read from the contract
+  // (fixed) and payment is routed through WooshInvoiceRegistry.pay(id).
+  requestId?: `0x${string}`;
+  memo?: string;
 }
 
 type TxState = "idle" | "pending" | "success" | "error";
@@ -29,7 +34,8 @@ type WooshStep = "email" | "verify" | "paying";
 // Accepts decimals up to 6 places — avoids silent float rounding
 const AMOUNT_RE = /^\d+(\.\d{1,6})?$/;
 
-export default function PaymentForm({ recipientAddress, recipientLabel, initialAmount }: Props) {
+export default function PaymentForm({ recipientAddress, recipientLabel, initialAmount, requestId, memo }: Props) {
+  const isRequest = !!requestId;
   const [amount, setAmount] = useState(initialAmount ?? "");
   // lockedAmount is set the moment the user enters Woosh mode.
   // All steps after that point read lockedAmount so the amount can't drift
@@ -119,10 +125,23 @@ export default function PaymentForm({ recipientAddress, recipientLabel, initialA
     setTxState("pending");
     setTxError(null);
     try {
-      const hash = await sendTransactionAsync({
-        to: recipientAddress,
-        value: parseUnits(amountTrimmed, 18),
-      });
+      const amountWei = parseUnits(amountTrimmed, 18);
+      let hash: `0x${string}`;
+      if (requestId) {
+        // Settle the on-chain request: pay(id) with msg.value == the stored amount.
+        if (!env.invoiceRegistryAddress) throw new Error("Invoice registry not configured");
+        hash = await sendTransactionAsync({
+          to: env.invoiceRegistryAddress,
+          data: encodeFunctionData({
+            abi: INVOICE_REGISTRY_ABI,
+            functionName: "pay",
+            args: [requestId],
+          }),
+          value: amountWei,
+        });
+      } else {
+        hash = await sendTransactionAsync({ to: recipientAddress, value: amountWei });
+      }
       setTxHash(hash);
       setTxState("success");
     } catch (err: unknown) {
@@ -189,10 +208,14 @@ export default function PaymentForm({ recipientAddress, recipientLabel, initialA
     setWooshStep("paying");
     setWooshError(null);
     try {
-      const res = await fetch("/api/wallet/send-payment", {
+      const res = await fetch(requestId ? "/api/wallet/pay-invoice" : "/api/wallet/send-payment", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userToken, recipientAddress, amount: amt }),
+        body: JSON.stringify(
+          requestId
+            ? { userToken, id: requestId, amount: amt }
+            : { userToken, recipientAddress, amount: amt }
+        ),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Failed to create payment");
@@ -258,13 +281,21 @@ export default function PaymentForm({ recipientAddress, recipientLabel, initialA
           <p className="text-text-secondary text-sm">
             Pay <span className="text-text-primary font-medium">{recipientLabel}</span>
           </p>
+          {isRequest && recipientLabel !== `${recipientAddress.slice(0, 6)}…${recipientAddress.slice(-4)}` && (
+            <p className="mt-0.5 font-mono text-xs text-text-secondary/40">
+              {recipientAddress.slice(0, 6)}…{recipientAddress.slice(-4)}
+            </p>
+          )}
+          {memo && (
+            <p className="mt-1 text-text-primary text-base font-medium">{memo}</p>
+          )}
         </div>
 
         <div className="glass-card rounded-card p-6 space-y-5">
           {/* Amount — locked once OTP flow starts */}
           <div>
             <label htmlFor="amount" className="block text-sm font-medium text-text-secondary mb-1.5">
-              Amount (USDC)
+              {isRequest ? "Amount due (USDC)" : "Amount (USDC)"}
             </label>
             <input
               id="amount"
@@ -272,10 +303,10 @@ export default function PaymentForm({ recipientAddress, recipientLabel, initialA
               min="0"
               step="0.01"
               value={lockedAmount !== null ? lockedAmount : amount}
-              onChange={(e) => { if (lockedAmount === null) { setAmount(e.target.value); setAmountError(null); } }}
+              onChange={(e) => { if (lockedAmount === null && !isRequest) { setAmount(e.target.value); setAmountError(null); } }}
               onBlur={validateAmount}
               placeholder="0.00"
-              disabled={lockedAmount !== null}
+              disabled={lockedAmount !== null || isRequest}
               className="w-full bg-navy border border-border rounded-input px-4 py-3 text-text-primary placeholder-text-secondary/50 focus:outline-none focus:border-blue-primary transition-colors text-xl font-semibold [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none disabled:opacity-70 disabled:cursor-not-allowed"
             />
             {amountError && <p className="mt-1.5 text-sm text-red-400">{amountError}</p>}

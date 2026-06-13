@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 
 interface Props {
@@ -10,6 +10,7 @@ interface Props {
   paymentLink: string;
   walletAddress: string;
   slug?: string;
+  onCreateInvoice?: () => void;
 }
 
 function CopyIcon() {
@@ -21,6 +22,16 @@ function CopyIcon() {
   );
 }
 
+function KebabIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" className="shrink-0">
+      <circle cx="3" cy="8" r="1.4" />
+      <circle cx="8" cy="8" r="1.4" />
+      <circle cx="13" cy="8" r="1.4" />
+    </svg>
+  );
+}
+
 export default function AccountBar({
   balance,
   isLoading,
@@ -28,23 +39,42 @@ export default function AccountBar({
   paymentLink,
   walletAddress,
   slug,
+  onCreateInvoice,
 }: Props) {
-  const [copiedLink, setCopiedLink] = useState(false);
-  const [copiedAddress, setCopiedAddress] = useState(false);
+  const [copied, setCopied] = useState<null | "link" | "address">(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement | null>(null);
 
-  async function copyLink() {
-    await navigator.clipboard.writeText(paymentLink);
-    setCopiedLink(true);
-    setTimeout(() => setCopiedLink(false), 2000);
+  // Close the menu on outside click or Escape
+  useEffect(() => {
+    if (!menuOpen) return;
+    function onDown(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setMenuOpen(false);
+    }
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [menuOpen]);
+
+  // Reset the "Copied!" hint whenever the menu reopens
+  useEffect(() => {
+    if (menuOpen) setCopied(null);
+  }, [menuOpen]);
+
+  async function copy(which: "link" | "address") {
+    await navigator.clipboard.writeText(which === "link" ? paymentLink : walletAddress);
+    setCopied(which);
+    setTimeout(() => setCopied(null), 2000);
   }
 
-  async function copyAddress() {
-    await navigator.clipboard.writeText(walletAddress);
-    setCopiedAddress(true);
-    setTimeout(() => setCopiedAddress(false), 2000);
-  }
-
-  const shortAddress = `${walletAddress.slice(0, 6)}…${walletAddress.slice(-4)}`;
+  const itemClass = "block w-full text-left px-4 py-2.5 text-sm text-text-primary hover:bg-white/5 transition-colors";
+  const chipClass = "flex items-center gap-1.5 h-9 px-3 sm:px-4 rounded-input bg-blue-primary/10 hover:bg-blue-primary/20 text-blue-primary text-xs sm:text-sm font-medium transition-colors whitespace-nowrap";
 
   return (
     <div className="flex items-start justify-between py-5">
@@ -60,43 +90,77 @@ export default function AccountBar({
         ) : (
           <p className="text-3xl font-bold text-text-primary">
             {balance ?? "$0.00"}
+            <span className="text-base font-medium text-text-secondary/50 ml-1.5">USDC</span>
           </p>
         )}
       </div>
 
-      {/* Right: payment link + address */}
-      <div className="flex flex-col items-end gap-1.5 min-w-0 ml-4">
-        <button
-          onClick={copyLink}
-          className="flex items-center gap-1.5 text-xs sm:text-sm bg-blue-primary/10 hover:bg-blue-primary/20 text-blue-primary px-3 sm:px-4 py-2 rounded-input font-medium transition-colors whitespace-nowrap"
-        >
-          {copiedLink ? (
-            "Copied!"
-          ) : slug ? (
-            <>
-              <span>{slug}</span>
-              <CopyIcon />
-            </>
-          ) : (
-            "Copy link"
-          )}
-        </button>
-
-        {!slug ? (
-          <Link
-            href="/slug-setup"
-            className="text-xs text-blue-primary/60 hover:text-blue-primary transition-colors whitespace-nowrap"
-          >
+      {/* Right: copy-link chip + actions menu, same height side by side */}
+      <div className="flex items-center gap-1.5 ml-4">
+        {slug ? (
+          <button onClick={() => copy("link")} className={chipClass}>
+            {copied === "link" ? (
+              "Copied!"
+            ) : (
+              <>
+                <span>{slug}</span>
+                <CopyIcon />
+              </>
+            )}
+          </button>
+        ) : (
+          <Link href="/slug-setup" className={chipClass}>
             Claim username
           </Link>
-        ) : (
-          <button
-            onClick={copyAddress}
-            className="text-xs font-mono text-text-secondary/40 hover:text-text-secondary transition-colors"
-          >
-            {copiedAddress ? "Copied!" : shortAddress}
-          </button>
         )}
+
+        <div className="relative" ref={menuRef}>
+          <button
+            onClick={() => setMenuOpen((v) => !v)}
+            aria-label="Account actions"
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
+            className="flex items-center justify-center h-9 w-9 rounded-input bg-blue-primary/10 hover:bg-blue-primary/20 text-blue-primary transition-colors"
+          >
+            <KebabIcon />
+          </button>
+
+          {menuOpen && (
+            <div
+              role="menu"
+              className="absolute right-0 top-full mt-1.5 z-[60] min-w-[200px] rounded-input border border-[#1E293B] bg-[#0d1222] py-1"
+              style={{ boxShadow: "0 8px 24px rgba(0,0,0,0.4)" }}
+            >
+              <button role="menuitem" onClick={() => copy("address")} className={itemClass}>
+                {copied === "address" ? "Copied!" : "Copy wallet address"}
+              </button>
+              <div className="my-1 border-t border-border" />
+              <Link
+                href="/pay"
+                role="menuitem"
+                onClick={() => setMenuOpen(false)}
+                className={itemClass}
+              >
+                Send payment
+              </Link>
+              <button
+                role="menuitem"
+                onClick={() => { setMenuOpen(false); onCreateInvoice?.(); }}
+                className={itemClass}
+              >
+                Create invoice
+              </button>
+              <Link
+                href="/dashboard/invoices"
+                role="menuitem"
+                onClick={() => setMenuOpen(false)}
+                className={itemClass}
+              >
+                My invoices
+              </Link>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

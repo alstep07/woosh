@@ -7,6 +7,8 @@ import { useUSDCBalance } from "@/entities/wallet/hooks/useUSDCBalance";
 import { useTransactionHistory } from "@/entities/payment/hooks/useTransactionHistory";
 import BrandHeader from "@/widgets/BrandHeader/ui/BrandHeader";
 import AccountBar from "@/widgets/AccountBar/ui/AccountBar";
+import WalletCard from "@/widgets/WalletCard/ui/WalletCard";
+import CreateInvoiceModal from "@/widgets/CreateInvoiceModal/ui/CreateInvoiceModal";
 import ChatPanel from "@/widgets/ChatPanel/ui/ChatPanel";
 import TransactionList from "@/widgets/TransactionList/ui/TransactionList";
 import Footer from "@/widgets/Footer/ui/Footer";
@@ -18,6 +20,7 @@ import type { Session } from "@/entities/user/model/types";
 export default function DashboardPage() {
   const router = useRouter();
   const [session, setSession] = useState<Session | null>(null);
+  const [createInvoiceOpen, setCreateInvoiceOpen] = useState(false);
 
   useEffect(() => {
     const s = loadSession();
@@ -92,10 +95,33 @@ export default function DashboardPage() {
     );
   }
 
+  const recentPayments = (
+    <>
+      <TransactionList
+        txs={txs?.slice(0, pendingTx ? 4 : 5)}
+        isLoading={txsLoading}
+        isError={txsError}
+        onRefresh={handleTxRefresh}
+        isRefreshing={isTxRefreshing}
+        pendingEntries={pendingTx ? [pendingTx] : undefined}
+      />
+      {txs && txs.length > 5 && (
+        <div className="flex justify-end mt-3">
+          <Link
+            href="/dashboard/history"
+            className="text-xs text-blue-primary/60 hover:text-blue-primary transition-colors"
+          >
+            View all transactions
+          </Link>
+        </div>
+      )}
+    </>
+  );
+
   return (
     <main className="h-screen bg-navy flex flex-col overflow-hidden">
       <div className="woosh-bg" aria-hidden="true" />
-      <div className="relative z-10">
+      <div className="relative z-10 shrink-0">
         <BrandHeader
           rightSlot={
             <div className="flex flex-col items-end gap-0.5 sm:flex-row sm:items-center sm:gap-4">
@@ -115,46 +141,61 @@ export default function DashboardPage() {
           }
         />
       </div>
-      <div className="relative z-10 flex-1 overflow-y-auto overflow-x-hidden">
-        <div className="px-4 sm:px-6 max-w-2xl mx-auto w-full pb-8 min-w-0">
-          <AccountBar
-            balance={balance?.display}
-            isLoading={balanceLoading}
-            isError={balanceError}
-            paymentLink={paymentLink}
-            walletAddress={session.walletAddress}
-            slug={session.slug}
-          />
-          <ChatPanel
-            name={session.slug}
-            walletAddress={session.walletAddress}
-            userEmail={session.email}
-            onPaymentSuccess={handlePaymentSuccess}
-            knownCounterparties={txs?.map((tx) => tx.counterparty)}
-          />
-          <TransactionList
-            txs={txs?.slice(0, pendingTx ? 2 : 3)}
-            isLoading={txsLoading}
-            isError={txsError}
-            onRefresh={handleTxRefresh}
-            isRefreshing={isTxRefreshing}
-            pendingEntries={pendingTx ? [pendingTx] : undefined}
-          />
-          {txs && txs.length > 3 && (
-            <div className="flex justify-end mt-3">
-              <Link
-                href="/dashboard/history"
-                className="text-xs text-blue-primary/60 hover:text-blue-primary transition-colors"
-              >
-                View all transactions
-              </Link>
-            </div>
-          )}
+      <div className="relative z-10 flex-1 min-h-0 overflow-y-auto lg:overflow-hidden px-4 sm:px-6 pt-6 lg:pt-8 pb-6">
+        <div className="max-w-6xl mx-auto w-full min-w-0 lg:h-full lg:px-8 lg:grid lg:grid-cols-12 lg:gap-6 lg:items-start">
+
+          {/* Mobile only: compact balance + slug + actions dropdown */}
+          <div className="lg:hidden mb-4">
+            <AccountBar
+              balance={balance?.display}
+              isLoading={balanceLoading}
+              isError={balanceError}
+              paymentLink={paymentLink}
+              walletAddress={session.walletAddress}
+              slug={session.slug}
+              onCreateInvoice={() => setCreateInvoiceOpen(true)}
+            />
+          </div>
+
+          {/* Chat — single instance; right on desktop, primary. Fills row height on
+              desktop (internal scroll); fixed tall block on mobile. */}
+          <div className="lg:order-2 lg:col-span-6 min-w-0 h-[60vh] lg:h-full lg:min-h-0 mb-4 lg:mb-0">
+            <ChatPanel
+              name={session.slug}
+              walletAddress={session.walletAddress}
+              userEmail={session.email}
+              onPaymentSuccess={handlePaymentSuccess}
+              knownCounterparties={txs?.map((tx) => tx.counterparty)}
+            />
+          </div>
+
+          {/* Desktop only: one cohesive wallet card with recent payments inside.
+              Left column, stretched to full height. */}
+          <div className="hidden lg:block lg:order-1 lg:col-span-6 lg:h-full lg:min-h-0 min-w-0">
+            <WalletCard
+              balance={balance?.display}
+              isLoading={balanceLoading}
+              isError={balanceError}
+              paymentLink={paymentLink}
+              walletAddress={session.walletAddress}
+              slug={session.slug}
+              onCreateInvoice={() => setCreateInvoiceOpen(true)}
+            >
+              {recentPayments}
+            </WalletCard>
+          </div>
+
+          {/* Mobile only: recent payments */}
+          <div className="lg:hidden">{recentPayments}</div>
         </div>
       </div>
       <div className="relative z-10 shrink-0">
         <Footer />
       </div>
+
+      {createInvoiceOpen && (
+        <CreateInvoiceModal session={session} onClose={() => setCreateInvoiceOpen(false)} />
+      )}
     </main>
   );
 }

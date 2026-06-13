@@ -111,15 +111,37 @@ export default function TransactionList({
               rel="noopener noreferrer"
               className="flex items-center justify-between px-1 py-2.5 hover:opacity-70 transition-opacity"
             >
-              <div>
-                <p className="text-xs text-text-secondary/50">
-                  {tx.direction === "received" ? "Received from" : "Sent to"}{" "}
-                  {slugsLoading ? (
-                    <span className="inline-block h-3 w-16 bg-border rounded animate-pulse align-middle" />
-                  ) : slugMap[tx.counterparty.toLowerCase()] ? (
-                    <span className="text-text-secondary/80">@{slugMap[tx.counterparty.toLowerCase()]}</span>
+              <div className="flex items-center gap-2 min-w-0">
+                {tx.note && (
+                  <span
+                    className="shrink-0 w-5 h-5 rounded-md bg-blue-primary/10 text-blue-primary flex items-center justify-center"
+                    title="Invoice"
+                  >
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h4m4 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                  </span>
+                )}
+                <p className="text-xs text-text-secondary/50 min-w-0 truncate">
+                  {tx.note ? (
+                    <>
+                      {tx.direction === "received" ? "Received" : "Sent"}{" "}
+                      <span className="text-text-secondary/80">
+                        · {tx.note}
+                        {tx.memo ? `: ${tx.memo.length > 24 ? `${tx.memo.slice(0, 24)}…` : tx.memo}` : ""}
+                      </span>
+                    </>
                   ) : (
-                    <span className="font-mono">{tx.counterparty.slice(0, 6)}…{tx.counterparty.slice(-4)}</span>
+                    <>
+                      {tx.direction === "received" ? "Received from" : "Sent to"}{" "}
+                      {slugsLoading ? (
+                        <span className="inline-block h-3 w-16 bg-border rounded animate-pulse align-middle" />
+                      ) : slugMap[tx.counterparty.toLowerCase()] ? (
+                        <span className="text-text-secondary/80">@{slugMap[tx.counterparty.toLowerCase()]}</span>
+                      ) : (
+                        <span className="font-mono">{tx.counterparty.slice(0, 6)}…{tx.counterparty.slice(-4)}</span>
+                      )}
+                    </>
                   )}
                   {" · "}
                   {formatDistanceToNow(tx.timestamp)}

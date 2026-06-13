@@ -16,3 +16,8 @@ registerToolExamples("get_transaction_history", [
   "how much did I spend today?",
   "show recent payments",
 ]);
+
+registerToolExamples("create_payment_request", [
+  "invoice 10 for a domain name",
+  "request 25 for design work",
+]);
