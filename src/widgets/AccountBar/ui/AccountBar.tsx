@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 
 interface Props {
@@ -12,11 +12,12 @@ interface Props {
   slug?: string;
 }
 
-function CopyIcon() {
+function KebabIcon() {
   return (
-    <svg width="12" height="12" viewBox="0 0 14 14" fill="none" className="shrink-0">
-      <rect x="4.5" y="4.5" width="8" height="8" rx="1.5" stroke="currentColor" strokeWidth="1.3" />
-      <path d="M2.5 9.5H2a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1h6.5a1 1 0 0 1 1 1v.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" className="shrink-0">
+      <circle cx="3" cy="8" r="1.4" />
+      <circle cx="8" cy="8" r="1.4" />
+      <circle cx="13" cy="8" r="1.4" />
     </svg>
   );
 }
@@ -29,22 +30,40 @@ export default function AccountBar({
   walletAddress,
   slug,
 }: Props) {
-  const [copiedLink, setCopiedLink] = useState(false);
-  const [copiedAddress, setCopiedAddress] = useState(false);
+  const [copied, setCopied] = useState<null | "link" | "address">(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement | null>(null);
 
-  async function copyLink() {
-    await navigator.clipboard.writeText(paymentLink);
-    setCopiedLink(true);
-    setTimeout(() => setCopiedLink(false), 2000);
-  }
+  // Close the menu on outside click or Escape
+  useEffect(() => {
+    if (!menuOpen) return;
+    function onDown(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setMenuOpen(false);
+    }
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [menuOpen]);
 
-  async function copyAddress() {
-    await navigator.clipboard.writeText(walletAddress);
-    setCopiedAddress(true);
-    setTimeout(() => setCopiedAddress(false), 2000);
+  // Reset the "Copied!" hint whenever the menu reopens
+  useEffect(() => {
+    if (menuOpen) setCopied(null);
+  }, [menuOpen]);
+
+  async function copy(which: "link" | "address") {
+    await navigator.clipboard.writeText(which === "link" ? paymentLink : walletAddress);
+    setCopied(which);
+    setTimeout(() => setCopied(null), 2000);
   }
 
   const shortAddress = `${walletAddress.slice(0, 6)}…${walletAddress.slice(-4)}`;
+  const itemClass = "block w-full text-left px-4 py-2.5 text-sm text-text-primary hover:bg-white/5 transition-colors";
 
   return (
     <div className="flex items-start justify-between py-5">
@@ -64,39 +83,58 @@ export default function AccountBar({
         )}
       </div>
 
-      {/* Right: payment link + address */}
-      <div className="flex flex-col items-end gap-1.5 min-w-0 ml-4">
-        <button
-          onClick={copyLink}
-          className="flex items-center gap-1.5 text-xs sm:text-sm bg-blue-primary/10 hover:bg-blue-primary/20 text-blue-primary px-3 sm:px-4 py-2 rounded-input font-medium transition-colors whitespace-nowrap"
-        >
-          {copiedLink ? (
-            "Copied!"
-          ) : slug ? (
-            <>
-              <span>{slug}</span>
-              <CopyIcon />
-            </>
-          ) : (
-            "Copy link"
-          )}
-        </button>
-
-        {!slug ? (
-          <Link
-            href="/slug-setup"
-            className="text-xs text-blue-primary/60 hover:text-blue-primary transition-colors whitespace-nowrap"
-          >
-            Claim username
-          </Link>
+      {/* Right: identity label + actions menu */}
+      <div className="flex items-center gap-2 ml-4">
+        {slug ? (
+          <span className="text-sm font-medium text-blue-primary">{slug}</span>
         ) : (
-          <button
-            onClick={copyAddress}
-            className="text-xs font-mono text-text-secondary/40 hover:text-text-secondary transition-colors"
-          >
-            {copiedAddress ? "Copied!" : shortAddress}
-          </button>
+          <span className="text-xs font-mono text-text-secondary/40">{shortAddress}</span>
         )}
+
+        <div className="relative" ref={menuRef}>
+          <button
+            onClick={() => setMenuOpen((v) => !v)}
+            aria-label="Account actions"
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
+            className="flex items-center justify-center w-9 h-9 rounded-input text-text-secondary hover:text-text-primary hover:bg-white/5 transition-colors"
+          >
+            <KebabIcon />
+          </button>
+
+          {menuOpen && (
+            <div
+              role="menu"
+              className="absolute right-0 top-full mt-1.5 z-50 min-w-[200px] rounded-input border border-border bg-card shadow-xl py-1"
+            >
+              <button role="menuitem" onClick={() => copy("link")} className={itemClass}>
+                {copied === "link" ? "Copied!" : "Copy payment link"}
+              </button>
+              <button role="menuitem" onClick={() => copy("address")} className={itemClass}>
+                {copied === "address" ? "Copied!" : "Copy wallet address"}
+              </button>
+              <div className="my-1 border-t border-border" />
+              <Link
+                href="/dashboard/requests"
+                role="menuitem"
+                onClick={() => setMenuOpen(false)}
+                className={itemClass}
+              >
+                Request a payment
+              </Link>
+              {!slug && (
+                <Link
+                  href="/slug-setup"
+                  role="menuitem"
+                  onClick={() => setMenuOpen(false)}
+                  className={itemClass}
+                >
+                  Claim username
+                </Link>
+              )}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

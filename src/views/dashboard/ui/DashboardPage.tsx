@@ -125,14 +125,6 @@ export default function DashboardPage() {
             walletAddress={session.walletAddress}
             slug={session.slug}
           />
-          <div className="flex justify-end mt-3">
-            <Link
-              href="/dashboard/requests"
-              className="text-xs text-blue-primary/70 hover:text-blue-primary transition-colors"
-            >
-              Request a payment →
-            </Link>
-          </div>
           <ChatPanel
             name={session.slug}
             walletAddress={session.walletAddress}

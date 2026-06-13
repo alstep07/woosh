@@ -231,7 +231,7 @@ export default function SlugSetupPage() {
                       rel="noopener noreferrer"
                       className="inline-flex items-center gap-1 text-amber-300 hover:text-amber-200 underline underline-offset-2 transition-colors"
                     >
-                      Open faucet →
+                      Open faucet
                     </a>
                   </div>
                 </div>

@@ -9,7 +9,8 @@ import { useEffect, useRef } from "react";
  * 1. WebGL quad — dark domain-warped aurora (pure time-based, no cursor glow).
  * 2. Canvas2D — twinkling star field (~320 stars, biased toward small/dim).
  * 3. Shooting stars — appear randomly, fall diagonally with a fading trail.
- * 4. Parallax — slow depth-aware drift: near stars shift more as cursor moves.
+ * 4. Parallax — slow depth-aware drift: far (background) stars shift away from the
+ *    cursor while near (foreground) stars stay put.
  * 5. Scatter — fast-moving cursor sends nearby stars flying; they drift home
  *    exponentially (no spring bounce).
  */
@@ -369,10 +370,11 @@ export default function LiquidHero() {
         const alpha = Math.min(1, s.a * tw * intro + s.flare * 0.30);
         const radius = s.r * (1 + s.flare * 0.28);
 
-        // Parallax offset — deeper stars move less
-        const depth = Math.max(0, s.z - 0.15); // 0 for very far, up to ~0.85 for near
-        const px = s.x * vw + s.ox + par.x * PAR_MAX_X * depth;
-        const py = s.y * vh + s.oy + par.y * PAR_MAX_Y * depth;
+        // Inverted parallax — the background (far stars) drifts AWAY from the cursor,
+        // while the foreground (near stars) stays put.
+        const depth = Math.max(0, 1.0 - s.z); // ~0.85 for far stars, ~0 for near
+        const px = s.x * vw + s.ox - par.x * PAR_MAX_X * depth;
+        const py = s.y * vh + s.oy - par.y * PAR_MAX_Y * depth;
 
         if (s.r > 1.1) {
           // Soft halo on the few bright stars
