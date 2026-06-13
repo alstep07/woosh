@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createInvoicePayChallenge, getUserWallets } from "@/shared/lib/circle";
+import { createInvoiceCreateChallenge, getUserWallets } from "@/shared/lib/circle";
 
-// Mirror /api/wallet/send-payment: map expired/invalid Circle tokens to 401 so the
-// client's OTP fallback fires instead of a generic error.
 function isAuthError(err: unknown): boolean {
   const status = (err as { response?: { status?: number } })?.response?.status;
   const code = (err as { response?: { data?: { code?: number } } })?.response?.data?.code;
@@ -23,12 +21,12 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const { userToken, id, amount } = await req.json();
-    if (!userToken || !id || !amount) {
+    const { userToken, salt, amount, memo } = await req.json();
+    if (!userToken || !salt || !amount) {
       return NextResponse.json({ error: "Missing fields" }, { status: 400 });
     }
-    if (!/^0x[a-fA-F0-9]{64}$/.test(id)) {
-      return NextResponse.json({ error: "Invalid invoice id" }, { status: 400 });
+    if (!/^\d+$/.test(String(salt))) {
+      return NextResponse.json({ error: "Invalid salt" }, { status: 400 });
     }
     if (!/^\d+(\.\d+)?$/.test(String(amount)) || parseFloat(amount) <= 0) {
       return NextResponse.json({ error: "Invalid amount" }, { status: 400 });
@@ -40,7 +38,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "No Woosh wallet found. Sign up first." }, { status: 404 });
     }
 
-    const result = await createInvoicePayChallenge(userToken, wallet.id, registry, id, String(amount));
+    const result = await createInvoiceCreateChallenge(
+      userToken,
+      wallet.id,
+      registry,
+      String(salt),
+      String(amount),
+      typeof memo === "string" ? memo.slice(0, 200) : ""
+    );
     return NextResponse.json({ ...result, walletId: wallet.id });
   } catch (err) {
     if (isAuthError(err)) {
@@ -48,8 +53,8 @@ export async function POST(req: NextRequest) {
     }
     const msg =
       (err as { response?: { data?: { message?: string } } })?.response?.data?.message
-      ?? (err instanceof Error ? err.message : "Failed to create payment");
-    console.error("[pay-invoice]", msg, err);
+      ?? (err instanceof Error ? err.message : "Failed to create request");
+    console.error("[create-invoice]", msg, err);
     return NextResponse.json({ error: msg }, { status: 500 });
   }
 }

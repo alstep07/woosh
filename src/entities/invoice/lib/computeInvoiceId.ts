@@ -1,25 +1,18 @@
-import { keccak256, encodeAbiParameters, parseUnits } from "viem";
+import { keccak256, encodeAbiParameters } from "viem";
 
 /**
  * Deterministic invoice id — MUST match WooshInvoiceRegistry.invoiceId on-chain:
- *   keccak256(abi.encode(address payee, uint256 amount, uint256 nonce))
- * Amount is the human decimal (e.g. "50"); Arc native USDC = 18 decimals.
+ *   keccak256(abi.encode(address creator, uint256 salt))
+ * Lets the client derive the id (for the share link) right after create(), without
+ * waiting to read it back from the chain.
  */
-export function computeInvoiceId(
-  payee: `0x${string}`,
-  amount: string,
-  nonce: string
-): `0x${string}` {
-  const amountWei = parseUnits(amount, 18);
+export function computeInvoiceId(creator: `0x${string}`, salt: string): `0x${string}` {
   return keccak256(
-    encodeAbiParameters(
-      [{ type: "address" }, { type: "uint256" }, { type: "uint256" }],
-      [payee, amountWei, BigInt(nonce)]
-    )
+    encodeAbiParameters([{ type: "address" }, { type: "uint256" }], [creator, BigInt(salt)])
   );
 }
 
-/** Random uint256-range nonce (decimal string) so repeat requests stay unique. */
+/** Random uint256-range salt (decimal string) so each request gets a unique id. */
 export function newNonce(): string {
   const bytes = new Uint8Array(16);
   crypto.getRandomValues(bytes);

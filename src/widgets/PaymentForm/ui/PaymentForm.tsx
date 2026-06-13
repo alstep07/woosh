@@ -22,9 +22,10 @@ interface Props {
   recipientAddress: `0x${string}`;
   recipientLabel: string;
   initialAmount?: string;
-  // When set, this is an on-chain payment request: amount is fixed and payment is
-  // routed through WooshInvoiceRegistry.pay() so it settles against this exact request.
-  requestNonce?: string;
+  // When set, this is an on-chain payment request: amount is read from the contract
+  // (fixed) and payment is routed through WooshInvoiceRegistry.pay(id).
+  requestId?: `0x${string}`;
+  memo?: string;
 }
 
 type TxState = "idle" | "pending" | "success" | "error";
@@ -33,8 +34,8 @@ type WooshStep = "email" | "verify" | "paying";
 // Accepts decimals up to 6 places — avoids silent float rounding
 const AMOUNT_RE = /^\d+(\.\d{1,6})?$/;
 
-export default function PaymentForm({ recipientAddress, recipientLabel, initialAmount, requestNonce }: Props) {
-  const isRequest = !!requestNonce;
+export default function PaymentForm({ recipientAddress, recipientLabel, initialAmount, requestId, memo }: Props) {
+  const isRequest = !!requestId;
   const [amount, setAmount] = useState(initialAmount ?? "");
   // lockedAmount is set the moment the user enters Woosh mode.
   // All steps after that point read lockedAmount so the amount can't drift
@@ -126,15 +127,15 @@ export default function PaymentForm({ recipientAddress, recipientLabel, initialA
     try {
       const amountWei = parseUnits(amountTrimmed, 18);
       let hash: `0x${string}`;
-      if (requestNonce) {
-        // Settle the on-chain request: pay(payee, amount, nonce) with msg.value == amount.
+      if (requestId) {
+        // Settle the on-chain request: pay(id) with msg.value == the stored amount.
         if (!env.invoiceRegistryAddress) throw new Error("Invoice registry not configured");
         hash = await sendTransactionAsync({
           to: env.invoiceRegistryAddress,
           data: encodeFunctionData({
             abi: INVOICE_REGISTRY_ABI,
             functionName: "pay",
-            args: [recipientAddress, amountWei, BigInt(requestNonce)],
+            args: [requestId],
           }),
           value: amountWei,
         });
@@ -207,12 +208,12 @@ export default function PaymentForm({ recipientAddress, recipientLabel, initialA
     setWooshStep("paying");
     setWooshError(null);
     try {
-      const res = await fetch(requestNonce ? "/api/wallet/pay-invoice" : "/api/wallet/send-payment", {
+      const res = await fetch(requestId ? "/api/wallet/pay-invoice" : "/api/wallet/send-payment", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(
-          requestNonce
-            ? { userToken, payee: recipientAddress, amount: amt, nonce: requestNonce }
+          requestId
+            ? { userToken, id: requestId, amount: amt }
             : { userToken, recipientAddress, amount: amt }
         ),
       });
@@ -280,6 +281,9 @@ export default function PaymentForm({ recipientAddress, recipientLabel, initialA
           <p className="text-text-secondary text-sm">
             Pay <span className="text-text-primary font-medium">{recipientLabel}</span>
           </p>
+          {memo && (
+            <p className="mt-1 text-text-primary text-base font-medium">{memo}</p>
+          )}
         </div>
 
         <div className="glass-card rounded-card p-6 space-y-5">

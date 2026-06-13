@@ -114,17 +114,16 @@ export async function createPaymentChallenge(
 }
 
 /**
- * Creates a challenge to settle an on-chain payment request via WooshInvoiceRegistry.
- * Calls pay(payee, amount, nonce) and sends `amount` as native value (msg.value).
- * The on-chain `require(msg.value == amount)` is what enforces the exact amount.
+ * Creates a challenge to register a payment request on-chain via
+ * WooshInvoiceRegistry.create(salt, amount, memo). Stores amount + memo on-chain.
  */
-export async function createInvoicePayChallenge(
+export async function createInvoiceCreateChallenge(
   userToken: string,
   walletId: string,
   registryAddress: `0x${string}`,
-  payee: string,
+  salt: string,   // uint256 as a decimal string
   amount: string, // human-readable decimal string, e.g. "50"
-  nonce: string   // uint256 as a decimal string
+  memo: string
 ) {
   if (!/^\d+(\.\d+)?$/.test(amount) || parseFloat(amount) <= 0) {
     throw new Error(`Invalid amount: ${amount}`);
@@ -135,8 +134,36 @@ export async function createInvoicePayChallenge(
     userToken,
     walletId,
     contractAddress: registryAddress,
-    abiFunctionSignature: "pay(address,uint256,uint256)",
-    abiParameters: [payee, amountWei, nonce],
+    abiFunctionSignature: "create(uint256,uint256,string)",
+    abiParameters: [salt, amountWei, memo],
+    fee: { type: "level", config: { feeLevel: "MEDIUM" } },
+    idempotencyKey: crypto.randomUUID(),
+  });
+  return { challengeId: res.data!.challengeId! };
+}
+
+/**
+ * Creates a challenge to settle a payment request via WooshInvoiceRegistry.pay(id).
+ * Sends `amount` as native value (msg.value); the contract enforces it equals the
+ * stored invoice amount.
+ */
+export async function createInvoicePayChallenge(
+  userToken: string,
+  walletId: string,
+  registryAddress: `0x${string}`,
+  id: string,     // bytes32 invoice id
+  amount: string  // human-readable decimal string — must equal the stored amount
+) {
+  if (!/^\d+(\.\d+)?$/.test(amount) || parseFloat(amount) <= 0) {
+    throw new Error(`Invalid amount: ${amount}`);
+  }
+  const client = getClient();
+  const res = await client.createUserTransactionContractExecutionChallenge({
+    userToken,
+    walletId,
+    contractAddress: registryAddress,
+    abiFunctionSignature: "pay(bytes32)",
+    abiParameters: [id],
     amount, // native value to send with the call; Circle converts to base units
     fee: { type: "level", config: { feeLevel: "MEDIUM" } },
     idempotencyKey: crypto.randomUUID(),

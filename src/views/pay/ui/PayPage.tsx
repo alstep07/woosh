@@ -6,10 +6,12 @@ interface Props {
   slug: string;
   address: `0x${string}` | null;
   initialAmount?: string;
-  requestNonce?: string;
+  requestId?: `0x${string}`;
+  memo?: string;
+  alreadyPaid?: boolean;
 }
 
-export function PayPage({ slug, address, initialAmount, requestNonce }: Props) {
+export function PayPage({ slug, address, initialAmount, requestId, memo, alreadyPaid }: Props) {
   if (!address) {
     return (
       <main className="min-h-screen bg-navy flex flex-col">
@@ -35,6 +37,26 @@ export function PayPage({ slug, address, initialAmount, requestNonce }: Props) {
     ? `${address.slice(0, 6)}…${address.slice(-4)}`
     : slug;
 
+  if (alreadyPaid) {
+    return (
+      <main className="min-h-screen bg-navy flex flex-col">
+        <BrandHeader />
+        <div className="flex-1 flex items-center justify-center px-6">
+          <div className="w-full max-w-md glass-card rounded-card p-8 text-center">
+            <div className="w-12 h-12 rounded-full bg-green-400/10 flex items-center justify-center mx-auto mb-4 text-2xl">
+              ✓
+            </div>
+            <h1 className="text-xl font-bold text-text-primary mb-2">Already paid</h1>
+            <p className="text-text-secondary text-sm">
+              This request{memo ? ` (${memo})` : ""} has already been settled.
+            </p>
+          </div>
+        </div>
+        <Footer />
+      </main>
+    );
+  }
+
   return (
     <main className="min-h-screen bg-navy flex flex-col">
       <BrandHeader />
@@ -43,7 +65,8 @@ export function PayPage({ slug, address, initialAmount, requestNonce }: Props) {
           recipientAddress={address}
           recipientLabel={recipientLabel}
           initialAmount={initialAmount}
-          requestNonce={requestNonce}
+          requestId={requestId}
+          memo={memo}
         />
       </div>
       <Footer />

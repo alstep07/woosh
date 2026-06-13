@@ -1,5 +1,2 @@
-import RequestsPage from "@/views/requests/ui/RequestsPage";
-
-export default function Page() {
-  return <RequestsPage />;
-}
+export const dynamic = "force-dynamic";
+export { default } from "@/views/requests/ui/RequestsPage";
