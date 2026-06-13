@@ -332,7 +332,7 @@ export default function RequestsPage() {
                     <span className="text-text-primary font-semibold">${inv.amount}</span>
                     {inv.memo && <span className="text-text-secondary text-sm truncate">· {inv.memo}</span>}
                   </div>
-                  <p className="text-xs text-text-secondary/40 mt-0.5 truncate font-mono">{linkFor(inv.id)}</p>
+                  <p className="text-xs text-text-secondary/40 mt-0.5 font-mono">{inv.id.slice(0, 10)}…{inv.id.slice(-8)}</p>
                 </div>
                 <span
                   className={`shrink-0 text-xs font-medium px-2 py-1 rounded-full ${
