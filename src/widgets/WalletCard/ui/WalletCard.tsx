@@ -39,7 +39,7 @@ export default function WalletCard({
   const actionClass = "text-xs text-text-secondary/50 hover:text-text-primary transition-colors";
 
   return (
-    <div className="glass-card rounded-card p-5">
+    <div className="glass-card rounded-card p-5 flex flex-col h-full min-h-0">
       {/* Public identity — the /pay/<slug> link, distinct from the raw wallet */}
       <div className="mb-3">
         {slug ? (
@@ -86,9 +86,12 @@ export default function WalletCard({
         </button>
       </div>
 
-      <div className="my-4 border-t border-border" />
+      <div className="my-4 border-t border-border shrink-0" />
 
-      {children}
+      {/* Recent payments — fills the remaining height, scrolls internally if long */}
+      <div className="flex-1 min-h-0 overflow-y-auto no-scrollbar">
+        {children}
+      </div>
     </div>
   );
 }

@@ -96,14 +96,14 @@ export default function DashboardPage() {
   const recentPayments = (
     <>
       <TransactionList
-        txs={txs?.slice(0, pendingTx ? 2 : 3)}
+        txs={txs?.slice(0, pendingTx ? 4 : 5)}
         isLoading={txsLoading}
         isError={txsError}
         onRefresh={handleTxRefresh}
         isRefreshing={isTxRefreshing}
         pendingEntries={pendingTx ? [pendingTx] : undefined}
       />
-      {txs && txs.length > 3 && (
+      {txs && txs.length > 5 && (
         <div className="flex justify-end mt-3">
           <Link
             href="/dashboard/history"
@@ -154,9 +154,9 @@ export default function DashboardPage() {
             />
           </div>
 
-          {/* Chat — single instance; primary, left on desktop. Fills row height on
+          {/* Chat — single instance; right on desktop, primary. Fills row height on
               desktop (internal scroll); fixed tall block on mobile. */}
-          <div className="lg:col-span-7 min-w-0 h-[60vh] lg:h-full lg:min-h-0 mb-4 lg:mb-0">
+          <div className="lg:order-2 lg:col-span-7 min-w-0 h-[60vh] lg:h-full lg:min-h-0 mb-4 lg:mb-0">
             <ChatPanel
               name={session.slug}
               walletAddress={session.walletAddress}
@@ -166,8 +166,9 @@ export default function DashboardPage() {
             />
           </div>
 
-          {/* Desktop only: one cohesive wallet card with recent payments inside */}
-          <div className="hidden lg:block lg:col-span-5 min-w-0">
+          {/* Desktop only: one cohesive wallet card with recent payments inside.
+              Left column, stretched to full height. */}
+          <div className="hidden lg:block lg:order-1 lg:col-span-5 lg:h-full lg:min-h-0 min-w-0">
             <WalletCard
               balance={balance?.display}
               isLoading={balanceLoading}
