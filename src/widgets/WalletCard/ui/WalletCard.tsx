@@ -45,8 +45,6 @@ export default function WalletCard({
     setTimeout(() => setCopied(null), 2000);
   }
 
-  const actionClass = "text-xs text-text-secondary/50 hover:text-text-primary transition-colors";
-
   return (
     <div className="glass-card rounded-card p-5 flex flex-col h-full min-h-0">
       {/* Identity row: slug chip (copies the share link) + raw wallet address (copies 0x) */}
@@ -101,9 +99,12 @@ export default function WalletCard({
         </p>
       )}
 
-      {/* Secondary action — quiet, muted */}
-      <div className="mt-3">
-        <Link href="/dashboard/invoices" className={actionClass}>
+      {/* Invoices entry — the one secondary action, kept visible */}
+      <div className="mt-3 pl-1">
+        <Link
+          href="/dashboard/invoices"
+          className="text-sm font-medium text-blue-primary hover:text-blue-secondary transition-colors"
+        >
           Invoices
         </Link>
       </div>
