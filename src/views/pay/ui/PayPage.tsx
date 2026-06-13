@@ -9,9 +9,10 @@ interface Props {
   requestId?: `0x${string}`;
   memo?: string;
   alreadyPaid?: boolean;
+  recipientSlug?: string;
 }
 
-export function PayPage({ slug, address, initialAmount, requestId, memo, alreadyPaid }: Props) {
+export function PayPage({ slug, address, initialAmount, requestId, memo, alreadyPaid, recipientSlug }: Props) {
   if (!address) {
     return (
       <main className="min-h-screen bg-navy flex flex-col">
@@ -31,11 +32,12 @@ export function PayPage({ slug, address, initialAmount, requestId, memo, already
     );
   }
 
-  // Use slug as label if it's not a raw address, otherwise truncate the address
-  const isRawAddress = /^0x[0-9a-fA-F]{40}$/.test(slug);
-  const recipientLabel = isRawAddress
-    ? `${address.slice(0, 6)}…${address.slice(-4)}`
-    : slug;
+  // For an invoice, the label is derived from the contract payee (recipientSlug),
+  // NEVER from the URL slug — so a tampered link can't misrepresent the recipient.
+  const shortAddr = `${address.slice(0, 6)}…${address.slice(-4)}`;
+  const recipientLabel = requestId
+    ? (recipientSlug ?? shortAddr)
+    : (/^0x[0-9a-fA-F]{40}$/.test(slug) ? shortAddr : slug);
 
   if (alreadyPaid) {
     return (
@@ -48,7 +50,7 @@ export function PayPage({ slug, address, initialAmount, requestId, memo, already
             </div>
             <h1 className="text-xl font-bold text-text-primary mb-2">Already paid</h1>
             <p className="text-text-secondary text-sm">
-              This request{memo ? ` (${memo})` : ""} has already been settled.
+              This invoice{memo ? ` (${memo})` : ""} has already been settled.
             </p>
           </div>
         </div>

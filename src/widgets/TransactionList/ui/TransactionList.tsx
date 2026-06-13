@@ -113,13 +113,25 @@ export default function TransactionList({
             >
               <div>
                 <p className="text-xs text-text-secondary/50">
-                  {tx.direction === "received" ? "Received from" : "Sent to"}{" "}
-                  {slugsLoading ? (
-                    <span className="inline-block h-3 w-16 bg-border rounded animate-pulse align-middle" />
-                  ) : slugMap[tx.counterparty.toLowerCase()] ? (
-                    <span className="text-text-secondary/80">@{slugMap[tx.counterparty.toLowerCase()]}</span>
+                  {tx.note ? (
+                    <>
+                      {tx.direction === "received" ? "Received" : "Sent"}{" "}
+                      <span className="text-text-secondary/80">
+                        · {tx.note}
+                        {tx.memo ? `: ${tx.memo.length > 24 ? `${tx.memo.slice(0, 24)}…` : tx.memo}` : ""}
+                      </span>
+                    </>
                   ) : (
-                    <span className="font-mono">{tx.counterparty.slice(0, 6)}…{tx.counterparty.slice(-4)}</span>
+                    <>
+                      {tx.direction === "received" ? "Received from" : "Sent to"}{" "}
+                      {slugsLoading ? (
+                        <span className="inline-block h-3 w-16 bg-border rounded animate-pulse align-middle" />
+                      ) : slugMap[tx.counterparty.toLowerCase()] ? (
+                        <span className="text-text-secondary/80">@{slugMap[tx.counterparty.toLowerCase()]}</span>
+                      ) : (
+                        <span className="font-mono">{tx.counterparty.slice(0, 6)}…{tx.counterparty.slice(-4)}</span>
+                      )}
+                    </>
                   )}
                   {" · "}
                   {formatDistanceToNow(tx.timestamp)}

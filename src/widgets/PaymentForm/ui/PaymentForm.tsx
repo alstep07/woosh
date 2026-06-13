@@ -281,6 +281,11 @@ export default function PaymentForm({ recipientAddress, recipientLabel, initialA
           <p className="text-text-secondary text-sm">
             Pay <span className="text-text-primary font-medium">{recipientLabel}</span>
           </p>
+          {isRequest && recipientLabel !== `${recipientAddress.slice(0, 6)}…${recipientAddress.slice(-4)}` && (
+            <p className="mt-0.5 font-mono text-xs text-text-secondary/40">
+              {recipientAddress.slice(0, 6)}…{recipientAddress.slice(-4)}
+            </p>
+          )}
           {memo && (
             <p className="mt-1 text-text-primary text-base font-medium">{memo}</p>
           )}
@@ -290,7 +295,7 @@ export default function PaymentForm({ recipientAddress, recipientLabel, initialA
           {/* Amount — locked once OTP flow starts */}
           <div>
             <label htmlFor="amount" className="block text-sm font-medium text-text-secondary mb-1.5">
-              {isRequest ? "Requested amount (USDC)" : "Amount (USDC)"}
+              {isRequest ? "Amount due (USDC)" : "Amount (USDC)"}
             </label>
             <input
               id="amount"
