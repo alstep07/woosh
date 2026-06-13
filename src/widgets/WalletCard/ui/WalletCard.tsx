@@ -105,7 +105,7 @@ export default function WalletCard({
           href="/pay"
           className="text-sm text-blue-primary hover:text-blue-secondary transition-colors"
         >
-          Send
+          Send payment
         </Link>
         <span className="w-px h-4 bg-border" />
         <Link
