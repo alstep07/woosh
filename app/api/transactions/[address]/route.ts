@@ -29,41 +29,52 @@ const addr = (a: { hash: string } | string | null): string | null =>
   a ? (typeof a === "string" ? a : a.hash).toLowerCase() : null;
 
 /**
- * Best-effort: attach each invoice row's onchain memo. For each invoice tx we read it
- * from the explorer, decode the invoice id from the pay(bytes32) calldata, then read
- * getInvoice(memo). Works for both sides (the parent tx is always the pay() call).
- * Fails open (no memo) on any error.
+ * Best-effort enrichment for invoice rows. Internal-tx receipts often lack a reliable
+ * timestamp (so they'd sort to the bottom), and never carry the memo. For each invoice
+ * tx we read the parent tx from the explorer: its timestamp is authoritative, and its
+ * pay(bytes32) calldata gives the invoice id -> getInvoice(memo). Fails open.
+ * Run this BEFORE sorting so the corrected timestamp orders the row correctly.
  */
-async function enrichInvoiceMemos(rows: OutTx[]): Promise<OutTx[]> {
+async function enrichInvoices(rows: OutTx[]): Promise<OutTx[]> {
   if (!REGISTRY) return rows;
   const hashes = [...new Set(rows.filter((r) => r.note === "Invoice").map((r) => r.hash))];
   if (hashes.length === 0) return rows;
 
-  const memoByHash = new Map<string, string>();
+  const info = new Map<string, { memo?: string; timestamp?: number }>();
   await Promise.all(
     hashes.map(async (hash) => {
       try {
         const res = await fetch(`${EXPLORER_BASE}/api/v2/transactions/${hash}`, { cache: "no-store" });
         if (!res.ok) return;
-        const tx = (await res.json()) as { raw_input?: string };
-        const raw = tx.raw_input;
-        // pay(bytes32): 0x + 4-byte selector (8 hex) + 32-byte id (64 hex)
-        if (!raw || raw.length < 74) return;
-        const id = `0x${raw.slice(10, 74)}` as `0x${string}`;
-        const inv = await getInvoice(id);
-        if (inv?.memo) memoByHash.set(hash.toLowerCase(), inv.memo);
+        const tx = (await res.json()) as { raw_input?: string; timestamp?: string };
+        const entry: { memo?: string; timestamp?: number } = {};
+        const ts = tx.timestamp ? Math.floor(new Date(tx.timestamp).getTime() / 1000) : NaN;
+        if (Number.isFinite(ts)) entry.timestamp = ts;
+        const raw = tx.raw_input; // pay(bytes32): 0x + 8 hex selector + 64 hex id
+        if (raw && raw.length >= 74) {
+          const inv = await getInvoice(`0x${raw.slice(10, 74)}` as `0x${string}`);
+          if (inv?.memo) entry.memo = inv.memo;
+        }
+        if (entry.memo !== undefined || entry.timestamp !== undefined) {
+          info.set(hash.toLowerCase(), entry);
+        }
       } catch {
         /* ignore — best effort */
       }
     })
   );
 
-  if (memoByHash.size === 0) return rows;
-  return rows.map((r) =>
-    r.note === "Invoice" && memoByHash.has(r.hash.toLowerCase())
-      ? { ...r, memo: memoByHash.get(r.hash.toLowerCase()) }
-      : r
-  );
+  if (info.size === 0) return rows;
+  return rows.map((r) => {
+    if (r.note !== "Invoice") return r;
+    const e = info.get(r.hash.toLowerCase());
+    if (!e) return r;
+    return {
+      ...r,
+      ...(e.memo !== undefined ? { memo: e.memo } : {}),
+      ...(e.timestamp !== undefined ? { timestamp: e.timestamp } : {}),
+    };
+  });
 }
 
 export async function GET(
@@ -133,8 +144,12 @@ export async function GET(
         };
       });
 
+    // Enrich BEFORE sorting: internal receipts get their authoritative timestamp here,
+    // so they order correctly (and aren't dropped from the dashboard's top 3).
+    const all = await enrichInvoices([...fromInternal, ...fromTop]);
+
     const seen = new Set<string>();
-    const merged = [...fromInternal, ...fromTop]
+    const merged = all
       .sort((a, b) => b.timestamp - a.timestamp)
       .filter((tx) => {
         const key = `${tx.hash}-${tx.direction}`;
@@ -144,8 +159,7 @@ export async function GET(
       })
       .slice(0, 20);
 
-    const enriched = await enrichInvoiceMemos(merged);
-    return NextResponse.json(enriched);
+    return NextResponse.json(merged);
   } catch (err) {
     console.error("[transactions]", err);
     return NextResponse.json([]);
