@@ -301,7 +301,7 @@ export default function SignupPage() {
               <p className="text-text-secondary text-sm mb-8">
                 Claim a username to get a clean payment link like{" "}
                 <span className="text-text-primary font-mono">
-                  woosh.app/pay/{suggestedSlug || "yourname"}
+                  {env.baseUrl}/pay/{suggestedSlug || "yourname"}
                 </span>
               </p>
               <Link

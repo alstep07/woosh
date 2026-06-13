@@ -19,7 +19,7 @@ const HOW_IT_WORKS = [
     bubble: "bg-blue-primary/10 text-blue-primary",
     steps: [
       "Sign up with email. Wallet included, no seed phrase.",
-      "Claim your link: woosh.app/pay/yourname",
+      `Claim your link: ${env.baseUrl}/pay/yourname`,
       "Share it anywhere. Money lands in under a second.",
     ],
   },

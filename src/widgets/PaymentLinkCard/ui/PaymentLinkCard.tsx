@@ -81,7 +81,7 @@ export default function PaymentLinkCard({ walletAddress, paymentLink, slug }: Pr
                 className="pointer-events-none absolute top-full right-0 mt-2 w-52 rounded-lg border border-border bg-card px-3 py-2.5 text-xs text-text-secondary opacity-0 transition-opacity group-hover:opacity-100 z-10"
               >
                 Register a short username — your link becomes{" "}
-                <span className="text-text-primary font-mono">woosh.app/pay/yourname</span>
+                <span className="text-text-primary font-mono">{env.baseUrl}/pay/yourname</span>
                 <span className="absolute right-2 -top-[5px] h-2.5 w-2.5 rotate-45 border-t border-l border-border bg-card" />
               </div>
             </div>

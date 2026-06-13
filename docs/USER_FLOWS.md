@@ -14,7 +14,7 @@ After wallet creation:
 - `/slug-setup`: pre-filled from email prefix, on-chain availability check (500ms debounce)
 - If taken → suggestions: `alex1`, `alex_pay`, `alex2026`
 - Submit → email OTP re-auth → PIN challenge → slug registered on-chain
-- Payment link becomes `woosh.app/pay/alex`
+- Payment link becomes `wooshapp.xyz/pay/alex`
 
 ## Sender — external wallet
 1. Open `/pay/[slug]`

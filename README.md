@@ -8,7 +8,7 @@ USDC payment platform for humans and AI agents. Built on [Arc](https://arc.netwo
 
 ## What it does
 
-- **Recipient** signs up with email → gets a Circle embedded wallet and a human-readable payment link (`woosh.app/pay/yourname`)
+- **Recipient** signs up with email → gets a Circle embedded wallet and a human-readable payment link (`wooshapp.xyz/pay/yourname`)
 - **Sender** opens the link, enters an amount, and pays USDC — from any EVM wallet via WalletConnect, or from their own Woosh account
 - **Woosh Agent** — natural-language chat in the dashboard: *"send $5 to alex"* → confirmation card → Circle PIN → paid
 - **Onboarding guide** for senders who need a wallet or USDC — 3 steps, zero crypto jargon
