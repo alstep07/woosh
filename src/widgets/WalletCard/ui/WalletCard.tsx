@@ -52,7 +52,7 @@ export default function WalletCard({
         {slug ? (
           <button
             onClick={() => copy("link")}
-            className="flex items-center gap-1.5 bg-blue-primary/10 hover:bg-blue-primary/20 text-blue-primary px-3 py-1 rounded-full text-sm font-medium transition-colors"
+            className="flex items-center gap-1.5 bg-blue-primary/10 hover:bg-blue-primary/20 text-blue-primary px-3 py-1.5 rounded-lg text-sm font-medium transition-colors"
           >
             {copied === "link" ? "Copied!" : (
               <>
@@ -64,7 +64,7 @@ export default function WalletCard({
         ) : (
           <Link
             href="/slug-setup"
-            className="flex items-center bg-blue-primary/10 hover:bg-blue-primary/20 text-blue-primary px-3 py-1 rounded-full text-sm font-medium transition-colors"
+            className="flex items-center bg-blue-primary/10 hover:bg-blue-primary/20 text-blue-primary px-3 py-1.5 rounded-lg text-sm font-medium transition-colors"
           >
             Claim username
           </Link>
