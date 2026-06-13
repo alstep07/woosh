@@ -25,6 +25,12 @@ import type { Session } from "@/entities/user/model/types";
 
 const AMOUNT_RE = /^\d+(\.\d{1,6})?$/;
 
+// Drop the protocol and middle-ellipsize a long link for display.
+function shortLink(url: string): string {
+  const s = url.replace(/^https?:\/\//, "");
+  return s.length > 34 ? `${s.slice(0, 24)}…${s.slice(-8)}` : s;
+}
+
 // "form" — create + list; "auth" — OTP re-auth; "creating" — challenge/PIN in flight
 type Phase = "form" | "auth" | "creating";
 
@@ -194,28 +200,35 @@ export default function RequestsPage() {
           whoever opens the link sees exactly what you asked for and can only pay that amount.
         </p>
 
-        {/* Just-created confirmation with a one-click copy link */}
+        {/* Just-created confirmation, styled like the payment-success card */}
         {lastLink && (
-          <div className="glass-card rounded-card p-4 mb-4 border border-green-400/20">
-            <div className="flex items-start justify-between gap-3">
-              <p className="text-sm text-green-400">Invoice created. Share this link:</p>
-              <button
-                onClick={() => setLastLink(null)}
-                aria-label="Dismiss"
-                className="shrink-0 text-text-secondary/40 hover:text-text-primary text-xs transition-colors"
-              >
-                ✕
-              </button>
+          <div className="glass-card rounded-card p-6 mb-6 text-center">
+            <div className="w-12 h-12 rounded-full bg-green-400/10 flex items-center justify-center mx-auto mb-3 text-2xl">
+              ✓
             </div>
+            <h2 className="text-lg font-bold text-text-primary mb-1">Invoice created</h2>
+            <p className="text-text-secondary text-sm mb-4">Share this link to get paid.</p>
             <button
               onClick={copyLastLink}
-              className="mt-2 flex items-center gap-1.5 max-w-full text-xs bg-blue-primary/10 hover:bg-blue-primary/20 text-blue-primary px-3 py-1.5 rounded-input font-medium transition-colors"
+              className="inline-flex items-center gap-1.5 max-w-full text-xs bg-blue-primary/10 hover:bg-blue-primary/20 text-blue-primary px-3 py-1.5 rounded-input font-medium transition-colors"
             >
               {copied === "last" ? (
                 "Copied!"
               ) : (
-                <span className="font-mono truncate">{lastLink.replace(/^https?:\/\//, "")}</span>
+                <>
+                  <span className="font-mono truncate">{shortLink(lastLink)}</span>
+                  <svg width="12" height="12" viewBox="0 0 14 14" fill="none" className="shrink-0">
+                    <rect x="4.5" y="4.5" width="8" height="8" rx="1.5" stroke="currentColor" strokeWidth="1.3" />
+                    <path d="M2.5 9.5H2a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1h6.5a1 1 0 0 1 1 1v.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+                  </svg>
+                </>
               )}
+            </button>
+            <button
+              onClick={() => setLastLink(null)}
+              className="block mx-auto mt-3 text-xs text-text-secondary/50 hover:text-text-secondary transition-colors"
+            >
+              Done
             </button>
           </div>
         )}
