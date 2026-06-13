@@ -38,6 +38,7 @@ export const INVOICE_REGISTRY_ABI = [
       { name: "paid", type: "bool" },
       { name: "payer", type: "address" },
       { name: "memo", type: "string" },
+      { name: "createdAt", type: "uint64" },
     ],
   },
   {

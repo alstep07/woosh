@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
 import { arcPublicClient } from "@/shared/lib/arc";
 import { resolveSlug } from "@/entities/slug/lib/resolveSlug";
+import { getMyInvoices } from "@/entities/invoice/lib/readInvoice";
 import { formatUnits } from "viem";
 
 const MODEL = process.env.ANTHROPIC_MODEL ?? "anthropic/claude-3-5-sonnet";
@@ -88,6 +89,14 @@ const TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
   {
     type: "function",
     function: {
+      name: "get_invoices",
+      description: "Get the invoices (payment requests) the user has created, with amount, what each is for, paid/unpaid status and creation date. Use to answer questions like 'do I have unpaid invoices?', 'what did I invoice this month?', or 'how much is owed to me?'.",
+      parameters: { type: "object", properties: {}, required: [] },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "create_payment_request",
       description: "Create an invoice for the user. Use when the user wants to BE paid / request money / send an invoice. You MUST have BOTH the amount and what it's for (memo) before calling; if either is missing, ask first, do not guess.",
       parameters: {
@@ -158,6 +167,21 @@ async function getTransactionHistory(address: string, limit = 5): Promise<string
   }
 }
 
+async function getInvoicesSummary(address: string): Promise<string> {
+  try {
+    const list = (await getMyInvoices(address as `0x${string}`)).slice(0, 40);
+    if (list.length === 0) return "No invoices created yet.";
+    return list
+      .map((inv) => {
+        const date = inv.createdAt ? new Date(inv.createdAt * 1000).toISOString().slice(0, 10) : "unknown date";
+        return `${inv.paid ? "PAID" : "UNPAID"} $${parseFloat(inv.amount).toFixed(2)}${inv.memo ? ` for "${inv.memo}"` : ""}, created ${date}`;
+      })
+      .join("\n");
+  } catch {
+    return "Could not load invoices.";
+  }
+}
+
 type ApiMessage = { role: "user" | "assistant"; content: string };
 
 export async function POST(req: NextRequest) {
@@ -210,6 +234,8 @@ Transaction history rules:
 - Only list individual transactions if the user explicitly asks for a transaction list or history.
 
 Send rules: always use the exact recipient name/address as stated, never substitute. If recipient or amount is unclear, ask to clarify. Only call send_payment when both recipient and amount are clear.
+
+Invoice questions: when the user asks about their invoices (unpaid ones, total owed to them, what they invoiced this month or on some date, etc.), call get_invoices and answer concisely from the data. Aggregate when asked (for example total of all UNPAID). Do not list every invoice unless the user asks for a list.
 
 Invoice rules: when the user wants to BE paid or to invoice money, you need the amount and what it is for (memo). Extract the memo from their message (for example "invoice 10 for a domain name" means amount 10 and memo "domain name"); only ask if no reason is given at all. As soon as you have both, you MUST call create_payment_request in that same turn. NEVER reply saying you will create or have created an invoice without actually calling the tool; calling it is what shows the confirmation card and link. Do not describe the steps, just call the tool.
 
@@ -282,6 +308,8 @@ When the user asks if someone paid them (e.g. "did alex pay me?"): first call re
           result = resolved
             ? `"${slug}" resolves to address ${resolved}`
             : `Username "${slug}" not found`;
+        } else if (call.function.name === "get_invoices") {
+          result = await getInvoicesSummary(walletAddress);
         } else if (call.function.name === "create_payment_request") {
           const amount = String(args.amount ?? "");
           const memo = String(args.memo ?? "").trim();

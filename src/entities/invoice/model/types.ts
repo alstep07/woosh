@@ -10,4 +10,5 @@ export type OnchainInvoice = {
   paid: boolean;
   payer: `0x${string}` | null;     // who paid, once paid
   memo: string;                    // what it's for
+  createdAt: number;               // unix seconds
 };

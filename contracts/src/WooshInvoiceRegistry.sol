@@ -10,11 +10,12 @@ pragma solidity ^0.8.20;
 ///         payee. The contract custodies nothing between create and pay.
 contract WooshInvoiceRegistry {
     struct Invoice {
-        address payee;   // who gets paid (the creator)
-        uint256 amount;  // exact native amount required (wei, 18 decimals on Arc)
+        address payee;     // who gets paid (the creator)
+        uint256 amount;    // exact native amount required (wei, 18 decimals on Arc)
         bool    paid;
-        address payer;   // who paid (0x0 until paid)
-        string  memo;    // what it's for — set by creator, shown to payer
+        address payer;     // who paid (0x0 until paid)
+        string  memo;      // what it's for, set by creator, shown to payer
+        uint64  createdAt; // block timestamp at creation
     }
 
     // id => invoice. id = keccak256(abi.encode(creator, salt)) so a creator's ids
@@ -38,7 +39,7 @@ contract WooshInvoiceRegistry {
         require(amount > 0, "WIR: zero amount");
         id = invoiceId(msg.sender, salt);
         require(_invoices[id].payee == address(0), "WIR: id exists");
-        _invoices[id] = Invoice({ payee: msg.sender, amount: amount, paid: false, payer: address(0), memo: memo });
+        _invoices[id] = Invoice({ payee: msg.sender, amount: amount, paid: false, payer: address(0), memo: memo, createdAt: uint64(block.timestamp) });
         _byCreator[msg.sender].push(id);
         emit InvoiceCreated(id, msg.sender, amount, memo);
     }
@@ -63,10 +64,10 @@ contract WooshInvoiceRegistry {
     function getInvoice(bytes32 id)
         external
         view
-        returns (address payee, uint256 amount, bool paid, address payer, string memory memo)
+        returns (address payee, uint256 amount, bool paid, address payer, string memory memo, uint64 createdAt)
     {
         Invoice storage inv = _invoices[id];
-        return (inv.payee, inv.amount, inv.paid, inv.payer, inv.memo);
+        return (inv.payee, inv.amount, inv.paid, inv.payer, inv.memo, inv.createdAt);
     }
 
     /// @notice All invoice ids created by `creator`, newest last. For the client's

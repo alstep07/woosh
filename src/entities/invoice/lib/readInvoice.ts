@@ -10,7 +10,7 @@ const ZERO = "0x0000000000000000000000000000000000000000";
 export async function getInvoice(id: `0x${string}`): Promise<OnchainInvoice | null> {
   if (!env.invoiceRegistryAddress) return null;
   try {
-    const [payee, amount, paid, payer, memo] = await arcPublicClient.readContract({
+    const [payee, amount, paid, payer, memo, createdAt] = await arcPublicClient.readContract({
       address: env.invoiceRegistryAddress,
       abi: INVOICE_REGISTRY_ABI,
       functionName: "getInvoice",
@@ -24,6 +24,7 @@ export async function getInvoice(id: `0x${string}`): Promise<OnchainInvoice | nu
       paid,
       payer: paid ? payer : null,
       memo,
+      createdAt: Number(createdAt),
     };
   } catch {
     return null;
