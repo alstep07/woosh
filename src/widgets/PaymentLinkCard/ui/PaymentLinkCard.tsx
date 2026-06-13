@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { env } from "@/shared/config/env";
 
 interface Props {
   walletAddress: `0x${string}`;

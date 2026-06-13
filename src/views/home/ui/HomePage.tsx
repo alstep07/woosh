@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import BrandHeader from "@/widgets/BrandHeader/ui/BrandHeader";
 import Footer from "@/widgets/Footer/ui/Footer";
 import { getSession } from "@/shared/lib/session";
+import { env } from "@/shared/config/env";
 
 const LiquidHero = dynamic(() => import("@/widgets/LiquidHero/ui/LiquidHero"), {
   ssr: false,
