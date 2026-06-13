@@ -156,6 +156,9 @@ export default function ChatPanel({ name, walletAddress, userEmail, onPaymentSuc
   const pendingRunRef = useRef<
     ((userToken: string, encryptionKey: string, sdk: W3SSdk) => Promise<"ok" | "auth_error" | "error">) | null
   >(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const abortRef = useRef<AbortController | null>(null);
+  const prevLoadingRef = useRef(false);
 
   // Persist messages to sessionStorage — welcome is excluded and rebuilt on load
   useEffect(() => {
@@ -167,6 +170,13 @@ export default function ChatPanel({ name, walletAddress, userEmail, onPaymentSuc
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isLoading]);
+
+  // Refocus the input once a response finishes (loading -> false), not on mount,
+  // so the user can keep typing without reaching for the field.
+  useEffect(() => {
+    if (prevLoadingRef.current && !isLoading) inputRef.current?.focus();
+    prevLoadingRef.current = isLoading;
+  }, [isLoading]);
 
   function updateMsgStatus(id: string, status: ChatMessage["actionStatus"] | undefined, actionError?: string) {
     setMessages((prev) =>
@@ -387,6 +397,8 @@ export default function ChatPanel({ name, walletAddress, userEmail, onPaymentSuc
     setInput("");
     setIsLoading(true);
 
+    const controller = new AbortController();
+    abortRef.current = controller;
     try {
       const history = [...messages.filter((m) => m.id !== "welcome" && m.text.trim()), userMsg].map((m) => ({
         role: m.role as "user" | "assistant",
@@ -397,6 +409,7 @@ export default function ChatPanel({ name, walletAddress, userEmail, onPaymentSuc
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ messages: history, walletAddress: walletAddress ?? "", userName: name }),
+        signal: controller.signal,
       });
 
       const data = (await res.json()) as {
@@ -428,18 +441,26 @@ export default function ChatPanel({ name, walletAddress, userEmail, onPaymentSuc
           ...(data.pendingAction ? { pendingAction: data.pendingAction } : {}),
         },
       ]);
-    } catch {
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: (Date.now() + 1).toString(),
-          role: "assistant",
-          text: "Something went wrong. Please try again.",
-        },
-      ]);
+    } catch (err) {
+      // Aborted by the user (stop button) — leave the chat as-is, no error bubble.
+      if ((err as Error)?.name !== "AbortError") {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: (Date.now() + 1).toString(),
+            role: "assistant",
+            text: "Something went wrong. Please try again.",
+          },
+        ]);
+      }
     } finally {
+      abortRef.current = null;
       setIsLoading(false);
     }
+  }
+
+  function handleStop() {
+    abortRef.current?.abort();
   }
 
   return (
@@ -655,7 +676,7 @@ export default function ChatPanel({ name, walletAddress, userEmail, onPaymentSuc
         <button
           onClick={scrollToBottom}
           aria-label="Scroll to latest"
-          className="absolute bottom-14 right-3 z-20 w-7 h-7 rounded-full bg-[rgba(8,12,26,0.80)] backdrop-blur-sm border border-white/10 flex items-center justify-center text-text-secondary/50 hover:text-text-primary transition-all"
+          className="absolute bottom-20 right-3 z-20 w-7 h-7 rounded-full bg-[rgba(8,12,26,0.80)] backdrop-blur-sm border border-white/10 flex items-center justify-center text-text-secondary/50 hover:text-text-primary transition-all"
         >
           <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
@@ -666,30 +687,30 @@ export default function ChatPanel({ name, walletAddress, userEmail, onPaymentSuc
       {/* Input */}
       <div className={`border-t border-border bg-white/[0.03] px-4 py-3 flex items-center gap-3 transition-colors ${focused ? "border-blue-primary/40" : ""}`}>
         <input
+          ref={inputRef}
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && handleSend()}
+          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleSend(); } }}
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
           placeholder={focused ? "" : hasConversation ? "Write a message..." : (typewriterPlaceholder || "")}
-          disabled={isLoading}
-          className="flex-1 bg-transparent text-text-primary text-base sm:text-sm outline-none placeholder:text-text-secondary/50 disabled:opacity-50"
+          className="flex-1 bg-transparent text-text-primary text-base sm:text-sm outline-none placeholder:text-text-secondary/50"
         />
         <button
-          onClick={handleSend}
-          disabled={!input.trim() || isLoading}
+          onClick={isLoading ? handleStop : handleSend}
+          disabled={!isLoading && !input.trim()}
           className="shrink-0 w-8 h-8 rounded-full flex items-center justify-center bg-blue-primary text-white hover:bg-blue-secondary disabled:bg-white/[0.06] disabled:text-text-secondary/30 transition-colors"
-          aria-label="Send"
+          aria-label={isLoading ? "Stop" : "Send"}
         >
-          <svg
-            className="w-4 h-4"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={2.2}
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 19V5M5 12l7-7 7 7" />
-          </svg>
+          {isLoading ? (
+            <svg className="w-[18px] h-[18px]" viewBox="0 0 24 24" fill="currentColor">
+              <rect x="5" y="5" width="14" height="14" rx="2.5" />
+            </svg>
+          ) : (
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 19V5M5 12l7-7 7 7" />
+            </svg>
+          )}
         </button>
       </div>
     </div>
