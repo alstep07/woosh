@@ -33,7 +33,9 @@ Web3:       Wagmi + Viem, Circle UCW SDK (@circle-fin/user-controlled-wallets)
 AI:         Claude via OpenRouter (openai npm pkg, baseURL: openrouter.ai/api/v1)
 Contracts:  Solidity on Arc, Foundry
 Network:    Arc Testnet (chain 5042002) → Mainnet summer 2026
-DB:         None yet — on-chain + Blockscout is source of truth. Supabase next.
+DB:         None — on-chain + Blockscout is the source of truth. A backend DB is
+            deliberately deferred until a feature needs state with no on-chain/derivable
+            home (see ARCHITECTURE → "No off-chain storage by default").
 ```
 
 ---
@@ -92,10 +94,13 @@ ANTHROPIC_MODEL=                     # default: anthropic/claude-3-5-sonnet
 
 ## Docs
 
-| File | What's inside |
-|------|--------------|
-| [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md) | What to build next, ordered by value/effort, architecture constraints |
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Wallet arch, contracts, TypeScript types, routes, API principles, FSD structure |
-| [docs/USER_FLOWS.md](docs/USER_FLOWS.md) | Step-by-step flows for every user type |
-| [docs/DESIGN.md](docs/DESIGN.md) | Visual style tokens, UX principles |
-| [docs/RESOURCES.md](docs/RESOURCES.md) | External docs, Circle SDK methods, Arc contracts |
+Read only when the task directly requires it — don't load all docs upfront.
+
+| File | When to open | What's inside |
+|------|-------------|--------------|
+| [docs/WORKFLOW.md](docs/WORKFLOW.md) | Before starting any feature or fix — branching rules, naming, merge process | Branch-per-feature workflow, agent responsibilities, merge criteria |
+| [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md) | When deciding what to build next or understanding phase priorities | What to build next, ordered by value/effort, architecture constraints |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | When adding routes, new wallet logic, contracts, or touching the FSD layer structure | Wallet arch, contracts, TypeScript types, routes, API principles, FSD structure |
+| [docs/USER_FLOWS.md](docs/USER_FLOWS.md) | When implementing or debugging a user-facing flow (signup, pay, slug claim, chat) | Step-by-step flows for every user type |
+| [docs/DESIGN.md](docs/DESIGN.md) | When writing UI — colors, spacing, component style | Visual style tokens, UX principles |
+| [docs/RESOURCES.md](docs/RESOURCES.md) | When you need a specific Circle SDK method, Arc contract address, or external API reference | External docs, Circle SDK methods, Arc contracts |

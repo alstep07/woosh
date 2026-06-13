@@ -12,8 +12,10 @@
 - Codebase is clean FSD: `challenge/execute` is generalized, on-chain is source of truth.
   New use cases rarely touch core.
 - **Three facts driving order:**
-  1. No off-chain layer; email/slug live in localStorage → account is NOT portable
-     across browsers/devices (a retention bug, not a feature).
+  1. No off-chain layer — and we confirmed we don't need one. Circle resolves the
+     wallet from email (`listWallets(userToken)`), slug is on-chain; localStorage is
+     just a cache, so the account is already portable. See ARCHITECTURE →
+     "Where Data Lives — No Off-Chain Storage by Default".
   2. `send_payment` already returns `pendingAction` (doesn't execute); the 4 chat tools
      are already pure functions → MCP is nearly free.
   3. `challenge/execute` already generalized (`slug/register` mirrors payment) →
@@ -33,7 +35,8 @@ These keep the "improve later, don't rewrite" property. Non-negotiable.
 - **Reuse `challenge/execute`**: any new contract interaction = a server route that creates
   the challenge (like `/api/slug/register`) + client executes via the existing PIN iframe.
   Do NOT invent a new signing path.
-- **On-chain stays source of truth** for balances/txs. Supabase is enrichment + identity only.
+- **On-chain stays source of truth** for balances/txs. **No off-chain DB by default** —
+  every storage idea must pass the ARCHITECTURE → "Where Data Lives" gate first.
 - **Never expose service-role keys / API secrets to the client.**
 - **Every feature gets agent integration.** Every new capability must have a corresponding
   chat tool (or at minimum, the agent must know the feature exists and can guide the user
@@ -43,24 +46,28 @@ These keep the "improve later, don't rewrite" property. Non-negotiable.
 
 ---
 
-## TRACK A — Persistence & core (substrate)
+## TRACK A — Off-chain storage (⚠️ OPEN QUESTION — do we ever need it?)
 
-### A1. Supabase persistence + account portability
-**Tool:** `@supabase/supabase-js` (service-role key, server-side only in API routes).
-**Why:** unblocks invoices, gift-card metadata, analytics; fixes the localStorage
-portability bug (account currently tied to one browser).
-**Tables:**
-- `users(wallet_address pk, email, slug, created_at)` — portable identity
-- `tx_metadata(tx_hash pk, memo, sender_label, created_at)`
-- `payment_requests(id pk, creator_address, amount text, memo, expires_at, status, created_at)`
-- `gift_cards(id pk, creator_address, amount text, token, status, claimed_by, message, created_at)`
-- `chat_messages(id pk, user_address, role, text, created_at)` — optional, replaces sessionStorage
-**Do:** migrate email↔wallet↔slug from localStorage → `users`; localStorage becomes cache.
-**Acceptance:** log in from a second browser with same email → wallet + slug resolve.
+> **Status: questioned / not scheduled.** We investigated adding Supabase (an A1
+> "persistence + portability" task) and **pulled it** — most of what it would store
+> already lives on-chain or in Circle, and portability is already solved (Circle
+> resolves wallet from email, slug is on-chain). See ARCHITECTURE → "Where Data Lives".
+>
+> A datastore is reconsidered ONLY when a concrete feature hits a wall the
+> chain/links/Blockscout can't solve. Candidate triggers to watch for:
+> - an invoice dashboard ("all my requests + live status") where per-request
+>   Blockscout derivation gets expensive/ambiguous (amount collisions) at volume;
+> - "you got paid" notifications needing a server to watch + store;
+> - cross-user analytics;
+> - genuinely homeless human text at scale (gift-card messages, tx memos).
+>
+> If/when one of these is real: add the SINGLE table that feature needs (not the
+> speculative 5-table schema), server-side service-role key only, and never mirror
+> on-chain facts into it.
 
 ---
 
-## TRACK B — MCP (independent, no Supabase dep, runs parallel to A)
+## TRACK B — MCP (independent, no DB, can run anytime)
 
 ### B1. Woosh MCP server
 **Tool:** `@modelcontextprotocol/sdk` (stdio or HTTP transport).
@@ -73,7 +80,7 @@ layer over existing logic — no new business logic.
 
 ---
 
-## NEAREST FEATURES (on-chain, no approvals beyond a free kit key, mostly no Supabase)
+## NEAREST FEATURES (on-chain, no approvals beyond a free kit key, no DB)
 
 ### 1. Multi-token balances in wallet (EURC, cirBTC)
 **Tool:** `viem` `readContract` with ERC-20 `balanceOf` (same pattern as your slug reads).
@@ -136,16 +143,19 @@ Client executes the two `challengeId` values sequentially (same pattern as send-
 
 ---
 
-## CLAIM / SHARE FEATURES (one layered contract + Supabase metadata)
+## CLAIM / SHARE FEATURES (one layered contract, on-chain state)
 
 > All verifiable on-chain or needing no verification. No oracles, no social conditions.
 > Build the contract per the layered architecture: vault holds funds + status; verifier
-> is replaceable; metadata in Supabase.
+> is replaceable. State (amount, status, claimed_by) is on-chain — do NOT shadow it in a
+> DB. Only genuinely homeless human text (e.g. a gift-card message) would need off-chain
+> storage, and only per the ARCHITECTURE "Where Data Lives" gate.
 
 ### 5. Gift cards (claim-by-secret) — viral acquisition
 **Tool:** custom Solidity contract (vault + `claim(cardId, proof)` where proof = secret
-preimage) deployed via your existing `challenge/execute` route pattern; metadata in
-Supabase `gift_cards`; bridge/balance reads via `viem`.
+preimage) deployed via your existing `challenge/execute` route pattern; bridge/balance
+reads via `viem`. Amount/status/claimed_by live in contract state. A card *message*, if
+added, is the only off-chain candidate — defer until the feature actually wants it.
 **Why:** viral by nature (recipient gets money → sees Woosh → claims → now has an account).
 Cheaper AND more growth-driving than recurring.
 **Flow:** creator funds card + stores `keccak256(secret)` → shares link with secret →
@@ -160,20 +170,24 @@ sybil. Fine for community use; do NOT position as a protected public raffle.
 **Acceptance:** $100 / 5 claims → first 5 distinct addresses get $20 each, 6th is rejected.
 
 ### 7. Tip jar / open-amount links
-**Tool:** variant of existing payment links — no fixed amount. Mostly UI + Supabase label.
+**Tool:** variant of existing payment links — no fixed amount. Pure UI, no storage.
 **Do:** `woosh/tip/slug` accepts any amount from any sender.
 **Acceptance:** open tip link, send arbitrary amount, creator's balance updates.
 
 ### 8. QR for payment requests
-**Tool:** any QR lib (e.g. `qrcode`) over the payment-request URL from A1/2.x.
-**Do:** render a QR for `/r/[id]` so it's scannable in person.
+**Tool:** any QR lib (e.g. `qrcode`) over the payment-request URL.
+**Do:** render a QR for `/pay/slug?amount=…` so it's scannable in person.
 **Acceptance:** scanning the QR opens the locked-amount pay page.
 
-### (also in this tier) Payment requests / invoices
-**Tool:** Supabase `payment_requests` + reuse existing `/api/transactions/[address]`
-Blockscout polling for paid-detection. Chat tool `create_payment_request(amount, memo)`.
+### (also in this tier) Payment requests / invoices — NEXT, no backend
+**Tool:** **link-based, stateless.** A request = `/pay/[slug]?amount=…` — the URL *is*
+the request (`PaymentForm` already accepts + locks `initialAmount`; `/pay/[slug]` already
+reads `?amount=`). Paid-detection reuses `/api/transactions/[address]` (Blockscout).
+Chat tool `create_payment_request(amount, memo)` returns the link. **No DB.**
 **Why:** this is the real acquisition channel — every request sent surfaces Woosh to a new person.
-**Acceptance:** create request → share `/r/[id]` → pay from another wallet → status flips to paid.
+**Acceptance:** create request → share link → pay from another wallet → history shows the tx.
+**DB trigger (not now):** only if a creator dashboard of live invoice statuses outgrows
+cheap Blockscout derivation — then reconsider per the "Where Data Lives" gate.
 
 ---
 
@@ -233,9 +247,9 @@ Keep "recurring buy cirBTC" low-key — Arc is stablecoin finance, not speculati
 ## Suggested execution order (by value-per-effort)
 
 ```
-Parallel start:
-  TRACK A: A1 Supabase + portability
-  TRACK B: B1 MCP server (independent)
+Start:
+  Payment requests/invoices  ← NEXT   link-based (/pay/slug?amount=) + Blockscout, no DB
+  TRACK B: B1 MCP server (independent) repackage 4 chat tools, no DB
 
 Then, nearest on-chain wins:
   1. Multi-token balances (EURC, cirBTC)      viem readContract
@@ -243,12 +257,11 @@ Then, nearest on-chain wins:
   3. Swap via chat agent                       extend chat tools, pendingAction
   4. Swap via UCW                              StableFX API + signUserTypedData (2 PINs)
 
-Then claim/share (needs A1):
-  Payment requests/invoices                    Supabase + Blockscout polling
-  5. Gift cards (claim-by-secret)              layered contract + Supabase
+Then claim/share (on-chain state, no DB):
+  5. Gift cards (claim-by-secret)              layered contract
   6. Split-claim                               extend same contract
   7. Tip jar / open-amount                     payment-link variant
-  8. QR                                        qrcode over /r/[id]
+  8. QR                                        qrcode over /pay/slug?amount=
 
 Cheap retention:
   9. Chat spending analytics                   aggregate existing Blockscout data
@@ -256,6 +269,7 @@ Cheap retention:
 Funnel fix (same SDK as swap):
   10. Bridge / Unified Balance                 App Kit (wraps CCTP)
 
+Off-chain DB: ⚠️ open question, not scheduled — see TRACK A.
 Deferred: USYC (allowlist), Recurring (permit+executor), off-ramp, DCW, 402.
 ```
 

@@ -1,5 +1,51 @@
 # Architecture — Woosh
 
+## Where Data Lives — No Off-Chain Storage by Default (read first)
+
+> This rule exists because we almost added a Supabase `users`/`gift_cards` layer
+> that duplicated data already living on-chain. Don't repeat that.
+
+**Default: there is NO backend database.** On-chain + Blockscout is the source of
+truth. A datastore is added ONLY when a feature needs state that has *no* on-chain
+home AND *cannot be derived* — and that need is proven, not assumed.
+
+**Before storing anything off-chain, run it through this gate. If any answer is
+"yes", it does NOT go in a DB:**
+
+1. Is it already on-chain? (balances, token amounts, slug ownership, who-claimed,
+   claimed/unclaimed status, contract state, tx sender/recipient)
+2. Does Circle already hold it? (email ↔ wallet mapping — Circle resolves the same
+   wallet from the same email via `listWallets(userToken)`; we never store this)
+3. Can it be encoded in the link itself? (a payment request = `/pay/slug?amount=…` —
+   the URL *is* the request; no row needed)
+4. Can it be derived from Blockscout? (paid / unpaid status of a request, history,
+   counterparties, totals)
+
+**What legitimately has no home** (and would justify a DB *when the feature ships*):
+purely human-meaningful text with no on-chain representation — a gift-card *message*,
+a tx *memo/label*. Even these are small and optional; prefer link-encoding or
+on-chain calldata/events first.
+
+**Worked examples (the actual analysis that produced this rule):**
+
+| Candidate | Verdict | Why |
+|-----------|---------|-----|
+| wallet address | on-chain / Circle | `listWallets(userToken)`, keyed on email |
+| slug | on-chain | `WooshSlugRegistry`, `lookupAddressSlug()` |
+| balance, tx history | on-chain / Blockscout | source of truth |
+| payment request (amount, recipient, memo) | encode in link | `/pay/slug?amount=` |
+| invoice paid? | derive | Blockscout polling |
+| gift card: amount / status / claimed_by | on-chain | vault contract state + claim tx |
+| gift card: message | **off-chain OK** | human text, no on-chain home |
+| chat history | client | sessionStorage today |
+
+**Anti-pattern:** mirroring an on-chain fact into a DB "for convenience / as a cache /
+for portability." A stale mirror can return *wrong* data and silently overrides the
+chain. Read from chain; don't shadow it. Portability is already solved by Circle
+(email → wallet) + on-chain reads.
+
+---
+
 ## Wallet Architecture
 
 ### UCW — User-Controlled Wallets (humans)
@@ -143,4 +189,5 @@ TransactionList — last 3, "View all" → /dashboard/history
 
 Source of truth: Blockscout v2 API (`/api/v2/addresses/{address}/transactions`).
 Hook: `useTransactionHistory(address)` → `GET /api/transactions/[address]`.
-No database in V1/V2. Supabase adds memo/label enrichment in V2c.
+No database. A datastore is only introduced if a feature needs off-chain state per
+the "Where Data Lives" gate above — currently nothing does.
