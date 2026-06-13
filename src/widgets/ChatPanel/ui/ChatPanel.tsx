@@ -443,7 +443,7 @@ export default function ChatPanel({ name, walletAddress, userEmail, onPaymentSuc
   }
 
   return (
-    <div className="flex flex-col glass-card rounded-card overflow-hidden mb-4 min-w-0 w-full relative">
+    <div className="flex flex-col glass-card rounded-card overflow-hidden min-w-0 w-full relative h-full">
       {/* Glass header — absolute so messages scroll beneath it */}
       <div className="z-10 px-4 py-3 flex items-center gap-2
                       bg-[#0d1222]
@@ -470,7 +470,7 @@ export default function ChatPanel({ name, walletAddress, userEmail, onPaymentSuc
       <div
         ref={scrollRef}
         onScroll={handleScroll}
-        className="overflow-y-auto no-scrollbar h-[360px] sm:h-[420px] lg:h-[500px] px-3 sm:px-4 pt-12 pb-3 sm:pb-4"
+        className="flex-1 min-h-0 overflow-y-auto no-scrollbar px-3 sm:px-4 pt-12 pb-3 sm:pb-4"
         style={{
           WebkitMaskImage: "linear-gradient(to bottom, transparent 0, black 24px)",
           maskImage: "linear-gradient(to bottom, transparent 0, black 24px)",

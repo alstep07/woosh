@@ -117,9 +117,9 @@ export default function DashboardPage() {
   );
 
   return (
-    <main className="min-h-screen bg-navy flex flex-col">
+    <main className="h-screen bg-navy flex flex-col overflow-hidden">
       <div className="woosh-bg" aria-hidden="true" />
-      <div className="relative z-10">
+      <div className="relative z-10 shrink-0">
         <BrandHeader
           rightSlot={
             <div className="flex flex-col items-end gap-0.5 sm:flex-row sm:items-center sm:gap-4">
@@ -139,8 +139,8 @@ export default function DashboardPage() {
           }
         />
       </div>
-      <div className="relative z-10 flex-1 px-4 sm:px-6 pt-6 lg:pt-10 pb-10">
-        <div className="max-w-6xl mx-auto w-full min-w-0 lg:grid lg:grid-cols-12 lg:gap-6 lg:items-start">
+      <div className="relative z-10 flex-1 min-h-0 overflow-y-auto lg:overflow-hidden px-4 sm:px-6 pt-6 lg:pt-8 pb-6">
+        <div className="max-w-6xl mx-auto w-full min-w-0 lg:h-full lg:grid lg:grid-cols-12 lg:gap-6 lg:items-start">
 
           {/* Mobile only: compact balance + slug + actions dropdown */}
           <div className="lg:hidden mb-4">
@@ -154,8 +154,9 @@ export default function DashboardPage() {
             />
           </div>
 
-          {/* Chat — single instance; primary, left on desktop */}
-          <div className="lg:col-span-7 min-w-0 mb-4 lg:mb-0">
+          {/* Chat — single instance; primary, left on desktop. Fills row height on
+              desktop (internal scroll); fixed tall block on mobile. */}
+          <div className="lg:col-span-7 min-w-0 h-[60vh] lg:h-full lg:min-h-0 mb-4 lg:mb-0">
             <ChatPanel
               name={session.slug}
               walletAddress={session.walletAddress}
