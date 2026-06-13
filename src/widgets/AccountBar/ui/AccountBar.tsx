@@ -134,6 +134,14 @@ export default function AccountBar({
               </button>
               <div className="my-1 border-t border-border" />
               <Link
+                href="/pay"
+                role="menuitem"
+                onClick={() => setMenuOpen(false)}
+                className={itemClass}
+              >
+                Pay someone
+              </Link>
+              <Link
                 href="/dashboard/invoices"
                 role="menuitem"
                 onClick={() => setMenuOpen(false)}

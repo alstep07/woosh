@@ -99,11 +99,17 @@ export default function WalletCard({
         </p>
       )}
 
-      {/* Invoices entry — the one secondary action, kept visible */}
-      <div className="mt-3 pl-1">
+      {/* Secondary actions — pay someone / view invoices */}
+      <div className="mt-3 pl-1 flex items-center gap-4">
+        <Link
+          href="/pay"
+          className="text-sm text-blue-primary hover:text-blue-secondary transition-colors"
+        >
+          Pay
+        </Link>
         <Link
           href="/dashboard/invoices"
-          className="text-sm font-medium text-blue-primary hover:text-blue-secondary transition-colors"
+          className="text-sm text-blue-primary hover:text-blue-secondary transition-colors"
         >
           Invoices
         </Link>
