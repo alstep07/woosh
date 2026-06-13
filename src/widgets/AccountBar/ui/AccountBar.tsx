@@ -10,6 +10,7 @@ interface Props {
   paymentLink: string;
   walletAddress: string;
   slug?: string;
+  onCreateInvoice?: () => void;
 }
 
 function CopyIcon() {
@@ -38,6 +39,7 @@ export default function AccountBar({
   paymentLink,
   walletAddress,
   slug,
+  onCreateInvoice,
 }: Props) {
   const [copied, setCopied] = useState<null | "link" | "address">(null);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -141,13 +143,20 @@ export default function AccountBar({
               >
                 Send payment
               </Link>
+              <button
+                role="menuitem"
+                onClick={() => { setMenuOpen(false); onCreateInvoice?.(); }}
+                className={itemClass}
+              >
+                Create invoice
+              </button>
               <Link
                 href="/dashboard/invoices"
                 role="menuitem"
                 onClick={() => setMenuOpen(false)}
                 className={itemClass}
               >
-                Invoices
+                My invoices
               </Link>
             </div>
           )}

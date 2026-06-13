@@ -19,6 +19,7 @@ interface Props {
   paymentLink: string;
   walletAddress: string;
   slug?: string;
+  onCreateInvoice: () => void;
   children: React.ReactNode; // recent payments
 }
 
@@ -35,6 +36,7 @@ export default function WalletCard({
   paymentLink,
   walletAddress,
   slug,
+  onCreateInvoice,
   children,
 }: Props) {
   const [copied, setCopied] = useState<null | "address" | "link">(null);
@@ -99,20 +101,18 @@ export default function WalletCard({
         </p>
       )}
 
-      {/* Secondary actions — send payment / view invoices */}
-      <div className="mt-3 pl-1 flex items-center gap-3">
-        <Link
-          href="/pay"
-          className="text-sm text-blue-primary hover:text-blue-secondary transition-colors"
-        >
+      {/* Secondary actions */}
+      <div className="mt-3 pl-1 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-blue-primary">
+        <Link href="/pay" className="hover:text-blue-secondary transition-colors">
           Send payment
         </Link>
         <span className="w-px h-4 bg-border" />
-        <Link
-          href="/dashboard/invoices"
-          className="text-sm text-blue-primary hover:text-blue-secondary transition-colors"
-        >
-          Invoices
+        <button onClick={onCreateInvoice} className="hover:text-blue-secondary transition-colors">
+          Create invoice
+        </button>
+        <span className="w-px h-4 bg-border" />
+        <Link href="/dashboard/invoices" className="hover:text-blue-secondary transition-colors">
+          My invoices
         </Link>
       </div>
 

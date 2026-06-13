@@ -8,6 +8,7 @@ import { useTransactionHistory } from "@/entities/payment/hooks/useTransactionHi
 import BrandHeader from "@/widgets/BrandHeader/ui/BrandHeader";
 import AccountBar from "@/widgets/AccountBar/ui/AccountBar";
 import WalletCard from "@/widgets/WalletCard/ui/WalletCard";
+import CreateInvoiceModal from "@/widgets/CreateInvoiceModal/ui/CreateInvoiceModal";
 import ChatPanel from "@/widgets/ChatPanel/ui/ChatPanel";
 import TransactionList from "@/widgets/TransactionList/ui/TransactionList";
 import Footer from "@/widgets/Footer/ui/Footer";
@@ -19,6 +20,7 @@ import type { Session } from "@/entities/user/model/types";
 export default function DashboardPage() {
   const router = useRouter();
   const [session, setSession] = useState<Session | null>(null);
+  const [createInvoiceOpen, setCreateInvoiceOpen] = useState(false);
 
   useEffect(() => {
     const s = loadSession();
@@ -151,12 +153,13 @@ export default function DashboardPage() {
               paymentLink={paymentLink}
               walletAddress={session.walletAddress}
               slug={session.slug}
+              onCreateInvoice={() => setCreateInvoiceOpen(true)}
             />
           </div>
 
           {/* Chat — single instance; right on desktop, primary. Fills row height on
               desktop (internal scroll); fixed tall block on mobile. */}
-          <div className="lg:order-2 lg:col-span-7 min-w-0 h-[60vh] lg:h-full lg:min-h-0 mb-4 lg:mb-0">
+          <div className="lg:order-2 lg:col-span-6 min-w-0 h-[60vh] lg:h-full lg:min-h-0 mb-4 lg:mb-0">
             <ChatPanel
               name={session.slug}
               walletAddress={session.walletAddress}
@@ -168,7 +171,7 @@ export default function DashboardPage() {
 
           {/* Desktop only: one cohesive wallet card with recent payments inside.
               Left column, stretched to full height. */}
-          <div className="hidden lg:block lg:order-1 lg:col-span-5 lg:h-full lg:min-h-0 min-w-0">
+          <div className="hidden lg:block lg:order-1 lg:col-span-6 lg:h-full lg:min-h-0 min-w-0">
             <WalletCard
               balance={balance?.display}
               isLoading={balanceLoading}
@@ -176,6 +179,7 @@ export default function DashboardPage() {
               paymentLink={paymentLink}
               walletAddress={session.walletAddress}
               slug={session.slug}
+              onCreateInvoice={() => setCreateInvoiceOpen(true)}
             >
               {recentPayments}
             </WalletCard>
@@ -188,6 +192,10 @@ export default function DashboardPage() {
       <div className="relative z-10 shrink-0">
         <Footer />
       </div>
+
+      {createInvoiceOpen && (
+        <CreateInvoiceModal session={session} onClose={() => setCreateInvoiceOpen(false)} />
+      )}
     </main>
   );
 }
