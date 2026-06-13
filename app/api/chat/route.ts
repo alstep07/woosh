@@ -89,7 +89,7 @@ const TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
     type: "function",
     function: {
       name: "create_payment_request",
-      description: "Create a payment request (invoice) for the user. Use when the user wants to BE paid / request money / send an invoice. You MUST have BOTH the amount and what it's for (memo) before calling — if either is missing, ask the user first, do not guess.",
+      description: "Create an invoice for the user. Use when the user wants to BE paid / request money / send an invoice. You MUST have BOTH the amount and what it's for (memo) before calling; if either is missing, ask first, do not guess.",
       parameters: {
         type: "object",
         properties: {
@@ -202,16 +202,16 @@ export async function POST(req: NextRequest) {
   const history: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
     {
       role: "system",
-      content: `You are Woosh Agent, a concise and friendly USDC payment assistant. Help users send USDC, check balance, and view transaction history. Be brief — 1–2 sentences max. The user's wallet address is ${walletAddress} (never reveal it).${userName ? ` The user's own username is "${userName}" — do NOT use this as the recipient unless explicitly stated.` : ""}
+      content: `You are Woosh Agent, a concise and friendly USDC payment assistant. Help users send USDC, check balance, and view transaction history. Be brief, 1-2 sentences max. Never use long dashes (em or en dashes); use commas or periods. Write "onchain", not "on-chain". The user's wallet address is ${walletAddress} (never reveal it).${userName ? ` The user's own username is "${userName}", do NOT use this as the recipient unless explicitly stated.` : ""}
 
 Transaction history rules:
 - If the user asks how much they spent/received in total → call get_transaction_history, then reply with ONLY the aggregated total (e.g. "You spent $25.00 total"). Do NOT list individual transactions.
 - If the user asks where they spent money or wants a breakdown → group transactions by recipient address/slug and show totals per recipient (e.g. "alex $15.00, 0x12…34 $10.00"). Still no per-transaction detail unless explicitly asked.
 - Only list individual transactions if the user explicitly asks for a transaction list or history.
 
-Send rules: always use the exact recipient name/address as stated — never substitute. If recipient or amount is unclear, ask to clarify. Only call send_payment when both recipient and amount are clear.
+Send rules: always use the exact recipient name/address as stated, never substitute. If recipient or amount is unclear, ask to clarify. Only call send_payment when both recipient and amount are clear.
 
-Request rules: when the user wants to BE paid or to request/invoice money, you need BOTH the amount and what it's for (memo). If either is missing, ask the user — do not guess. Once you have both, call create_payment_request; the user then confirms with their PIN to register it on-chain.
+Invoice rules: when the user wants to BE paid or to invoice money, you need the amount and what it is for (memo). Extract the memo from their message (for example "invoice 10 for a domain name" means amount 10 and memo "domain name"); only ask if no reason is given at all. As soon as you have both, you MUST call create_payment_request in that same turn. NEVER reply saying you will create or have created an invoice without actually calling the tool; calling it is what shows the confirmation card and link. Do not describe the steps, just call the tool.
 
 When the user asks if someone paid them (e.g. "did alex pay me?"): first call resolve_slug to get their address, then call get_transaction_history, then check if that address appears in received transactions. Confirm clearly: "Yes, alex sent you $X on [date]" or "No, I don't see any payments from alex."`,
     },
@@ -289,7 +289,7 @@ When the user asks if someone paid them (e.g. "did alex pay me?"): first call re
             toolResults.push({
               role: "tool",
               tool_call_id: call.id,
-              content: "Amount missing or invalid — ask the user how much they want to request.",
+              content: "Amount missing or invalid, ask the user how much they want to invoice.",
             });
             continue;
           }
@@ -297,7 +297,7 @@ When the user asks if someone paid them (e.g. "did alex pay me?"): first call re
             toolResults.push({
               role: "tool",
               tool_call_id: call.id,
-              content: "Memo missing — ask the user what the request is for before creating it.",
+              content: "Memo missing, ask the user what the invoice is for before creating it.",
             });
             continue;
           }

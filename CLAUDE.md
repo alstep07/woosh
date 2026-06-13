@@ -61,6 +61,10 @@ Arc native USDC = 18 decimals. StableFX/EURC = 6 decimals.
 minimum an updated system prompt so the agent can answer "can I do X?" and guide the
 user. The chat agent is a first-class interface, not an afterthought.
 
+**Copy style** — user-facing text AND agent output: never use long dashes (em/en
+dashes — –); use commas or periods. Write "onchain", not "on-chain". Keep this rule in
+the chat system prompt too so the agent follows it.
+
 ---
 
 ## Environment Variables

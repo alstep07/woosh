@@ -14,6 +14,12 @@ import { buildRequestLink } from "@/entities/invoice/lib/buildRequestLink";
 const EXAMPLES = getAllExamples();
 const CHAT_STORAGE_KEY = "woosh_chat_history";
 
+// Compact a link for display: drop the protocol and middle-ellipsize the long tail.
+function shortenLink(url: string): string {
+  const s = url.replace(/^https?:\/\//, "");
+  return s.length > 34 ? `${s.slice(0, 24)}…${s.slice(-8)}` : s;
+}
+
 type PendingAction =
   | { type: "send_payment"; to: string; amount: string; resolvedAddress?: string }
   | { type: "create_request"; amount: string; memo: string };
@@ -277,7 +283,7 @@ export default function ChatPanel({ name, walletAddress, userEmail, onPaymentSuc
     if (!env.circleAppId) {
       window.location.href = pa.type === "send_payment"
         ? `/pay/${pa.to}?amount=${pa.amount}`
-        : `/dashboard/requests`;
+        : `/dashboard/invoices`;
       return;
     }
     if (pa.type === "send_payment" && !pa.resolvedAddress) return;
@@ -408,7 +414,7 @@ export default function ChatPanel({ name, walletAddress, userEmail, onPaymentSuc
       const assistantText = data.text ||
         (data.pendingAction
           ? data.pendingAction.type === "create_request"
-            ? `I'll create a request for $${Number(data.pendingAction.amount).toFixed(2)}${data.pendingAction.memo ? ` for ${data.pendingAction.memo}` : ""}.`
+            ? `I'll create an invoice for $${Number(data.pendingAction.amount).toFixed(2)}${data.pendingAction.memo ? ` for ${data.pendingAction.memo}` : ""}.`
             : `I'll send $${Number(data.pendingAction.amount).toFixed(2)} to ${data.pendingAction.to}.`
           : "");
 
@@ -488,12 +494,12 @@ export default function ChatPanel({ name, walletAddress, userEmail, onPaymentSuc
                     {msg.pendingAction.type === "create_request" ? (
                       <>
                         <p className="text-xs text-text-secondary mb-1">
-                          Create a request for ${Number(msg.pendingAction.amount).toFixed(2)}
+                          Create an invoice for ${Number(msg.pendingAction.amount).toFixed(2)}
                           {msg.pendingAction.memo && (
                             <> — <span className="text-text-primary font-medium">{msg.pendingAction.memo}</span></>
                           )}?
                         </p>
-                        <p className="text-xs text-text-secondary/40 mb-2">Registered on-chain · needs your PIN</p>
+                        <p className="text-xs text-text-secondary/40 mb-2">Registered onchain · needs your PIN</p>
                       </>
                     ) : (
                       <>
@@ -538,7 +544,7 @@ export default function ChatPanel({ name, walletAddress, userEmail, onPaymentSuc
                 {/* Request created — copyable link chip */}
                 {msg.pendingAction && msg.actionStatus === "created" && msg.requestLink && (
                   <div className={`${msg.text ? "mt-2 pt-2 border-t border-white/10" : ""}`}>
-                    <p className="text-xs text-green-400 mb-1.5">Request created — share this link:</p>
+                    <p className="text-xs text-green-400 mb-1.5">Invoice created — share this link:</p>
                     <button
                       onClick={() => copyRequestLink(msg.id, msg.requestLink!)}
                       className="flex items-center gap-1.5 max-w-full text-xs bg-blue-primary/10 hover:bg-blue-primary/20 text-blue-primary px-3 py-1.5 rounded-input font-medium transition-colors"
@@ -547,7 +553,7 @@ export default function ChatPanel({ name, walletAddress, userEmail, onPaymentSuc
                         "Copied!"
                       ) : (
                         <>
-                          <span className="truncate">{msg.requestLink.replace(/^https?:\/\//, "")}</span>
+                          <span className="font-mono">{shortenLink(msg.requestLink)}</span>
                           <svg width="12" height="12" viewBox="0 0 14 14" fill="none" className="shrink-0">
                             <rect x="4.5" y="4.5" width="8" height="8" rx="1.5" stroke="currentColor" strokeWidth="1.3" />
                             <path d="M2.5 9.5H2a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1h6.5a1 1 0 0 1 1 1v.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />

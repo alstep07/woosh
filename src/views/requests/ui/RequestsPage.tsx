@@ -178,9 +178,9 @@ export default function RequestsPage() {
           Back to dashboard
         </Link>
 
-        <h1 className="text-2xl font-bold text-text-primary mb-2">Request a payment</h1>
+        <h1 className="text-2xl font-bold text-text-primary mb-2">Invoices</h1>
         <p className="text-text-secondary text-sm mb-6">
-          Register a request on-chain — the amount and note are stored in the contract, so
+          Create an invoice onchain. The amount and note are stored in the contract, so
           whoever opens the link sees exactly what you asked for and can only pay that amount.
         </p>
 
@@ -190,13 +190,13 @@ export default function RequestsPage() {
             <div className="text-center py-4">
               <div className="flex justify-center mb-3"><Spinner size="lg" /></div>
               <p className="text-text-secondary text-sm">
-                Creating your request… a PIN window will appear to confirm.
+                Creating your invoice… a PIN window will appear to confirm.
               </p>
             </div>
           ) : phase === "auth" ? (
             <div className="space-y-3">
               <p className="text-sm text-text-secondary">
-                Confirm it&apos;s you to register the request on-chain.
+                Confirm it&apos;s you to register the invoice onchain.
               </p>
               {auth.step === "email" && !auth.loading && (
                 <EmailStep
@@ -262,14 +262,14 @@ export default function RequestsPage() {
                 </div>
               </div>
               {error && <p className="text-sm text-red-400">{error}</p>}
-              <Button onClick={startCreate}>Create request</Button>
+              <Button onClick={startCreate}>Create invoice</Button>
             </div>
           )}
         </div>
 
         {/* List — read from the contract */}
         <h2 className="text-sm font-semibold text-text-secondary uppercase tracking-widest mb-3">
-          Your requests
+          Your invoices
         </h2>
         {loading ? (
           <div className="space-y-3">
@@ -285,7 +285,7 @@ export default function RequestsPage() {
           </div>
         ) : invoices.length === 0 ? (
           <p className="text-text-secondary/60 text-sm text-center py-8">
-            No requests yet. Create one above.
+            No invoices yet. Create one above.
           </p>
         ) : (
           <div className="space-y-3">

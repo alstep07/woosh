@@ -12,6 +12,15 @@ interface Props {
   slug?: string;
 }
 
+function CopyIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 14 14" fill="none" className="shrink-0">
+      <rect x="4.5" y="4.5" width="8" height="8" rx="1.5" stroke="currentColor" strokeWidth="1.3" />
+      <path d="M2.5 9.5H2a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1h6.5a1 1 0 0 1 1 1v.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 function KebabIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" className="shrink-0">
@@ -62,8 +71,8 @@ export default function AccountBar({
     setTimeout(() => setCopied(null), 2000);
   }
 
-  const shortAddress = `${walletAddress.slice(0, 6)}…${walletAddress.slice(-4)}`;
   const itemClass = "block w-full text-left px-4 py-2.5 text-sm text-text-primary hover:bg-white/5 transition-colors";
+  const chipClass = "flex items-center gap-1.5 h-9 px-3 sm:px-4 rounded-input bg-blue-primary/10 hover:bg-blue-primary/20 text-blue-primary text-xs sm:text-sm font-medium transition-colors whitespace-nowrap";
 
   return (
     <div className="flex items-start justify-between py-5">
@@ -83,12 +92,23 @@ export default function AccountBar({
         )}
       </div>
 
-      {/* Right: identity label + actions menu */}
-      <div className="flex items-center gap-2 ml-4">
+      {/* Right: copy-link chip + actions menu, same height side by side */}
+      <div className="flex items-center gap-1.5 ml-4">
         {slug ? (
-          <span className="text-sm font-medium text-blue-primary">{slug}</span>
+          <button onClick={() => copy("link")} className={chipClass}>
+            {copied === "link" ? (
+              "Copied!"
+            ) : (
+              <>
+                <span>{slug}</span>
+                <CopyIcon />
+              </>
+            )}
+          </button>
         ) : (
-          <span className="text-xs font-mono text-text-secondary/40">{shortAddress}</span>
+          <Link href="/slug-setup" className={chipClass}>
+            Claim username
+          </Link>
         )}
 
         <div className="relative" ref={menuRef}>
@@ -97,7 +117,7 @@ export default function AccountBar({
             aria-label="Account actions"
             aria-haspopup="menu"
             aria-expanded={menuOpen}
-            className="flex items-center justify-center w-9 h-9 rounded-input text-text-secondary hover:text-text-primary hover:bg-white/5 transition-colors"
+            className="flex items-center justify-center h-9 w-9 rounded-input bg-blue-primary/10 hover:bg-blue-primary/20 text-blue-primary transition-colors"
           >
             <KebabIcon />
           </button>
@@ -107,31 +127,18 @@ export default function AccountBar({
               role="menu"
               className="absolute right-0 top-full mt-1.5 z-50 min-w-[200px] rounded-input border border-border bg-card shadow-xl py-1"
             >
-              <button role="menuitem" onClick={() => copy("link")} className={itemClass}>
-                {copied === "link" ? "Copied!" : "Copy payment link"}
-              </button>
               <button role="menuitem" onClick={() => copy("address")} className={itemClass}>
                 {copied === "address" ? "Copied!" : "Copy wallet address"}
               </button>
               <div className="my-1 border-t border-border" />
               <Link
-                href="/dashboard/requests"
+                href="/dashboard/invoices"
                 role="menuitem"
                 onClick={() => setMenuOpen(false)}
                 className={itemClass}
               >
-                Request a payment
+                Invoices
               </Link>
-              {!slug && (
-                <Link
-                  href="/slug-setup"
-                  role="menuitem"
-                  onClick={() => setMenuOpen(false)}
-                  className={itemClass}
-                >
-                  Claim username
-                </Link>
-              )}
             </div>
           )}
         </div>
