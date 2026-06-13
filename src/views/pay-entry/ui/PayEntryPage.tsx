@@ -43,7 +43,7 @@ export default function PayEntryPage() {
       <BrandHeader />
       <div className="flex-1 flex flex-col items-center justify-center px-6">
         <div className="w-full max-w-md">
-          <h1 className="text-2xl font-bold text-text-primary mb-2">Pay someone</h1>
+          <h1 className="text-2xl font-bold text-text-primary mb-2">Send a payment</h1>
           <p className="text-text-secondary text-sm mb-6">
             Enter a Woosh username or a wallet address.
           </p>

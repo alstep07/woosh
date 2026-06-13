@@ -139,7 +139,7 @@ export default function AccountBar({
                 onClick={() => setMenuOpen(false)}
                 className={itemClass}
               >
-                Pay someone
+                Send payment
               </Link>
               <Link
                 href="/dashboard/invoices"
