@@ -43,12 +43,12 @@ export default function RequestsPage() {
   return (
     <main className="min-h-screen bg-navy flex flex-col">
       <BrandHeader />
-      <div className="flex-1 px-4 sm:px-6 py-8 max-w-2xl mx-auto w-full">
+      <div className="flex-1 px-4 sm:px-6 lg:px-8 py-8 max-w-4xl mx-auto w-full">
         <Link
           href="/dashboard"
           className="block text-sm text-blue-primary/60 hover:text-blue-primary transition-colors mb-6"
         >
-          Back to dashboard
+          Back
         </Link>
 
         <div className="flex items-center justify-between gap-4 mb-6">

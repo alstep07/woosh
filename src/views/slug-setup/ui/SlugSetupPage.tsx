@@ -192,7 +192,7 @@ export default function SlugSetupPage() {
                 href="/dashboard"
                 className="block w-full text-sm text-blue-primary/60 hover:text-blue-primary transition-colors mb-6"
               >
-                Back to dashboard
+                Back
               </Link>
               <h1 className="text-2xl font-bold text-text-primary mb-2">
                 Choose your payment link
