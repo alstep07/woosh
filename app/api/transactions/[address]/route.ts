@@ -1,6 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { arcPublicClient } from "@/shared/lib/arc";
-import { INVOICE_REGISTRY_ABI } from "@/entities/invoice/model/abi";
 import { getInvoice } from "@/entities/invoice/lib/readInvoice";
 
 const EXPLORER_BASE =
@@ -31,47 +29,41 @@ const addr = (a: { hash: string } | string | null): string | null =>
   a ? (typeof a === "string" ? a : a.hash).toLowerCase() : null;
 
 /**
- * Best-effort: attach each invoice row's on-chain memo by matching the tx hash to an
- * InvoicePaid event → invoice id → getInvoice(memo). Fails open (no memo) on any error.
+ * Best-effort: attach each invoice row's onchain memo. For each invoice tx we read it
+ * from the explorer, decode the invoice id from the pay(bytes32) calldata, then read
+ * getInvoice(memo). Works for both sides (the parent tx is always the pay() call).
+ * Fails open (no memo) on any error.
  */
-async function enrichInvoiceMemos(rows: OutTx[], address: string): Promise<OutTx[]> {
+async function enrichInvoiceMemos(rows: OutTx[]): Promise<OutTx[]> {
   if (!REGISTRY) return rows;
-  const hasInvoice = rows.some((r) => r.note === "Invoice");
-  if (!hasInvoice) return rows;
+  const hashes = [...new Set(rows.filter((r) => r.note === "Invoice").map((r) => r.hash))];
+  if (hashes.length === 0) return rows;
 
-  try {
-    const reg = REGISTRY as `0x${string}`;
-    const lower = address.toLowerCase() as `0x${string}`;
-    const [asPayee, asPayer] = await Promise.all([
-      arcPublicClient.getContractEvents({ address: reg, abi: INVOICE_REGISTRY_ABI, eventName: "InvoicePaid", args: { payee: lower }, fromBlock: 0n }),
-      arcPublicClient.getContractEvents({ address: reg, abi: INVOICE_REGISTRY_ABI, eventName: "InvoicePaid", args: { payer: lower }, fromBlock: 0n }),
-    ]);
-
-    const hashToId = new Map<string, `0x${string}`>();
-    for (const ev of [...asPayee, ...asPayer]) {
-      const h = ev.transactionHash?.toLowerCase();
-      const id = ev.args.id;
-      if (h && id) hashToId.set(h, id);
-    }
-
-    const ids = [...new Set(hashToId.values())];
-    const memoById = new Map<string, string>();
-    await Promise.all(
-      ids.map(async (id) => {
+  const memoByHash = new Map<string, string>();
+  await Promise.all(
+    hashes.map(async (hash) => {
+      try {
+        const res = await fetch(`${EXPLORER_BASE}/api/v2/transactions/${hash}`, { cache: "no-store" });
+        if (!res.ok) return;
+        const tx = (await res.json()) as { raw_input?: string };
+        const raw = tx.raw_input;
+        // pay(bytes32): 0x + 4-byte selector (8 hex) + 32-byte id (64 hex)
+        if (!raw || raw.length < 74) return;
+        const id = `0x${raw.slice(10, 74)}` as `0x${string}`;
         const inv = await getInvoice(id);
-        if (inv?.memo) memoById.set(id, inv.memo);
-      })
-    );
+        if (inv?.memo) memoByHash.set(hash.toLowerCase(), inv.memo);
+      } catch {
+        /* ignore — best effort */
+      }
+    })
+  );
 
-    return rows.map((r) => {
-      if (r.note !== "Invoice") return r;
-      const id = hashToId.get(r.hash.toLowerCase());
-      const memo = id ? memoById.get(id) : undefined;
-      return memo ? { ...r, memo } : r;
-    });
-  } catch {
-    return rows;
-  }
+  if (memoByHash.size === 0) return rows;
+  return rows.map((r) =>
+    r.note === "Invoice" && memoByHash.has(r.hash.toLowerCase())
+      ? { ...r, memo: memoByHash.get(r.hash.toLowerCase()) }
+      : r
+  );
 }
 
 export async function GET(
@@ -152,7 +144,7 @@ export async function GET(
       })
       .slice(0, 20);
 
-    const enriched = await enrichInvoiceMemos(merged, lower);
+    const enriched = await enrichInvoiceMemos(merged);
     return NextResponse.json(enriched);
   } catch (err) {
     console.error("[transactions]", err);
