@@ -6,9 +6,10 @@ interface Props {
   slug: string;
   address: `0x${string}` | null;
   initialAmount?: string;
+  requestNonce?: string;
 }
 
-export function PayPage({ slug, address, initialAmount }: Props) {
+export function PayPage({ slug, address, initialAmount, requestNonce }: Props) {
   if (!address) {
     return (
       <main className="min-h-screen bg-navy flex flex-col">
@@ -42,6 +43,7 @@ export function PayPage({ slug, address, initialAmount }: Props) {
           recipientAddress={address}
           recipientLabel={recipientLabel}
           initialAmount={initialAmount}
+          requestNonce={requestNonce}
         />
       </div>
       <Footer />

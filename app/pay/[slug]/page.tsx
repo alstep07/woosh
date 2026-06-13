@@ -3,7 +3,7 @@ import { PayPage } from "@/views/pay/ui/PayPage";
 
 interface Props {
   params: { slug: string };
-  searchParams?: { amount?: string };
+  searchParams?: { amount?: string; req?: string };
 }
 
 export default async function Page({ params, searchParams }: Props) {
@@ -13,6 +13,7 @@ export default async function Page({ params, searchParams }: Props) {
       address={address}
       slug={params.slug}
       initialAmount={searchParams?.amount}
+      requestNonce={searchParams?.req}
     />
   );
 }

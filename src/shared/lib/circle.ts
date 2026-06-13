@@ -6,6 +6,7 @@ import {
   initiateUserControlledWalletsClient,
   Blockchain,
 } from "@circle-fin/user-controlled-wallets";
+import { parseUnits } from "viem";
 
 function getClient() {
   const key = process.env.CIRCLE_API_KEY;
@@ -108,6 +109,37 @@ export async function createPaymentChallenge(
     blockchain: Blockchain.ArcTestnet,
     tokenAddress: "", // native USDC on Arc — no contract address
     fee: { type: "level", config: { feeLevel: "MEDIUM" } },
+  });
+  return { challengeId: res.data!.challengeId! };
+}
+
+/**
+ * Creates a challenge to settle an on-chain payment request via WooshInvoiceRegistry.
+ * Calls pay(payee, amount, nonce) and sends `amount` as native value (msg.value).
+ * The on-chain `require(msg.value == amount)` is what enforces the exact amount.
+ */
+export async function createInvoicePayChallenge(
+  userToken: string,
+  walletId: string,
+  registryAddress: `0x${string}`,
+  payee: string,
+  amount: string, // human-readable decimal string, e.g. "50"
+  nonce: string   // uint256 as a decimal string
+) {
+  if (!/^\d+(\.\d+)?$/.test(amount) || parseFloat(amount) <= 0) {
+    throw new Error(`Invalid amount: ${amount}`);
+  }
+  const amountWei = parseUnits(amount, 18).toString(); // Arc native USDC = 18 decimals
+  const client = getClient();
+  const res = await client.createUserTransactionContractExecutionChallenge({
+    userToken,
+    walletId,
+    contractAddress: registryAddress,
+    abiFunctionSignature: "pay(address,uint256,uint256)",
+    abiParameters: [payee, amountWei, nonce],
+    amount, // native value to send with the call; Circle converts to base units
+    fee: { type: "level", config: { feeLevel: "MEDIUM" } },
+    idempotencyKey: crypto.randomUUID(),
   });
   return { challengeId: res.data!.challengeId! };
 }
