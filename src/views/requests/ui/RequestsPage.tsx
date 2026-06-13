@@ -213,14 +213,14 @@ export default function RequestsPage() {
               )}
               {auth.step === "email" && auth.loading && (
                 <div className="text-center py-2">
-                  <Spinner size="lg" />
-                  <p className="text-text-secondary text-sm mt-2">Sending your code…</p>
+                  <div className="flex justify-center mb-2"><Spinner size="lg" /></div>
+                  <p className="text-text-secondary text-sm">Sending your code…</p>
                 </div>
               )}
               {auth.step === "verify" && (
                 <div className="text-center py-2">
-                  <Spinner size="lg" />
-                  <p className="text-text-secondary text-sm mt-2">
+                  <div className="flex justify-center mb-2"><Spinner size="lg" /></div>
+                  <p className="text-text-secondary text-sm">
                     Enter the code from <span className="text-text-primary">{auth.email}</span> in the window that opened.
                   </p>
                   {auth.error && <p className="text-sm text-red-400 mt-2">{auth.error}</p>}
