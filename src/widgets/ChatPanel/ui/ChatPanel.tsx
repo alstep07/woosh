@@ -471,6 +471,10 @@ export default function ChatPanel({ name, walletAddress, userEmail, onPaymentSuc
         ref={scrollRef}
         onScroll={handleScroll}
         className="overflow-y-auto no-scrollbar h-64 sm:h-[17rem] px-3 sm:px-4 pt-12 pb-3 sm:pb-4"
+        style={{
+          WebkitMaskImage: "linear-gradient(to bottom, transparent 0, black 24px)",
+          maskImage: "linear-gradient(to bottom, transparent 0, black 24px)",
+        }}
       >
         <div className="flex flex-col justify-end min-h-full space-y-3">
           {messages.map((msg) => (
@@ -674,21 +678,17 @@ export default function ChatPanel({ name, walletAddress, userEmail, onPaymentSuc
         <button
           onClick={handleSend}
           disabled={!input.trim() || isLoading}
-          className="text-blue-primary hover:text-blue-secondary disabled:text-text-secondary/20 transition-colors shrink-0"
+          className="shrink-0 w-8 h-8 rounded-full flex items-center justify-center bg-blue-primary text-white hover:bg-blue-secondary disabled:bg-white/[0.06] disabled:text-text-secondary/30 transition-colors"
           aria-label="Send"
         >
           <svg
-            className="w-5 h-5"
+            className="w-4 h-4"
             fill="none"
             viewBox="0 0 24 24"
             stroke="currentColor"
-            strokeWidth={2}
+            strokeWidth={2.2}
           >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
-            />
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 19V5M5 12l7-7 7 7" />
           </svg>
         </button>
       </div>

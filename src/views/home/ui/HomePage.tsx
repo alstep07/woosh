@@ -6,7 +6,6 @@ import { useEffect, useState } from "react";
 import BrandHeader from "@/widgets/BrandHeader/ui/BrandHeader";
 import Footer from "@/widgets/Footer/ui/Footer";
 import { getSession } from "@/shared/lib/session";
-import { env } from "@/shared/config/env";
 
 const LiquidHero = dynamic(() => import("@/widgets/LiquidHero/ui/LiquidHero"), {
   ssr: false,
@@ -20,7 +19,7 @@ const HOW_IT_WORKS = [
     bubble: "bg-blue-primary/10 text-blue-primary",
     steps: [
       "Sign up with email. Wallet included, no seed phrase.",
-      `Share your link ${env.baseUrl}/pay/yourname, or send an invoice for an exact amount.`,
+      `Share your link, or send an invoice for an exact amount.`,
       "Money lands in under a second. Invoices flip to Paid onchain.",
     ],
   },

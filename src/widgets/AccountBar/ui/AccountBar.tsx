@@ -88,6 +88,7 @@ export default function AccountBar({
         ) : (
           <p className="text-3xl font-bold text-text-primary">
             {balance ?? "$0.00"}
+            <span className="text-base font-medium text-text-secondary/50 ml-1.5">USDC</span>
           </p>
         )}
       </div>
@@ -125,7 +126,8 @@ export default function AccountBar({
           {menuOpen && (
             <div
               role="menu"
-              className="absolute right-0 top-full mt-1.5 z-50 min-w-[200px] rounded-input border border-border bg-card shadow-xl py-1"
+              className="absolute right-0 top-full mt-1.5 z-[60] min-w-[200px] rounded-input border border-[#1E293B] bg-[#0d1222] py-1"
+              style={{ boxShadow: "0 8px 24px rgba(0,0,0,0.4)" }}
             >
               <button role="menuitem" onClick={() => copy("address")} className={itemClass}>
                 {copied === "address" ? "Copied!" : "Copy wallet address"}

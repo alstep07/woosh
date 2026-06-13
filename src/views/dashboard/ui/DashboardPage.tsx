@@ -116,40 +116,47 @@ export default function DashboardPage() {
         />
       </div>
       <div className="relative z-10 flex-1 overflow-y-auto overflow-x-hidden">
-        <div className="px-4 sm:px-6 max-w-2xl mx-auto w-full pb-8 min-w-0">
-          <AccountBar
-            balance={balance?.display}
-            isLoading={balanceLoading}
-            isError={balanceError}
-            paymentLink={paymentLink}
-            walletAddress={session.walletAddress}
-            slug={session.slug}
-          />
-          <ChatPanel
-            name={session.slug}
-            walletAddress={session.walletAddress}
-            userEmail={session.email}
-            onPaymentSuccess={handlePaymentSuccess}
-            knownCounterparties={txs?.map((tx) => tx.counterparty)}
-          />
-          <TransactionList
-            txs={txs?.slice(0, pendingTx ? 2 : 3)}
-            isLoading={txsLoading}
-            isError={txsError}
-            onRefresh={handleTxRefresh}
-            isRefreshing={isTxRefreshing}
-            pendingEntries={pendingTx ? [pendingTx] : undefined}
-          />
-          {txs && txs.length > 3 && (
-            <div className="flex justify-end mt-3">
-              <Link
-                href="/dashboard/history"
-                className="text-xs text-blue-primary/60 hover:text-blue-primary transition-colors"
-              >
-                View all transactions
-              </Link>
-            </div>
-          )}
+        <div className="px-4 sm:px-6 max-w-5xl mx-auto w-full pb-8 min-w-0 lg:grid lg:grid-cols-5 lg:gap-6 lg:items-start">
+          {/* Primary: chat (left, ~60% on desktop; first on mobile) */}
+          <div className="lg:col-span-3 min-w-0">
+            <ChatPanel
+              name={session.slug}
+              walletAddress={session.walletAddress}
+              userEmail={session.email}
+              onPaymentSuccess={handlePaymentSuccess}
+              knownCounterparties={txs?.map((tx) => tx.counterparty)}
+            />
+          </div>
+
+          {/* Secondary: balance + recent payments (right, ~40%) */}
+          <div className="lg:col-span-2 min-w-0">
+            <AccountBar
+              balance={balance?.display}
+              isLoading={balanceLoading}
+              isError={balanceError}
+              paymentLink={paymentLink}
+              walletAddress={session.walletAddress}
+              slug={session.slug}
+            />
+            <TransactionList
+              txs={txs?.slice(0, pendingTx ? 2 : 3)}
+              isLoading={txsLoading}
+              isError={txsError}
+              onRefresh={handleTxRefresh}
+              isRefreshing={isTxRefreshing}
+              pendingEntries={pendingTx ? [pendingTx] : undefined}
+            />
+            {txs && txs.length > 3 && (
+              <div className="flex justify-end mt-3">
+                <Link
+                  href="/dashboard/history"
+                  className="text-xs text-blue-primary/60 hover:text-blue-primary transition-colors"
+                >
+                  View all transactions
+                </Link>
+              </div>
+            )}
+          </div>
         </div>
       </div>
       <div className="relative z-10 shrink-0">
