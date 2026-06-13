@@ -3,6 +3,7 @@
  * All calls are wrapped in try-catch so Safari private mode never crashes the app.
  */
 import type { Session } from "@/entities/user/model/types";
+import type { PaymentRequest } from "@/entities/invoice/model/types";
 
 // ── localStorage ──────────────────────────────────────────────────────────────
 
@@ -73,6 +74,34 @@ export function clearPendingTokens(): void {
   try {
     sessionStorage.removeItem("woosh_pending_token");
     sessionStorage.removeItem("woosh_pending_enc_key");
+  } catch {}
+}
+
+// ── localStorage — the creator's own payment requests ────────────────────────
+// On-chain status (paid[id]) is the truth; this is just the local list of links
+// the creator made, so they can find and track them. Not shared, not a backend.
+
+export function getRequests(): PaymentRequest[] {
+  try {
+    const raw = localStorage.getItem("woosh_requests");
+    if (!raw) return [];
+    return JSON.parse(raw) as PaymentRequest[];
+  } catch {
+    return [];
+  }
+}
+
+export function saveRequest(request: PaymentRequest): void {
+  try {
+    const list = getRequests();
+    localStorage.setItem("woosh_requests", JSON.stringify([request, ...list]));
+  } catch {}
+}
+
+export function deleteRequest(id: string): void {
+  try {
+    const list = getRequests().filter((r) => r.id !== id);
+    localStorage.setItem("woosh_requests", JSON.stringify(list));
   } catch {}
 }
 

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
 import { arcPublicClient } from "@/shared/lib/arc";
 import { resolveSlug } from "@/entities/slug/lib/resolveSlug";
+import { newNonce } from "@/entities/invoice/lib/computeInvoiceId";
 import { formatUnits } from "viem";
 
 const MODEL = process.env.ANTHROPIC_MODEL ?? "anthropic/claude-3-5-sonnet";
@@ -82,6 +83,23 @@ const TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
           },
         },
         required: ["to", "amount"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "create_payment_request",
+      description: "Create a payment request (invoice) link the user can share so someone pays them a specific USDC amount. The link can only be paid for that exact amount. Use when the user wants to BE paid / request money / send an invoice.",
+      parameters: {
+        type: "object",
+        properties: {
+          amount: {
+            type: "string",
+            description: "Amount in USDC to request, e.g. '25' or '9.99'",
+          },
+        },
+        required: ["amount"],
       },
     },
   },
@@ -190,6 +208,8 @@ Transaction history rules:
 
 Send rules: always use the exact recipient name/address as stated — never substitute. If recipient or amount is unclear, ask to clarify. Only call send_payment when both recipient and amount are clear.
 
+Request rules: when the user wants to BE paid or to request/invoice an amount, call create_payment_request with the amount and give them the returned link to share. Each request link can only be paid for that exact amount.
+
 When the user asks if someone paid them (e.g. "did alex pay me?"): first call resolve_slug to get their address, then call get_transaction_history, then check if that address appears in received transactions. Confirm clearly: "Yes, alex sent you $X on [date]" or "No, I don't see any payments from alex."`,
     },
     ...messages,
@@ -259,6 +279,17 @@ When the user asks if someone paid them (e.g. "did alex pay me?"): first call re
           result = resolved
             ? `"${slug}" resolves to address ${resolved}`
             : `Username "${slug}" not found`;
+        } else if (call.function.name === "create_payment_request") {
+          const amount = String(args.amount ?? "");
+          if (!/^\d+(\.\d+)?$/.test(amount) || parseFloat(amount) <= 0) {
+            result = "Invalid amount — ask the user for a positive USDC amount.";
+          } else {
+            const identifier = userName ?? walletAddress;
+            const nonce = newNonce();
+            const base = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:3000";
+            const link = `${base}/pay/${identifier}?amount=${amount}&req=${nonce}`;
+            result = `Payment request created. Share this link (pays exactly $${amount}): ${link}`;
+          }
         } else {
           result = "Unknown tool";
         }
