@@ -89,7 +89,7 @@ const TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
     type: "function",
     function: {
       name: "create_payment_request",
-      description: "Guide the user to create a payment request (invoice). Use when the user wants to BE paid / request money / send an invoice. Creating one is an on-chain action that needs the user's PIN, so it's done from the Request a payment screen — this tool returns the instructions.",
+      description: "Create a payment request (invoice) for the user. Use when the user wants to BE paid / request money / send an invoice. You MUST have BOTH the amount and what it's for (memo) before calling — if either is missing, ask the user first, do not guess.",
       parameters: {
         type: "object",
         properties: {
@@ -97,8 +97,12 @@ const TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
             type: "string",
             description: "Amount in USDC the user wants to request, e.g. '25'",
           },
+          memo: {
+            type: "string",
+            description: "What the request is for, e.g. 'Brunch' or 'October rent'",
+          },
         },
-        required: ["amount"],
+        required: ["amount", "memo"],
       },
     },
   },
@@ -207,7 +211,7 @@ Transaction history rules:
 
 Send rules: always use the exact recipient name/address as stated — never substitute. If recipient or amount is unclear, ask to clarify. Only call send_payment when both recipient and amount are clear.
 
-Request rules: when the user wants to BE paid or to request/invoice an amount, call create_payment_request and relay the returned instructions (creating a request is an on-chain action that needs their PIN, done from the Request a payment screen).
+Request rules: when the user wants to BE paid or to request/invoice money, you need BOTH the amount and what it's for (memo). If either is missing, ask the user — do not guess. Once you have both, call create_payment_request; the user then confirms with their PIN to register it on-chain.
 
 When the user asks if someone paid them (e.g. "did alex pay me?"): first call resolve_slug to get their address, then call get_transaction_history, then check if that address appears in received transactions. Confirm clearly: "Yes, alex sent you $X on [date]" or "No, I don't see any payments from alex."`,
     },
@@ -280,8 +284,27 @@ When the user asks if someone paid them (e.g. "did alex pay me?"): first call re
             : `Username "${slug}" not found`;
         } else if (call.function.name === "create_payment_request") {
           const amount = String(args.amount ?? "");
-          const amt = /^\d+(\.\d+)?$/.test(amount) && parseFloat(amount) > 0 ? `$${amount}` : "the amount";
-          result = `To request ${amt}: open the “⋯” menu on your dashboard → “Request a payment”, enter the amount and an optional note, and confirm with your PIN. It's registered on-chain so the payer sees the exact amount and can only pay that. Tell the user these steps.`;
+          const memo = String(args.memo ?? "").trim();
+          if (!/^\d+(\.\d+)?$/.test(amount) || parseFloat(amount) <= 0) {
+            toolResults.push({
+              role: "tool",
+              tool_call_id: call.id,
+              content: "Amount missing or invalid — ask the user how much they want to request.",
+            });
+            continue;
+          }
+          if (!memo) {
+            toolResults.push({
+              role: "tool",
+              tool_call_id: call.id,
+              content: "Memo missing — ask the user what the request is for before creating it.",
+            });
+            continue;
+          }
+          return NextResponse.json({
+            text: msg.content ?? "",
+            pendingAction: { type: "create_request", amount, memo },
+          });
         } else {
           result = "Unknown tool";
         }

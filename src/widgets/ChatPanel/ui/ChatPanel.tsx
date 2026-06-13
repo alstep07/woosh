@@ -8,16 +8,15 @@ import { getAllExamples } from "@/features/chat/model/registry";
 import { env } from "@/shared/config/env";
 import { getW3SSdk, setLoginHandler } from "@/shared/lib/w3s";
 import { getCachedTokens, setCachedTokens, clearCachedTokens } from "@/shared/lib/session";
+import { computeInvoiceId, newNonce } from "@/entities/invoice/lib/computeInvoiceId";
+import { buildRequestLink } from "@/entities/invoice/lib/buildRequestLink";
 
 const EXAMPLES = getAllExamples();
 const CHAT_STORAGE_KEY = "woosh_chat_history";
 
-type PendingAction = {
-  type: "send_payment";
-  to: string;
-  amount: string;
-  resolvedAddress?: string;
-};
+type PendingAction =
+  | { type: "send_payment"; to: string; amount: string; resolvedAddress?: string }
+  | { type: "create_request"; amount: string; memo: string };
 
 type ChatMessage = {
   id: string;
@@ -25,9 +24,10 @@ type ChatMessage = {
   text: string;
   isError?: boolean;
   pendingAction?: PendingAction;
-  actionStatus?: "confirmed" | "cancelled" | "sending" | "paid" | "send_error";
+  actionStatus?: "confirmed" | "cancelled" | "sending" | "paid" | "created" | "send_error";
   actionError?: string;
   txExplorerUrl?: string;
+  requestLink?: string;
 };
 
 function buildWelcome(name?: string): ChatMessage {
@@ -140,9 +140,16 @@ export default function ChatPanel({ name, walletAddress, userEmail, onPaymentSuc
     try { sessionStorage.removeItem(CHAT_STORAGE_KEY); } catch {}
   }
 
+  const [copiedMsgId, setCopiedMsgId] = useState<string | null>(null);
+
   // Circle SDK — uses shared singleton so only one instance ever exists per tab
   const deviceIdRef = useRef<string>("");
   const payingMsgIdRef = useRef<string | null>(null);
+  // The challenge executor for the in-flight confirmation (send vs create), so the
+  // OTP completion handler runs the right one with the same parameters.
+  const pendingRunRef = useRef<
+    ((userToken: string, encryptionKey: string, sdk: W3SSdk) => Promise<"ok" | "auth_error" | "error">) | null
+  >(null);
 
   // Persist messages to sessionStorage — welcome is excluded and rebuilt on load
   useEffect(() => {
@@ -213,25 +220,89 @@ export default function ChatPanel({ name, walletAddress, userEmail, onPaymentSuc
     }
   }
 
+  async function executeCreateRequest(
+    msgId: string,
+    salt: string,
+    amount: string,
+    memo: string,
+    userToken: string,
+    encryptionKey: string,
+    sdk: W3SSdk
+  ): Promise<"ok" | "auth_error" | "error"> {
+    updateMsgStatus(msgId, "sending");
+    try {
+      const res = await fetch("/api/wallet/create-invoice", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userToken, salt, amount, memo }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        if (res.status === 401 || res.status === 403) return "auth_error";
+        throw new Error(data.error ?? "Failed to create request");
+      }
+
+      sdk.setAuthentication({ userToken, encryptionKey });
+      sdk.execute(data.challengeId, (err) => {
+        if (err) {
+          updateMsgStatus(msgId, "send_error", "Couldn't create the request. Please try again.");
+          return;
+        }
+        // id is deterministic from (payee, salt) — build the link without waiting for the tx to index
+        const addr = walletAddress as `0x${string}`;
+        const id = computeInvoiceId(addr, salt);
+        const link = buildRequestLink(name ?? addr, id);
+        setMessages((prev) =>
+          prev.map((m) => (m.id === msgId ? { ...m, actionStatus: "created", requestLink: link } : m))
+        );
+      });
+      return "ok";
+    } catch (err) {
+      updateMsgStatus(msgId, "send_error", err instanceof Error ? err.message : "Failed to create request.");
+      return "error";
+    }
+  }
+
+  async function copyRequestLink(msgId: string, link: string) {
+    await navigator.clipboard.writeText(link);
+    setCopiedMsgId(msgId);
+    setTimeout(() => setCopiedMsgId(null), 2000);
+  }
+
   async function handleConfirm(msg: ChatMessage) {
     if (!msg.pendingAction) return;
-    const { resolvedAddress, amount } = msg.pendingAction;
-    if (!resolvedAddress) return;
+    const pa = msg.pendingAction;
 
-    // If Circle not configured — fall back to payment page
+    // If Circle not configured — fall back to a relevant page
     if (!env.circleAppId) {
-      window.location.href = `/pay/${msg.pendingAction.to}?amount=${amount}`;
+      window.location.href = pa.type === "send_payment"
+        ? `/pay/${pa.to}?amount=${pa.amount}`
+        : `/dashboard/requests`;
+      return;
+    }
+    if (pa.type === "send_payment" && !pa.resolvedAddress) return;
+    if (pa.type === "create_request" && !walletAddress) {
+      updateMsgStatus(msg.id, "send_error", "Please re-open the app to authenticate.");
       return;
     }
 
     updateMsgStatus(msg.id, "confirmed");
     payingMsgIdRef.current = msg.id;
 
+    // Build the executor for this action once, so the cached-token and OTP paths
+    // (and a possible retry) all run the same thing with the same parameters.
+    const salt = pa.type === "create_request" ? newNonce() : "";
+    const run = (userToken: string, encryptionKey: string, sdk: W3SSdk) =>
+      pa.type === "send_payment"
+        ? executePay(msg.id, pa.resolvedAddress!, pa.amount, userToken, encryptionKey, sdk)
+        : executeCreateRequest(msg.id, salt, pa.amount, pa.memo, userToken, encryptionKey, sdk);
+    pendingRunRef.current = run;
+
     // Try cached session token first — skip OTP entirely
     const cached = getCachedTokens();
     if (cached) {
       const sdk = getW3SSdk(env.circleAppId);
-      const result = await executePay(msg.id, resolvedAddress, amount, cached.userToken, cached.encryptionKey, sdk);
+      const result = await run(cached.userToken, cached.encryptionKey, sdk);
       if (result !== "auth_error") return;
       // Token expired — clear and fall through to OTP
       clearCachedTokens();
@@ -253,7 +324,7 @@ export default function ChatPanel({ name, walletAddress, userEmail, onPaymentSuc
       const { userToken, encryptionKey } = result as { userToken: string; encryptionKey: string };
       setCachedTokens(userToken, encryptionKey);
       const sdk = getW3SSdk(env.circleAppId);
-      await executePay(msgId, resolvedAddress, amount, userToken, encryptionKey, sdk);
+      await pendingRunRef.current?.(userToken, encryptionKey, sdk);
     });
 
     try {
@@ -336,7 +407,9 @@ export default function ChatPanel({ name, walletAddress, userEmail, onPaymentSuc
       // so the history always has meaningful assistant context
       const assistantText = data.text ||
         (data.pendingAction
-          ? `I'll send $${Number(data.pendingAction.amount).toFixed(2)} to ${data.pendingAction.to}.`
+          ? data.pendingAction.type === "create_request"
+            ? `I'll create a request for $${Number(data.pendingAction.amount).toFixed(2)}${data.pendingAction.memo ? ` for ${data.pendingAction.memo}` : ""}.`
+            : `I'll send $${Number(data.pendingAction.amount).toFixed(2)} to ${data.pendingAction.to}.`
           : "");
 
       setMessages((prev) => [
@@ -412,25 +485,39 @@ export default function ChatPanel({ name, walletAddress, userEmail, onPaymentSuc
                 {/* Pending action confirmation card */}
                 {msg.pendingAction && !msg.actionStatus && (
                   <div className={`${msg.text ? "mt-2 pt-2 border-t border-white/10" : ""}`}>
-                    <p className="text-xs text-text-secondary mb-1">
-                      Send ${Number(msg.pendingAction.amount).toFixed(2)} to{" "}
-                      <span className="text-text-primary font-medium">{msg.pendingAction.to}</span>
-                      {msg.pendingAction.resolvedAddress && (
-                        <span className="font-mono text-text-secondary/50 ml-1">
-                          (…{msg.pendingAction.resolvedAddress.slice(-4)})
-                        </span>
-                      )}?
-                    </p>
-                    <p className="text-xs text-text-secondary/40 mb-2">Fee paid in USDC · Arc network</p>
-                    {msg.pendingAction.resolvedAddress &&
-                      knownCounterparties &&
-                      !knownCounterparties.some(
-                        (a) => a.toLowerCase() === msg.pendingAction!.resolvedAddress!.toLowerCase()
-                      ) && (
-                        <p className="text-xs text-amber-400/70 mb-2">
-                          First time paying this address.
+                    {msg.pendingAction.type === "create_request" ? (
+                      <>
+                        <p className="text-xs text-text-secondary mb-1">
+                          Create a request for ${Number(msg.pendingAction.amount).toFixed(2)}
+                          {msg.pendingAction.memo && (
+                            <> — <span className="text-text-primary font-medium">{msg.pendingAction.memo}</span></>
+                          )}?
                         </p>
-                      )}
+                        <p className="text-xs text-text-secondary/40 mb-2">Registered on-chain · needs your PIN</p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-xs text-text-secondary mb-1">
+                          Send ${Number(msg.pendingAction.amount).toFixed(2)} to{" "}
+                          <span className="text-text-primary font-medium">{msg.pendingAction.to}</span>
+                          {msg.pendingAction.resolvedAddress && (
+                            <span className="font-mono text-text-secondary/50 ml-1">
+                              (…{msg.pendingAction.resolvedAddress.slice(-4)})
+                            </span>
+                          )}?
+                        </p>
+                        <p className="text-xs text-text-secondary/40 mb-2">Fee paid in USDC · Arc network</p>
+                        {msg.pendingAction.resolvedAddress &&
+                          knownCounterparties &&
+                          !knownCounterparties.some(
+                            (a) => a.toLowerCase() === (msg.pendingAction as { resolvedAddress?: string }).resolvedAddress!.toLowerCase()
+                          ) && (
+                            <p className="text-xs text-amber-400/70 mb-2">
+                              First time paying this address.
+                            </p>
+                          )}
+                      </>
+                    )}
                     <div className="flex gap-2">
                       <button
                         onClick={() => handleConfirm(msg)}
@@ -445,6 +532,29 @@ export default function ChatPanel({ name, walletAddress, userEmail, onPaymentSuc
                         Cancel
                       </button>
                     </div>
+                  </div>
+                )}
+
+                {/* Request created — copyable link chip */}
+                {msg.pendingAction && msg.actionStatus === "created" && msg.requestLink && (
+                  <div className={`${msg.text ? "mt-2 pt-2 border-t border-white/10" : ""}`}>
+                    <p className="text-xs text-green-400 mb-1.5">Request created — share this link:</p>
+                    <button
+                      onClick={() => copyRequestLink(msg.id, msg.requestLink!)}
+                      className="flex items-center gap-1.5 max-w-full text-xs bg-blue-primary/10 hover:bg-blue-primary/20 text-blue-primary px-3 py-1.5 rounded-input font-medium transition-colors"
+                    >
+                      {copiedMsgId === msg.id ? (
+                        "Copied!"
+                      ) : (
+                        <>
+                          <span className="truncate">{msg.requestLink.replace(/^https?:\/\//, "")}</span>
+                          <svg width="12" height="12" viewBox="0 0 14 14" fill="none" className="shrink-0">
+                            <rect x="4.5" y="4.5" width="8" height="8" rx="1.5" stroke="currentColor" strokeWidth="1.3" />
+                            <path d="M2.5 9.5H2a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1h6.5a1 1 0 0 1 1 1v.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+                          </svg>
+                        </>
+                      )}
+                    </button>
                   </div>
                 )}
 
