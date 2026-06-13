@@ -19,7 +19,7 @@ import {
   clearCachedTokens,
 } from "@/shared/lib/session";
 import { useMyInvoices } from "@/entities/invoice/hooks/useMyInvoices";
-import { newNonce } from "@/entities/invoice/lib/computeInvoiceId";
+import { computeInvoiceId, newNonce } from "@/entities/invoice/lib/computeInvoiceId";
 import { buildRequestLink } from "@/entities/invoice/lib/buildRequestLink";
 import type { Session } from "@/entities/user/model/types";
 
@@ -39,6 +39,7 @@ export default function RequestsPage() {
   const [phase, setPhase] = useState<Phase>("form");
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
+  const [lastLink, setLastLink] = useState<string | null>(null);
 
   // Pending request params, held in a ref so the SDK callback (captured once) reads
   // the latest values across the async OTP/PIN flow.
@@ -134,7 +135,10 @@ export default function RequestsPage() {
           setPhase("form");
           return;
         }
-        // Success — reset form, refetch the on-chain list (Arc finalises sub-second).
+        // Success. The id is deterministic from (payee, salt), so build the share
+        // link immediately and show a confirmation, then refetch the onchain list.
+        const id = computeInvoiceId(s.walletAddress, pending.salt);
+        setLastLink(buildRequestLink(s.slug ?? s.walletAddress, id));
         setAmount("");
         setMemo("");
         setPhase("form");
@@ -156,6 +160,13 @@ export default function RequestsPage() {
   async function copyLink(id: `0x${string}`) {
     await navigator.clipboard.writeText(linkFor(id));
     setCopied(id);
+    setTimeout(() => setCopied(null), 2000);
+  }
+
+  async function copyLastLink() {
+    if (!lastLink) return;
+    await navigator.clipboard.writeText(lastLink);
+    setCopied("last");
     setTimeout(() => setCopied(null), 2000);
   }
 
@@ -183,6 +194,32 @@ export default function RequestsPage() {
           Create an invoice onchain. The amount and note are stored in the contract, so
           whoever opens the link sees exactly what you asked for and can only pay that amount.
         </p>
+
+        {/* Just-created confirmation with a one-click copy link */}
+        {lastLink && (
+          <div className="glass-card rounded-card p-4 mb-4 border border-green-400/20">
+            <div className="flex items-start justify-between gap-3">
+              <p className="text-sm text-green-400">Invoice created. Share this link:</p>
+              <button
+                onClick={() => setLastLink(null)}
+                aria-label="Dismiss"
+                className="shrink-0 text-text-secondary/40 hover:text-text-primary text-xs transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+            <button
+              onClick={copyLastLink}
+              className="mt-2 flex items-center gap-1.5 max-w-full text-xs bg-blue-primary/10 hover:bg-blue-primary/20 text-blue-primary px-3 py-1.5 rounded-input font-medium transition-colors"
+            >
+              {copied === "last" ? (
+                "Copied!"
+              ) : (
+                <span className="font-mono truncate">{lastLink.replace(/^https?:\/\//, "")}</span>
+              )}
+            </button>
+          </div>
+        )}
 
         {/* Create / re-auth */}
         <div className="glass-card rounded-card p-5 mb-8">
