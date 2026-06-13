@@ -470,7 +470,7 @@ export default function ChatPanel({ name, walletAddress, userEmail, onPaymentSuc
       <div
         ref={scrollRef}
         onScroll={handleScroll}
-        className="overflow-y-auto no-scrollbar h-64 sm:h-[17rem] px-3 sm:px-4 pt-12 pb-3 sm:pb-4"
+        className="overflow-y-auto no-scrollbar h-[360px] sm:h-[420px] lg:h-[500px] px-3 sm:px-4 pt-12 pb-3 sm:pb-4"
         style={{
           WebkitMaskImage: "linear-gradient(to bottom, transparent 0, black 24px)",
           maskImage: "linear-gradient(to bottom, transparent 0, black 24px)",

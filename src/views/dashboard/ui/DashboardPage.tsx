@@ -7,6 +7,7 @@ import { useUSDCBalance } from "@/entities/wallet/hooks/useUSDCBalance";
 import { useTransactionHistory } from "@/entities/payment/hooks/useTransactionHistory";
 import BrandHeader from "@/widgets/BrandHeader/ui/BrandHeader";
 import AccountBar from "@/widgets/AccountBar/ui/AccountBar";
+import WalletCard from "@/widgets/WalletCard/ui/WalletCard";
 import ChatPanel from "@/widgets/ChatPanel/ui/ChatPanel";
 import TransactionList from "@/widgets/TransactionList/ui/TransactionList";
 import Footer from "@/widgets/Footer/ui/Footer";
@@ -92,8 +93,31 @@ export default function DashboardPage() {
     );
   }
 
+  const recentPayments = (
+    <>
+      <TransactionList
+        txs={txs?.slice(0, pendingTx ? 2 : 3)}
+        isLoading={txsLoading}
+        isError={txsError}
+        onRefresh={handleTxRefresh}
+        isRefreshing={isTxRefreshing}
+        pendingEntries={pendingTx ? [pendingTx] : undefined}
+      />
+      {txs && txs.length > 3 && (
+        <div className="flex justify-end mt-3">
+          <Link
+            href="/dashboard/history"
+            className="text-xs text-blue-primary/60 hover:text-blue-primary transition-colors"
+          >
+            View all transactions
+          </Link>
+        </div>
+      )}
+    </>
+  );
+
   return (
-    <main className="h-screen bg-navy flex flex-col overflow-hidden">
+    <main className="min-h-screen bg-navy flex flex-col">
       <div className="woosh-bg" aria-hidden="true" />
       <div className="relative z-10">
         <BrandHeader
@@ -115,10 +139,23 @@ export default function DashboardPage() {
           }
         />
       </div>
-      <div className="relative z-10 flex-1 overflow-y-auto overflow-x-hidden">
-        <div className="px-4 sm:px-6 max-w-5xl mx-auto w-full pb-8 min-w-0 lg:grid lg:grid-cols-5 lg:gap-6 lg:items-start">
-          {/* Primary: chat (left, ~60% on desktop; first on mobile) */}
-          <div className="lg:col-span-3 min-w-0">
+      <div className="relative z-10 flex-1 px-4 sm:px-6 pt-6 lg:pt-10 pb-10">
+        <div className="max-w-6xl mx-auto w-full min-w-0 lg:grid lg:grid-cols-12 lg:gap-6 lg:items-start">
+
+          {/* Mobile only: compact balance + slug + actions dropdown */}
+          <div className="lg:hidden mb-4">
+            <AccountBar
+              balance={balance?.display}
+              isLoading={balanceLoading}
+              isError={balanceError}
+              paymentLink={paymentLink}
+              walletAddress={session.walletAddress}
+              slug={session.slug}
+            />
+          </div>
+
+          {/* Chat — single instance; primary, left on desktop */}
+          <div className="lg:col-span-7 min-w-0 mb-4 lg:mb-0">
             <ChatPanel
               name={session.slug}
               walletAddress={session.walletAddress}
@@ -128,35 +165,22 @@ export default function DashboardPage() {
             />
           </div>
 
-          {/* Secondary: balance + recent payments (right, ~40%) */}
-          <div className="lg:col-span-2 min-w-0">
-            <AccountBar
+          {/* Desktop only: one cohesive wallet card with recent payments inside */}
+          <div className="hidden lg:block lg:col-span-5 min-w-0">
+            <WalletCard
               balance={balance?.display}
               isLoading={balanceLoading}
               isError={balanceError}
               paymentLink={paymentLink}
               walletAddress={session.walletAddress}
               slug={session.slug}
-            />
-            <TransactionList
-              txs={txs?.slice(0, pendingTx ? 2 : 3)}
-              isLoading={txsLoading}
-              isError={txsError}
-              onRefresh={handleTxRefresh}
-              isRefreshing={isTxRefreshing}
-              pendingEntries={pendingTx ? [pendingTx] : undefined}
-            />
-            {txs && txs.length > 3 && (
-              <div className="flex justify-end mt-3">
-                <Link
-                  href="/dashboard/history"
-                  className="text-xs text-blue-primary/60 hover:text-blue-primary transition-colors"
-                >
-                  View all transactions
-                </Link>
-              </div>
-            )}
+            >
+              {recentPayments}
+            </WalletCard>
           </div>
+
+          {/* Mobile only: recent payments */}
+          <div className="lg:hidden">{recentPayments}</div>
         </div>
       </div>
       <div className="relative z-10 shrink-0">
