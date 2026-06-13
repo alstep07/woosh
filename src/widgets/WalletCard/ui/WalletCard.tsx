@@ -3,6 +3,15 @@
 import { useState } from "react";
 import Link from "next/link";
 
+function CopyIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 14 14" fill="none" className="shrink-0">
+      <rect x="4.5" y="4.5" width="8" height="8" rx="1.5" stroke="currentColor" strokeWidth="1.3" />
+      <path d="M2.5 9.5H2a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1h6.5a1 1 0 0 1 1 1v.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 interface Props {
   balance: string | undefined;
   isLoading: boolean;
@@ -40,20 +49,41 @@ export default function WalletCard({
 
   return (
     <div className="glass-card rounded-card p-5 flex flex-col h-full min-h-0">
-      {/* Public identity — the /pay/<slug> link, distinct from the raw wallet */}
-      <div className="mb-3">
+      {/* Identity row: slug chip (copies the share link) + raw wallet address (copies 0x) */}
+      <div className="flex items-center justify-between gap-2 mb-4">
         {slug ? (
-          <span className="inline-flex items-center bg-blue-primary/10 text-blue-primary px-3 py-1 rounded-full text-sm font-medium">
-            /pay/{slug}
-          </span>
+          <button
+            onClick={() => copy("link")}
+            className="flex items-center gap-1.5 bg-blue-primary/10 hover:bg-blue-primary/20 text-blue-primary px-3 py-1 rounded-full text-sm font-medium transition-colors"
+          >
+            {copied === "link" ? "Copied!" : (
+              <>
+                <span>{slug}</span>
+                <CopyIcon />
+              </>
+            )}
+          </button>
         ) : (
           <Link
             href="/slug-setup"
-            className="inline-flex items-center bg-blue-primary/10 hover:bg-blue-primary/20 text-blue-primary px-3 py-1 rounded-full text-sm font-medium transition-colors"
+            className="flex items-center bg-blue-primary/10 hover:bg-blue-primary/20 text-blue-primary px-3 py-1 rounded-full text-sm font-medium transition-colors"
           >
             Claim username
           </Link>
         )}
+
+        <button
+          onClick={() => copy("address")}
+          title="Copy wallet address"
+          className="flex items-center gap-1.5 font-mono text-xs text-text-secondary/50 hover:text-text-primary transition-colors"
+        >
+          {copied === "address" ? "Copied!" : (
+            <>
+              <span>{walletAddress.slice(0, 6)}…{walletAddress.slice(-4)}</span>
+              <CopyIcon />
+            </>
+          )}
+        </button>
       </div>
 
       {/* Balance — focal point */}
@@ -71,19 +101,11 @@ export default function WalletCard({
         </p>
       )}
 
-      {/* Secondary actions — quiet, muted */}
-      <div className="flex items-center gap-2 mt-3">
-        <button onClick={() => copy("address")} className={actionClass}>
-          {copied === "address" ? "Copied!" : "Copy address"}
-        </button>
-        <span className="text-text-secondary/20">·</span>
+      {/* Secondary action — quiet, muted */}
+      <div className="mt-3">
         <Link href="/dashboard/invoices" className={actionClass}>
           Invoices
         </Link>
-        <span className="text-text-secondary/20">·</span>
-        <button onClick={() => copy("link")} className={actionClass}>
-          {copied === "link" ? "Copied!" : "Share link"}
-        </button>
       </div>
 
       <div className="my-4 border-t border-border shrink-0" />
