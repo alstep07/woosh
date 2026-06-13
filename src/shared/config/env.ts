@@ -9,4 +9,5 @@ export const env = {
   arcFaucetUrl: process.env.NEXT_PUBLIC_ARC_FAUCET_URL ?? "https://faucet-testnet.arc.network",
   baseUrl: process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:3000",
   slugRegistryAddress: process.env.NEXT_PUBLIC_SLUG_REGISTRY_ADDRESS as `0x${string}` | undefined,
+  invoiceRegistryAddress: process.env.NEXT_PUBLIC_INVOICE_REGISTRY_ADDRESS as `0x${string}` | undefined,
 };

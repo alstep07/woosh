@@ -79,6 +79,7 @@ Examples already in use:
 | Contract | Address | Notes |
 |----------|---------|-------|
 | `WooshSlugRegistry` | `NEXT_PUBLIC_SLUG_REGISTRY_ADDRESS` | Deployed via Foundry |
+| `WooshInvoiceRegistry` | `NEXT_PUBLIC_INVOICE_REGISTRY_ADDRESS` | Payment requests. `pay(payee,amount,nonce)` payable, forwards exact native value, records `paid[id]`. Custodies nothing. |
 | USDC (native) | `0x3600000000000000000000000000000000000000` | 18 decimals on Arc |
 | EURC | `0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a` | 6 decimals, ERC-20 |
 | USYC | `0xe9185F0c5F296Ed1797AaE4238D26CCaBEadb86C` | Yield token, allowlist required |

@@ -83,7 +83,8 @@ NEXT_PUBLIC_ARC_FAUCET_URL=       # default: https://faucet-testnet.arc.network
 NEXT_PUBLIC_BASE_URL=
 
 # Smart Contracts
-NEXT_PUBLIC_SLUG_REGISTRY_ADDRESS=   # WooshSlugRegistry on Arc
+NEXT_PUBLIC_SLUG_REGISTRY_ADDRESS=      # WooshSlugRegistry on Arc
+NEXT_PUBLIC_INVOICE_REGISTRY_ADDRESS=   # WooshInvoiceRegistry on Arc (payment requests)
 
 # Woosh Agent
 OPENROUTER_API_KEY=
