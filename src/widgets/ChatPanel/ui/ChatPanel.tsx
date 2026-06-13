@@ -34,6 +34,7 @@ type ChatMessage = {
   actionError?: string;
   txExplorerUrl?: string;
   requestLink?: string;
+  cancelled?: boolean;
 };
 
 function buildWelcome(name?: string): ChatMessage {
@@ -400,7 +401,7 @@ export default function ChatPanel({ name, walletAddress, userEmail, onPaymentSuc
     const controller = new AbortController();
     abortRef.current = controller;
     try {
-      const history = [...messages.filter((m) => m.id !== "welcome" && m.text.trim()), userMsg].map((m) => ({
+      const history = [...messages.filter((m) => m.id !== "welcome" && m.text.trim() && !m.cancelled), userMsg].map((m) => ({
         role: m.role as "user" | "assistant",
         content: m.text,
       }));
@@ -442,8 +443,11 @@ export default function ChatPanel({ name, walletAddress, userEmail, onPaymentSuc
         },
       ]);
     } catch (err) {
-      // Aborted by the user (stop button) — leave the chat as-is, no error bubble.
-      if ((err as Error)?.name !== "AbortError") {
+      if ((err as Error)?.name === "AbortError") {
+        // Stopped by the user: mark the message cancelled and exclude it from future
+        // context so the agent never acts on it on a later turn.
+        setMessages((prev) => prev.map((m) => (m.id === userMsg.id ? { ...m, cancelled: true } : m)));
+      } else {
         setMessages((prev) => [
           ...prev,
           {
@@ -506,7 +510,7 @@ export default function ChatPanel({ name, walletAddress, userEmail, onPaymentSuc
                   : msg.isError
                   ? "bg-red-500/10 text-red-300/80 rounded-bl-sm"
                   : "bg-white/[0.06] text-text-primary rounded-bl-sm"
-              }`}>
+              } ${msg.cancelled ? "opacity-50 line-through" : ""}`}>
                 {msg.text && (
                   <div className="[&_strong]:font-semibold [&_em]:italic [&_ul]:list-disc [&_ul]:pl-4 [&_ul]:mt-1 [&_ol]:list-decimal [&_ol]:pl-4 [&_ol]:mt-1 [&_li]:mt-0.5 [&_p]:mb-1 [&_p:last-child]:mb-0 [&_code]:font-mono [&_code]:text-xs [&_code]:bg-white/10 [&_code]:px-1 [&_code]:rounded">
                     <ReactMarkdown>{msg.text}</ReactMarkdown>
