@@ -200,7 +200,7 @@ export default function SlugSetupPage() {
               <p className="text-text-secondary text-sm mb-8">
                 Your link will be{" "}
                 <span className="text-text-primary font-mono">
-                  woosh.app/pay/{slug || "yourname"}
+                  {env.baseUrl}/pay/{slug || "yourname"}
                 </span>
               </p>
 
@@ -314,7 +314,7 @@ export default function SlugSetupPage() {
               </h1>
               <p className="text-text-secondary text-sm mb-8">
                 To register{" "}
-                <span className="text-text-primary font-mono">woosh.app/pay/{slug}</span>{" "}
+                <span className="text-text-primary font-mono">{env.baseUrl}/pay/{slug}</span>{" "}
                 on the blockchain, we need to verify it&apos;s you.
               </p>
 
