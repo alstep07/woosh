@@ -140,7 +140,7 @@ export default function DashboardPage() {
         />
       </div>
       <div className="relative z-10 flex-1 min-h-0 overflow-y-auto lg:overflow-hidden px-4 sm:px-6 pt-6 lg:pt-8 pb-6">
-        <div className="max-w-6xl mx-auto w-full min-w-0 lg:h-full lg:grid lg:grid-cols-12 lg:gap-6 lg:items-start">
+        <div className="max-w-6xl mx-auto w-full min-w-0 lg:h-full lg:px-8 lg:grid lg:grid-cols-12 lg:gap-6 lg:items-start">
 
           {/* Mobile only: compact balance + slug + actions dropdown */}
           <div className="lg:hidden mb-4">
