@@ -20,8 +20,8 @@ const HOW_IT_WORKS = [
     bubble: "bg-blue-primary/10 text-blue-primary",
     steps: [
       "Sign up with email. Wallet included, no seed phrase.",
-      `Claim your link: ${env.baseUrl}/pay/yourname`,
-      "Share it anywhere. Money lands in under a second.",
+      `Share your link ${env.baseUrl}/pay/yourname, or send an invoice for an exact amount.`,
+      "Money lands in under a second. Invoices flip to Paid onchain.",
     ],
   },
   {
@@ -39,9 +39,9 @@ const HOW_IT_WORKS = [
     accent: "text-green-300",
     bubble: "bg-green-300/10 text-green-300",
     steps: [
-      "Type \"Send $20 to alex\", confirm, done.",
-      "Check balance and history in plain English.",
-      "You approve every send with your PIN.",
+      "Say \"Send $20 to alex\" or \"invoice 10 for design\".",
+      "Check balance, history and invoices in plain English.",
+      "You approve every action with your PIN.",
     ],
   },
 ];
