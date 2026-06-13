@@ -257,7 +257,7 @@ export default function ChatPanel({ name, walletAddress, userEmail, onPaymentSuc
         // id is deterministic from (payee, salt) — build the link without waiting for the tx to index
         const addr = walletAddress as `0x${string}`;
         const id = computeInvoiceId(addr, salt);
-        const link = buildRequestLink(name ?? addr, id);
+        const link = buildRequestLink(id);
         setMessages((prev) =>
           prev.map((m) => (m.id === msgId ? { ...m, actionStatus: "created", requestLink: link } : m))
         );

@@ -138,7 +138,7 @@ export default function RequestsPage() {
         // Success. The id is deterministic from (payee, salt), so build the share
         // link immediately and show a confirmation, then refetch the onchain list.
         const id = computeInvoiceId(s.walletAddress, pending.salt);
-        setLastLink(buildRequestLink(s.slug ?? s.walletAddress, id));
+        setLastLink(buildRequestLink(id));
         setAmount("");
         setMemo("");
         setPhase("form");
@@ -153,8 +153,7 @@ export default function RequestsPage() {
   }
 
   function linkFor(id: `0x${string}`): string {
-    const s = sessionRef.current!;
-    return buildRequestLink(s.slug ?? s.walletAddress, id);
+    return buildRequestLink(id);
   }
 
   async function copyLink(id: `0x${string}`) {
