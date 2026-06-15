@@ -6,7 +6,7 @@ export const env = {
   arcRpcUrl: process.env.NEXT_PUBLIC_ARC_RPC_URL ?? "https://rpc.testnet.arc.network",
   arcChainId: Number(process.env.NEXT_PUBLIC_ARC_CHAIN_ID ?? 5042002),
   arcExplorerUrl: process.env.NEXT_PUBLIC_ARC_EXPLORER_URL ?? "https://testnet.arcscan.app",
-  arcFaucetUrl: process.env.NEXT_PUBLIC_ARC_FAUCET_URL ?? "https://faucet-testnet.arc.network",
+  arcFaucetUrl: process.env.NEXT_PUBLIC_ARC_FAUCET_URL ?? "https://faucet.circle.com/",
   baseUrl: process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:3000",
   slugRegistryAddress: process.env.NEXT_PUBLIC_SLUG_REGISTRY_ADDRESS as `0x${string}` | undefined,
   invoiceRegistryAddress: process.env.NEXT_PUBLIC_INVOICE_REGISTRY_ADDRESS as `0x${string}` | undefined,

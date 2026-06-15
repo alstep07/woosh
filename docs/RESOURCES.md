@@ -77,7 +77,7 @@ setLoginHandler(fn)                      // register OTP success callback
 Chain ID:    5042002
 RPC:         https://rpc.testnet.arc.network
 Explorer:    https://testnet.arcscan.app
-Faucet:      https://faucet-testnet.arc.network
+Faucet:      https://faucet.circle.com/
 ```
 
 ---

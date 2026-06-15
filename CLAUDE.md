@@ -84,7 +84,7 @@ NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=
 NEXT_PUBLIC_ARC_RPC_URL=          # default: https://rpc.testnet.arc.network
 NEXT_PUBLIC_ARC_CHAIN_ID=         # default: 5042002
 NEXT_PUBLIC_ARC_EXPLORER_URL=     # default: https://testnet.arcscan.app
-NEXT_PUBLIC_ARC_FAUCET_URL=       # default: https://faucet-testnet.arc.network
+NEXT_PUBLIC_ARC_FAUCET_URL=       # default: https://faucet.circle.com/
 NEXT_PUBLIC_BASE_URL=
 
 # Smart Contracts
