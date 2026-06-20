@@ -21,3 +21,14 @@ registerToolExamples("create_payment_request", [
   "invoice 10 for a domain name",
   "request 25 for design work",
 ]);
+
+registerToolExamples("create_strategy", [
+  "buy 10 usdc of cirBTC every week",
+  "pay alex 50 usdc monthly",
+  "auto-buy EURC with 5 usdc daily",
+]);
+
+registerToolExamples("get_strategies", [
+  "what strategies do I have?",
+  "is my DCA still running?",
+]);

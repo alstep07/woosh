@@ -3,7 +3,23 @@ import OpenAI from "openai";
 import { arcPublicClient } from "@/shared/lib/arc";
 import { resolveSlug } from "@/entities/slug/lib/resolveSlug";
 import { getMyInvoices } from "@/entities/invoice/lib/readInvoice";
+import { getMyStrategies } from "@/entities/strategy/lib/readStrategy";
+import { strategySummary, statusBadge } from "@/entities/strategy/lib/format";
+import { EURC, CIRBTC, tokenByAddress } from "@/shared/lib/tokens";
 import { formatUnits } from "viem";
+
+const INTERVAL_SECONDS: Record<string, number> = {
+  daily: 86_400,
+  weekly: 604_800,
+  monthly: 2_592_000,
+};
+
+function resolveTokenOut(symbol: string): `0x${string}` | null {
+  const s = symbol.trim().toLowerCase();
+  if (s === "eurc") return EURC.address;
+  if (s === "cirbtc") return CIRBTC.address ?? null;
+  return null;
+}
 
 const MODEL = process.env.ANTHROPIC_MODEL ?? "anthropic/claude-3-5-sonnet";
 
@@ -115,6 +131,59 @@ const TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "get_strategies",
+      description: "Get the user's automated strategies (recurring payments and DCA auto-buys) with what each does, status, balance left, and next run. Use for 'what strategies do I have?', 'is my DCA running?', 'how much is left in my auto-buy?'.",
+      parameters: { type: "object", properties: {}, required: [] },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "create_strategy",
+      description:
+        "Set up an automated strategy: a recurring USDC payment, or a DCA auto-buy of another token with USDC. It runs onchain on schedule with NO PIN each time after a one-time setup the user confirms. You MUST have all required fields before calling; if any is missing, ask first, do not guess. For 'funding' (total to deposit): if the user gives a number of runs, you may compute funding = amountPerPeriod x runs; otherwise ask how much to deposit.",
+      parameters: {
+        type: "object",
+        properties: {
+          kind: {
+            type: "string",
+            enum: ["payment", "swap"],
+            description: "'payment' for a recurring payment to someone, 'swap' for a DCA auto-buy of a token",
+          },
+          recipient: {
+            type: "string",
+            description: "payment only: the username or 0x address to pay each period",
+          },
+          token: {
+            type: "string",
+            enum: ["EURC", "cirBTC"],
+            description: "swap only: which token to buy with USDC",
+          },
+          amountPerPeriod: {
+            type: "string",
+            description: "USDC spent/sent each run, e.g. '10'",
+          },
+          interval: {
+            type: "string",
+            enum: ["daily", "weekly", "monthly"],
+            description: "how often it runs",
+          },
+          periods: {
+            type: "integer",
+            description: "number of runs; omit for open-ended (until funds run out)",
+          },
+          funding: {
+            type: "string",
+            description: "total USDC to deposit now; must be >= amountPerPeriod",
+          },
+        },
+        required: ["kind", "amountPerPeriod", "interval", "funding"],
+      },
+    },
+  },
 ];
 
 async function getBalance(address: string): Promise<string> {
@@ -182,6 +251,23 @@ async function getInvoicesSummary(address: string): Promise<string> {
   }
 }
 
+async function getStrategiesSummary(address: string): Promise<string> {
+  try {
+    const list = (await getMyStrategies(address as `0x${string}`)).slice(0, 40);
+    if (list.length === 0) return "No strategies set up yet.";
+    return list
+      .map((s) => {
+        const symbol = s.kind === "swap" ? tokenByAddress(s.tokenOut)?.symbol : undefined;
+        return `${statusBadge(s.status).text.toUpperCase()}: ${strategySummary(s, symbol)}, ${s.balance} USDC left${
+          s.periodsTotal > 0 ? ` (${s.periodsDone}/${s.periodsTotal} runs)` : ` (${s.periodsDone} runs done)`
+        }`;
+      })
+      .join("\n");
+  } catch {
+    return "Could not load strategies.";
+  }
+}
+
 type ApiMessage = { role: "user" | "assistant"; content: string };
 
 export async function POST(req: NextRequest) {
@@ -239,7 +325,13 @@ Invoice questions: when the user asks about their invoices (unpaid ones, total o
 
 Invoice rules: when the user wants to BE paid or to invoice money, you need the amount and what it is for (memo). Extract the memo from their message (for example "invoice 10 for a domain name" means amount 10 and memo "domain name"); only ask if no reason is given at all. As soon as you have both, you MUST call create_payment_request in that same turn. NEVER reply saying you will create or have created an invoice without actually calling the tool; calling it is what shows the confirmation card and link. Do not describe the steps, just call the tool.
 
-When the user asks if someone paid them (e.g. "did alex pay me?"): first call resolve_slug to get their address, then call get_transaction_history, then check if that address appears in received transactions. Confirm clearly: "Yes, alex sent you $X on [date]" or "No, I don't see any payments from alex."`,
+When the user asks if someone paid them (e.g. "did alex pay me?"): first call resolve_slug to get their address, then call get_transaction_history, then check if that address appears in received transactions. Confirm clearly: "Yes, alex sent you $X on [date]" or "No, I don't see any payments from alex."
+
+Strategies (automation): users can set up recurring USDC payments (pay someone a fixed amount on a schedule) or DCA auto-buys (buy EURC or cirBTC with USDC on a schedule). How it works, explain plainly if asked: the strategy's budget is deposited into an onchain vault during a one-time setup the user confirms with their PIN; after that it runs automatically onchain on schedule with NO PIN each time. The user can pause or cancel anytime and gets the remaining balance back. Cadence options are daily, weekly, monthly.
+
+Strategy questions: when the user asks about their strategies (is my DCA running, how much is left, what automations do I have), call get_strategies and answer concisely from the data.
+
+Strategy setup: to create one you need the kind (recurring payment or auto-buy), amount per run, how often (daily/weekly/monthly), the recipient (for payments) or which token to buy (for auto-buy), and the total to deposit (funding). If the user gives a number of runs but not a total, compute funding = amount per run x runs. If you cannot determine the total, ask for it. As soon as you have everything, you MUST call create_strategy in that same turn, do not just say you will. To pause or cancel a specific strategy, guide the user to the Strategies page at /dashboard/strategies.`,
     },
     ...messages,
   ];
@@ -294,6 +386,74 @@ When the user asks if someone paid them (e.g. "did alex pay me?"): first call re
           });
         }
 
+        if (call.function.name === "create_strategy") {
+          const kind = args.kind === "swap" ? "swap" : "payment";
+          const amountPerPeriod = String(args.amountPerPeriod ?? "");
+          const funding = String(args.funding ?? "");
+          const intervalKey = String(args.interval ?? "").toLowerCase();
+          const intervalSeconds = INTERVAL_SECONDS[intervalKey];
+          const periodsTotal = Number.isInteger(args.periods) ? Number(args.periods) : 0;
+
+          const fail = (content: string) => {
+            toolResults.push({ role: "tool", tool_call_id: call.id, content });
+          };
+
+          if (!/^\d+(\.\d+)?$/.test(amountPerPeriod) || parseFloat(amountPerPeriod) <= 0) {
+            fail("amountPerPeriod missing or invalid, ask how much per run.");
+            continue;
+          }
+          if (!intervalSeconds) {
+            fail("interval missing or invalid, ask if it should run daily, weekly or monthly.");
+            continue;
+          }
+          if (!/^\d+(\.\d+)?$/.test(funding) || parseFloat(funding) < parseFloat(amountPerPeriod)) {
+            fail("funding missing or less than one run. Ask for the total to deposit, or compute it from runs x amount.");
+            continue;
+          }
+
+          if (kind === "payment") {
+            const to = String(args.recipient ?? "").trim();
+            if (!to) { fail("recipient missing, ask who to pay."); continue; }
+            const resolvedAddress = /^0x[a-fA-F0-9]{40}$/.test(to) ? to : await resolveSlug(to);
+            if (!resolvedAddress) { fail(`Recipient "${to}" not found, ask the user to double-check.`); continue; }
+            return NextResponse.json({
+              text: msg.content ?? "",
+              pendingAction: {
+                type: "create_strategy",
+                kind,
+                recipient: to,
+                resolvedAddress,
+                amountPerPeriod,
+                interval: intervalKey,
+                intervalSeconds,
+                periodsTotal,
+                funding,
+              },
+            });
+          }
+
+          const tokenSymbol = String(args.token ?? "");
+          const tokenOut = resolveTokenOut(tokenSymbol);
+          if (!tokenOut) {
+            fail(`Token "${tokenSymbol}" is not available for auto-buy. Only EURC${CIRBTC.address ? " and cirBTC" : ""} can be bought right now.`);
+            continue;
+          }
+          return NextResponse.json({
+            text: msg.content ?? "",
+            pendingAction: {
+              type: "create_strategy",
+              kind,
+              tokenSymbol: tokenSymbol.toLowerCase() === "eurc" ? "EURC" : "cirBTC",
+              tokenOut,
+              amountPerPeriod,
+              interval: intervalKey,
+              intervalSeconds,
+              periodsTotal,
+              funding,
+            },
+          });
+        }
+
         let result: string;
         if (call.function.name === "get_balance") {
           result = await getBalance(walletAddress);
@@ -310,6 +470,8 @@ When the user asks if someone paid them (e.g. "did alex pay me?"): first call re
             : `Username "${slug}" not found`;
         } else if (call.function.name === "get_invoices") {
           result = await getInvoicesSummary(walletAddress);
+        } else if (call.function.name === "get_strategies") {
+          result = await getStrategiesSummary(walletAddress);
         } else if (call.function.name === "create_payment_request") {
           const amount = String(args.amount ?? "");
           const memo = String(args.memo ?? "").trim();
