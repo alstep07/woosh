@@ -22,7 +22,10 @@ pragma solidity ^0.8.20;
 ///         are handled as msg.value (same model as WooshInvoiceRegistry).
 contract WooshStrategyRegistry {
     enum Kind { Payment, Swap }
-    enum Status { Active, Paused, Completed, Cancelled }
+    // Active: running. Paused: paused by owner. Completed: reached periodsTotal (terminal).
+    // Cancelled: cancelled by owner, funds refunded (terminal). Depleted: auto-paused
+    // because the balance can no longer fund a period — revived by fund().
+    enum Status { Active, Paused, Completed, Cancelled, Depleted }
 
     struct Strategy {
         address owner;            // creator; receives swap output and refunds
@@ -65,6 +68,7 @@ contract WooshStrategyRegistry {
     event StrategyStatusChanged(bytes32 indexed id, Status status);
     event StrategyCancelled(bytes32 indexed id, address indexed owner, uint256 refunded);
     event ExecutorChanged(address indexed executor);
+    event AdminTransferred(address indexed admin);
 
     modifier nonReentrant() {
         require(_locked == 1, "WSR: reentrant");
@@ -87,6 +91,15 @@ contract WooshStrategyRegistry {
         require(msg.sender == admin, "WSR: not admin");
         executor = newExecutor;
         emit ExecutorChanged(newExecutor);
+    }
+
+    /// @notice Hand admin (executor-rotation rights) to a new key/multisig. Admin only.
+    ///         Admin can ONLY rotate the executor; it can never move strategy funds.
+    function transferAdmin(address newAdmin) external {
+        require(msg.sender == admin, "WSR: not admin");
+        require(newAdmin != address(0), "WSR: zero admin");
+        admin = newAdmin;
+        emit AdminTransferred(newAdmin);
     }
 
     /// @notice Deterministic id for an owner's strategy. Same (owner, salt) => same id.
@@ -143,14 +156,24 @@ contract WooshStrategyRegistry {
         emit StrategyCreated(id, msg.sender, kind, recipient, tokenOut, amountPerPeriod, intervalSeconds, periodsTotal, msg.value);
     }
 
-    /// @notice Top up a strategy's budget. Owner only.
+    /// @notice Top up a strategy's budget. Owner only. A Depleted strategy (auto-paused
+    ///         for low funds) auto-resumes once it can afford a period again.
     function fund(bytes32 id) external payable {
         Strategy storage s = _strategies[id];
         require(s.owner == msg.sender, "WSR: not owner");
-        require(s.status == Status.Active || s.status == Status.Paused, "WSR: closed");
+        require(
+            s.status == Status.Active || s.status == Status.Paused || s.status == Status.Depleted,
+            "WSR: closed"
+        );
         require(msg.value > 0, "WSR: zero");
         s.balance += msg.value;
         emit StrategyFunded(id, msg.sender, msg.value, s.balance);
+
+        if (s.status == Status.Depleted && s.balance >= s.amountPerPeriod) {
+            s.status = Status.Active;
+            if (s.nextRunAt < block.timestamp) s.nextRunAt = uint64(block.timestamp);
+            emit StrategyStatusChanged(id, Status.Active);
+        }
     }
 
     /// @notice Execute one period of a Payment strategy. Executor only.
@@ -194,11 +217,14 @@ contract WooshStrategyRegistry {
         s.periodsDone += 1;
         s.nextRunAt = uint64(block.timestamp) + s.intervalSeconds;
 
-        bool reachedCap = s.periodsTotal != 0 && s.periodsDone >= s.periodsTotal;
-        bool outOfFunds = s.balance < s.amountPerPeriod;
-        if (reachedCap || outOfFunds) {
+        // Reaching the period cap is terminal (Completed). Merely running out of funds
+        // is recoverable (Depleted) — the owner can fund() to revive it.
+        if (s.periodsTotal != 0 && s.periodsDone >= s.periodsTotal) {
             s.status = Status.Completed;
             emit StrategyStatusChanged(id, Status.Completed);
+        } else if (s.balance < s.amountPerPeriod) {
+            s.status = Status.Depleted;
+            emit StrategyStatusChanged(id, Status.Depleted);
         }
     }
 
@@ -226,7 +252,10 @@ contract WooshStrategyRegistry {
     function cancel(bytes32 id) external nonReentrant {
         Strategy storage s = _strategies[id];
         require(s.owner == msg.sender, "WSR: not owner");
-        require(s.status == Status.Active || s.status == Status.Paused, "WSR: closed");
+        require(
+            s.status == Status.Active || s.status == Status.Paused || s.status == Status.Depleted,
+            "WSR: closed"
+        );
 
         uint256 refund = s.balance;
         s.balance = 0;
@@ -247,6 +276,15 @@ contract WooshStrategyRegistry {
     /// @notice All strategy ids created by `owner`, newest last.
     function getStrategyIds(address owner) external view returns (bytes32[] memory) {
         return _byOwner[owner];
+    }
+
+    /// @notice Read many strategies at once. Lets the executor pull a whole page in one
+    ///         RPC call (pair with allIds) instead of one round-trip per id.
+    function getStrategiesBatch(bytes32[] calldata ids) external view returns (Strategy[] memory out) {
+        out = new Strategy[](ids.length);
+        for (uint256 i = 0; i < ids.length; i++) {
+            out[i] = _strategies[ids[i]];
+        }
     }
 
     /// @notice Total number of strategies ever created (for executor pagination).

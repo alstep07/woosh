@@ -9,7 +9,7 @@
  */
 export type StrategyKind = "payment" | "swap";
 
-export type StrategyStatus = "active" | "paused" | "completed" | "cancelled";
+export type StrategyStatus = "active" | "paused" | "completed" | "cancelled" | "depleted";
 
 export type OnchainStrategy = {
   id: `0x${string}`;
@@ -37,4 +37,5 @@ export const STRATEGY_STATUS_BY_ENUM: StrategyStatus[] = [
   "paused",
   "completed",
   "cancelled",
+  "depleted",
 ];

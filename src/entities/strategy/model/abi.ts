@@ -1,22 +1,22 @@
 // Mirrors WooshStrategyRegistry.sol. The Strategy struct is returned as a single tuple
 // by getStrategy; viem decodes it into an object keyed by the component names below.
-const STRATEGY_TUPLE = {
-  type: "tuple",
-  components: [
-    { name: "owner", type: "address" },
-    { name: "kind", type: "uint8" },
-    { name: "recipient", type: "address" },
-    { name: "tokenOut", type: "address" },
-    { name: "amountPerPeriod", type: "uint256" },
-    { name: "intervalSeconds", type: "uint64" },
-    { name: "periodsTotal", type: "uint32" },
-    { name: "periodsDone", type: "uint32" },
-    { name: "nextRunAt", type: "uint64" },
-    { name: "balance", type: "uint256" },
-    { name: "status", type: "uint8" },
-    { name: "createdAt", type: "uint64" },
-  ],
-} as const;
+const STRATEGY_COMPONENTS = [
+  { name: "owner", type: "address" },
+  { name: "kind", type: "uint8" },
+  { name: "recipient", type: "address" },
+  { name: "tokenOut", type: "address" },
+  { name: "amountPerPeriod", type: "uint256" },
+  { name: "intervalSeconds", type: "uint64" },
+  { name: "periodsTotal", type: "uint32" },
+  { name: "periodsDone", type: "uint32" },
+  { name: "nextRunAt", type: "uint64" },
+  { name: "balance", type: "uint256" },
+  { name: "status", type: "uint8" },
+  { name: "createdAt", type: "uint64" },
+] as const;
+
+const STRATEGY_TUPLE = { type: "tuple", components: STRATEGY_COMPONENTS } as const;
+const STRATEGY_TUPLE_ARRAY = { type: "tuple[]", components: STRATEGY_COMPONENTS } as const;
 
 export const STRATEGY_REGISTRY_ABI = [
   {
@@ -94,11 +94,25 @@ export const STRATEGY_REGISTRY_ABI = [
     outputs: [],
   },
   {
+    name: "transferAdmin",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "newAdmin", type: "address" }],
+    outputs: [],
+  },
+  {
     name: "executor",
     type: "function",
     stateMutability: "view",
     inputs: [],
     outputs: [{ type: "address" }],
+  },
+  {
+    name: "getStrategiesBatch",
+    type: "function",
+    stateMutability: "view",
+    inputs: [{ name: "ids", type: "bytes32[]" }],
+    outputs: [STRATEGY_TUPLE_ARRAY],
   },
   {
     name: "getStrategy",
