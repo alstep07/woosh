@@ -1,4 +1,4 @@
-export const APP_VERSION = "2.2";
+export const APP_VERSION = "3.0";
 
 export const env = {
   circleAppId: process.env.NEXT_PUBLIC_CIRCLE_APP_ID ?? "",
@@ -10,4 +10,8 @@ export const env = {
   baseUrl: process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:3000",
   slugRegistryAddress: process.env.NEXT_PUBLIC_SLUG_REGISTRY_ADDRESS as `0x${string}` | undefined,
   invoiceRegistryAddress: process.env.NEXT_PUBLIC_INVOICE_REGISTRY_ADDRESS as `0x${string}` | undefined,
+  strategyRegistryAddress: process.env.NEXT_PUBLIC_STRATEGY_REGISTRY_ADDRESS as `0x${string}` | undefined,
+  eurcAddress: process.env.NEXT_PUBLIC_EURC_ADDRESS as `0x${string}` | undefined,
+  cirbtcAddress: process.env.NEXT_PUBLIC_CIRBTC_ADDRESS as `0x${string}` | undefined,
+  appKitKey: process.env.NEXT_PUBLIC_APP_KIT_KEY ?? "",
 };
