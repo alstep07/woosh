@@ -158,6 +158,14 @@ export default function AccountBar({
               >
                 My invoices
               </Link>
+              <Link
+                href="/dashboard/strategies"
+                role="menuitem"
+                onClick={() => setMenuOpen(false)}
+                className={itemClass}
+              >
+                Strategies
+              </Link>
             </div>
           )}
         </div>
