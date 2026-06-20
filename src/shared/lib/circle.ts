@@ -170,3 +170,108 @@ export async function createInvoicePayChallenge(
   });
   return { challengeId: res.data!.challengeId! };
 }
+
+const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
+
+/**
+ * Challenge to create + fund an automated strategy via
+ * WooshStrategyRegistry.create(salt, kind, recipient, tokenOut, amountPerPeriod,
+ * intervalSeconds, periodsTotal). The native value sent (`funding`) is the strategy's
+ * starting budget, custodied by the contract.
+ *
+ * @param kind 0 = Payment (recurring transfer), 1 = Swap (DCA)
+ * @param recipient Payment: who gets paid. Swap: pass the zero address.
+ * @param tokenOut Swap: target token. Payment: pass the zero address.
+ * @param amountPerPeriod human decimal USDC released/sent each execution
+ * @param funding human decimal USDC to deposit now (must be >= amountPerPeriod)
+ */
+export async function createStrategyCreateChallenge(
+  userToken: string,
+  walletId: string,
+  registryAddress: `0x${string}`,
+  salt: string,
+  kind: 0 | 1,
+  recipient: string,
+  tokenOut: string,
+  amountPerPeriod: string,
+  intervalSeconds: number,
+  periodsTotal: number,
+  funding: string
+) {
+  if (!/^\d+(\.\d+)?$/.test(amountPerPeriod) || parseFloat(amountPerPeriod) <= 0) {
+    throw new Error(`Invalid amountPerPeriod: ${amountPerPeriod}`);
+  }
+  if (!/^\d+(\.\d+)?$/.test(funding) || parseFloat(funding) < parseFloat(amountPerPeriod)) {
+    throw new Error(`Funding must be >= amountPerPeriod`);
+  }
+  const amountWei = parseUnits(amountPerPeriod, 18).toString(); // Arc native USDC = 18 decimals
+  const client = getClient();
+  const res = await client.createUserTransactionContractExecutionChallenge({
+    userToken,
+    walletId,
+    contractAddress: registryAddress,
+    abiFunctionSignature: "create(uint256,uint8,address,address,uint256,uint64,uint32)",
+    abiParameters: [
+      salt,
+      String(kind),
+      recipient || ZERO_ADDRESS,
+      tokenOut || ZERO_ADDRESS,
+      amountWei,
+      String(intervalSeconds),
+      String(periodsTotal),
+    ],
+    amount: funding, // native budget deposited with create()
+    fee: { type: "level", config: { feeLevel: "MEDIUM" } },
+    idempotencyKey: crypto.randomUUID(),
+  });
+  return { challengeId: res.data!.challengeId! };
+}
+
+/** Challenge to top up a strategy via WooshStrategyRegistry.fund(id). */
+export async function createStrategyFundChallenge(
+  userToken: string,
+  walletId: string,
+  registryAddress: `0x${string}`,
+  id: string,
+  amount: string
+) {
+  if (!/^\d+(\.\d+)?$/.test(amount) || parseFloat(amount) <= 0) {
+    throw new Error(`Invalid amount: ${amount}`);
+  }
+  const client = getClient();
+  const res = await client.createUserTransactionContractExecutionChallenge({
+    userToken,
+    walletId,
+    contractAddress: registryAddress,
+    abiFunctionSignature: "fund(bytes32)",
+    abiParameters: [id],
+    amount,
+    fee: { type: "level", config: { feeLevel: "MEDIUM" } },
+    idempotencyKey: crypto.randomUUID(),
+  });
+  return { challengeId: res.data!.challengeId! };
+}
+
+/**
+ * Challenge for an owner action on a strategy: pause(id) / resume(id) / cancel(id).
+ * All three take a single bytes32 id and are non-payable.
+ */
+export async function createStrategyActionChallenge(
+  userToken: string,
+  walletId: string,
+  registryAddress: `0x${string}`,
+  action: "pause" | "resume" | "cancel",
+  id: string
+) {
+  const client = getClient();
+  const res = await client.createUserTransactionContractExecutionChallenge({
+    userToken,
+    walletId,
+    contractAddress: registryAddress,
+    abiFunctionSignature: `${action}(bytes32)`,
+    abiParameters: [id],
+    fee: { type: "level", config: { feeLevel: "MEDIUM" } },
+    idempotencyKey: crypto.randomUUID(),
+  });
+  return { challengeId: res.data!.challengeId! };
+}
