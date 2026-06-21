@@ -13,5 +13,4 @@ export const env = {
   strategyRegistryAddress: process.env.NEXT_PUBLIC_STRATEGY_REGISTRY_ADDRESS as `0x${string}` | undefined,
   eurcAddress: process.env.NEXT_PUBLIC_EURC_ADDRESS as `0x${string}` | undefined,
   cirbtcAddress: process.env.NEXT_PUBLIC_CIRBTC_ADDRESS as `0x${string}` | undefined,
-  appKitKey: process.env.NEXT_PUBLIC_APP_KIT_KEY ?? "",
 };

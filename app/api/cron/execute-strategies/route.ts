@@ -1,8 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
+import { formatUnits } from "viem";
 import { arcPublicClient } from "@/shared/lib/arc";
 import { STRATEGY_REGISTRY_ABI } from "@/entities/strategy/model/abi";
-import { dcwExecuteContract, waitForTx } from "@/shared/lib/dcw";
+import { dcwExecuteContract, dcwTransfer, waitForTx, getExecutorAddress } from "@/shared/lib/dcw";
+import { swapUsdcTo } from "@/shared/lib/swap";
+import { tokenByAddress } from "@/shared/lib/tokens";
 import { env } from "@/shared/config/env";
+
+const FAILED_STATES = new Set(["FAILED", "CANCELLED", "DENIED"]);
 
 // Scheduler-agnostic strategy executor. Vercel Cron (daily on Hobby) hits this, but so can
 // an external pinger (cron-job.org / GitHub Actions) for finer cadence, or a worker. All
@@ -45,7 +50,7 @@ async function runExecutor(): Promise<Record<string, unknown>> {
   })) as bigint;
 
   let paid = 0;
-  let skippedSwap = 0;
+  let swapped = 0;
   let failed = 0;
   let timedOut = false;
   const errors: { id: string; error: string }[] = [];
@@ -77,10 +82,38 @@ async function runExecutor(): Promise<Record<string, unknown>> {
       if (s.balance < s.amountPerPeriod) continue;
 
       if (s.kind === 1) {
-        // Swap / DCA: releaseForSwap hands funds to the executor to swap off-chain. We do
-        // NOT release until the swap rail (StableFX/App Kit) is implemented and verified,
-        // so funds are never released without a swap to complete. See Phase 7.
-        skippedSwap++;
+        // Swap / DCA: release one period of USDC to the executor, swap it via Circle Swap
+        // Kit (Circle Wallets adapter = this same DCW executor), then forward the output
+        // token to the strategy owner. releaseForSwap advances the schedule atomically, so
+        // even if the swap step fails the released USDC stays in the executor wallet (Woosh
+        // controlled, recoverable), never lost.
+        const symbol = tokenByAddress(s.tokenOut)?.symbol;
+        if (symbol !== "EURC" && symbol !== "cirBTC") {
+          failed++;
+          errors.push({ id: ids[i], error: `unsupported tokenOut ${s.tokenOut}` });
+          continue;
+        }
+        try {
+          const rel = await dcwExecuteContract(registry, "releaseForSwap(bytes32)", [ids[i]]);
+          const relId = (rel as { id?: string } | undefined)?.id;
+          if (relId) {
+            const state = await waitForTx(relId, TX_WAIT_MS);
+            if (FAILED_STATES.has(state)) {
+              failed++;
+              errors.push({ id: ids[i], error: `release ${state}` });
+              continue;
+            }
+          }
+          const amountIn = formatUnits(s.amountPerPeriod, 18);
+          const out = await swapUsdcTo(symbol, amountIn, getExecutorAddress());
+          if (out.amountOut) {
+            await dcwTransfer(s.owner, out.amountOut, s.tokenOut);
+          }
+          swapped++;
+        } catch (err) {
+          failed++;
+          errors.push({ id: ids[i], error: err instanceof Error ? err.message : "swap failed" });
+        }
         continue;
       }
 
@@ -90,7 +123,7 @@ async function runExecutor(): Promise<Record<string, unknown>> {
         const txId = (tx as { id?: string } | undefined)?.id;
         if (txId) {
           const state = await waitForTx(txId, TX_WAIT_MS);
-          if (state === "FAILED" || state === "CANCELLED" || state === "DENIED") {
+          if (FAILED_STATES.has(state)) {
             failed++;
             errors.push({ id: ids[i], error: `tx ${state}` });
             continue;
@@ -108,7 +141,7 @@ async function runExecutor(): Promise<Record<string, unknown>> {
   return {
     ok: true,
     paid,
-    skippedSwap,
+    swapped,
     failed,
     timedOut,
     tookMs: Date.now() - startedAt,
