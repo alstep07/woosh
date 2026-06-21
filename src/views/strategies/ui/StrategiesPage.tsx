@@ -173,7 +173,7 @@ export default function StrategiesPage() {
           href="/dashboard"
           className="inline-flex items-center gap-1.5 text-sm text-blue-primary/60 hover:text-blue-primary transition-colors mb-6"
         >
-          <span aria-hidden>←</span> Dashboard
+          Dashboard
         </Link>
 
         <div className="flex items-start justify-between gap-4 mb-6">

@@ -50,7 +50,7 @@ export default function DashboardHistoryPage() {
           onClick={() => router.back()}
           className="inline-flex items-center gap-1.5 text-sm text-blue-primary/60 hover:text-blue-primary transition-colors mb-6"
         >
-          <span aria-hidden>←</span> Dashboard
+          Dashboard
         </button>
         <h1 className="text-2xl font-bold text-text-primary mb-6">Transactions</h1>
         <TransactionList txs={txs} isLoading={isLoading} isError={isError} onRefresh={handleRefresh} isRefreshing={isRefreshing} skeletonCount={5} />

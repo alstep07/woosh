@@ -49,14 +49,14 @@ export function BalanceSummary({ balance, isLoading, isError, holdings, totalUsd
       ) : isError ? (
         <p className="text-3xl font-bold text-text-secondary/40">—</p>
       ) : showTotal ? (
-        <p className="text-3xl font-bold text-text-primary tracking-tight">
+        <p className="font-mono text-3xl font-semibold text-text-primary tracking-tight">
           ${fmtUsd(totalUsd)}
-          <span className="text-base font-medium text-text-secondary/50 ml-1.5">USDC</span>
+          <span className="font-sans text-base font-medium text-text-secondary/50 ml-1.5">USDC</span>
         </p>
       ) : (
-        <p className="text-3xl font-bold text-text-primary tracking-tight">
+        <p className="font-mono text-3xl font-semibold text-text-primary tracking-tight">
           {balance ?? "$0.00"}
-          <span className="text-base font-medium text-text-secondary/50 ml-1.5">USDC</span>
+          <span className="font-sans text-base font-medium text-text-secondary/50 ml-1.5">USDC</span>
         </p>
       )}
 
@@ -70,9 +70,9 @@ export function BalanceSummary({ balance, isLoading, isError, holdings, totalUsd
                   {g.ch}
                 </span>
                 <span className="text-sm text-text-secondary flex-1">{t.symbol}</span>
-                <span className="text-sm text-text-primary tabular-nums">{fmtAmount(t.amount)}</span>
+                <span className="font-mono text-sm text-text-primary tabular-nums">{fmtAmount(t.amount)}</span>
                 {t.usd != null && (
-                  <span className="text-xs text-text-secondary/40 tabular-nums w-16 text-right">${fmtUsd(t.usd)}</span>
+                  <span className="font-mono text-xs text-text-secondary/40 tabular-nums w-16 text-right">${fmtUsd(t.usd)}</span>
                 )}
               </div>
             );
