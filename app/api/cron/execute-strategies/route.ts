@@ -3,7 +3,7 @@ import { formatUnits } from "viem";
 import { arcPublicClient } from "@/shared/lib/arc";
 import { STRATEGY_REGISTRY_ABI } from "@/entities/strategy/model/abi";
 import { dcwExecuteContract, dcwTransfer, waitForTx, getExecutorAddress } from "@/shared/lib/dcw";
-import { executeSwap, canSwap, type SwapToken } from "@/shared/lib/swap";
+import { executeSwap, canSwap, usdc18ToSwap6 } from "@/shared/lib/swap";
 import { tokenByAddress } from "@/shared/lib/tokens";
 import { env } from "@/shared/config/env";
 
@@ -89,16 +89,21 @@ async function runExecutor(): Promise<Record<string, unknown>> {
         // releaseForSwap advances the schedule atomically. If the swap itself then fails, we
         // refund the released USDC back to the owner so nothing is stuck in the executor.
         const token = tokenByAddress(s.tokenOut);
-        const symbol = token?.symbol;
-        if (!token?.address || (symbol !== "EURC" && symbol !== "cirBTC")) {
+        if (!token?.address) {
           failed++;
           errors.push({ id: ids[i], error: `unsupported tokenOut ${s.tokenOut}` });
           continue;
         }
-        // App Kit takes a human amount and handles USDC decimals internally.
-        const amountInHuman = formatUnits(s.amountPerPeriod, 18);
-        const route = await canSwap(symbol as SwapToken, amountInHuman, getExecutorAddress());
-        if (!route.ok) {
+        // USDC swaps use the 6-dec ERC-20 representation; convert from the contract's 18-dec
+        // native unit. Guard against a per-period amount that rounds to zero at 6 decimals.
+        const amountIn6 = usdc18ToSwap6(s.amountPerPeriod);
+        if (BigInt(amountIn6) <= 0n) {
+          failed++;
+          errors.push({ id: ids[i], error: "amountPerPeriod rounds to 0 at 6 decimals" });
+          continue;
+        }
+        const route = await canSwap(token.address, amountIn6, getExecutorAddress());
+        if (!route.ok || !route.plan) {
           skippedNoRoute++;
           errors.push({ id: ids[i], error: `no swap route: ${route.error}` });
           continue;
@@ -119,11 +124,12 @@ async function runExecutor(): Promise<Record<string, unknown>> {
           }
           released = true;
 
-          const out = await executeSwap(symbol as SwapToken, amountInHuman, getExecutorAddress());
+          // Execute the SAME quote we validated above (no second quote -> no route race).
+          const out = await executeSwap(route.plan);
           swapDone = true;
 
-          if (out.amountOut) {
-            const human = formatUnits(BigInt(out.amountOut), token.decimals);
+          if (out.amountOut && out.tokenOutDecimals != null) {
+            const human = formatUnits(BigInt(out.amountOut), out.tokenOutDecimals);
             await dcwTransfer(s.owner, human, s.tokenOut);
           }
           swapped++;
