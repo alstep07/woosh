@@ -10,6 +10,56 @@ interface PendingEntry {
   amount: string; // formatted, e.g. "10.00"
 }
 
+/** Per-type icon badge: every row gets one, distinct by what the tx is. */
+function TxIcon({ tx }: { tx: TxRecord }) {
+  const type =
+    tx.note === "Invoice" ? "invoice"
+    : tx.note === "Strategy payment" ? "recurring"
+    : tx.note === "DCA" ? "dca"
+    : tx.note === "Strategy" ? "strategy"
+    : tx.token ? "token"
+    : tx.direction === "received" ? "received"
+    : "sent";
+
+  const cls: Record<string, string> = {
+    received: "bg-green-400/10 text-green-400",
+    sent: "bg-white/[0.06] text-text-secondary",
+    invoice: "bg-blue-primary/10 text-blue-primary",
+    recurring: "bg-blue-secondary/10 text-blue-secondary",
+    dca: "bg-amber-400/10 text-amber-400",
+    strategy: "bg-blue-primary/10 text-blue-primary",
+    token: "bg-amber-400/10 text-amber-400",
+  };
+
+  const paths: Record<string, React.ReactNode> = {
+    // arrow down-left into tray
+    received: <path strokeLinecap="round" strokeLinejoin="round" d="M19 5L8 16m0 0h7m-7 0V9" />,
+    // arrow up-right
+    sent: <path strokeLinecap="round" strokeLinejoin="round" d="M5 19L16 8m0 0H9m7 0v7" />,
+    // document
+    invoice: <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h4m4 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />,
+    // circular arrows (recurring)
+    recurring: <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h5M20 20v-5h-5M20 9A8 8 0 006 5.3M4 15a8 8 0 0014 3.7" />,
+    // swap arrows (DCA)
+    dca: <path strokeLinecap="round" strokeLinejoin="round" d="M7 16V4m0 0L3 8m4-4l4 4M17 8v12m0 0l4-4m-4 4l-4-4" />,
+    // automation / bolt (strategy deposit)
+    strategy: <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />,
+    // coin (token)
+    token: <><circle cx="12" cy="12" r="8" /><path strokeLinecap="round" d="M12 8v8M9.5 10.5h3a1.5 1.5 0 010 3h-3" /></>,
+  };
+
+  return (
+    <span
+      className={`shrink-0 w-5 h-5 rounded-md flex items-center justify-center ${cls[type]}`}
+      title={tx.note ?? (tx.direction === "received" ? "Received" : "Sent")}
+    >
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+        {paths[type]}
+      </svg>
+    </span>
+  );
+}
+
 interface Props {
   txs: TxRecord[] | undefined;
   isLoading: boolean;
@@ -112,16 +162,7 @@ export default function TransactionList({
               className="flex items-center justify-between px-1 py-2.5 hover:opacity-70 transition-opacity"
             >
               <div className="flex items-center gap-2 min-w-0">
-                {tx.note && (
-                  <span
-                    className="shrink-0 w-5 h-5 rounded-md bg-blue-primary/10 text-blue-primary flex items-center justify-center"
-                    title={tx.note}
-                  >
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h4m4 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                  </span>
-                )}
+                <TxIcon tx={tx} />
                 <p className="text-xs text-text-secondary/50 min-w-0 truncate">
                   {tx.note ? (
                     <>

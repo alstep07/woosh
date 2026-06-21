@@ -12,6 +12,12 @@ function CopyIcon() {
   );
 }
 
+interface TokenHolding {
+  symbol: string;
+  amount: string;
+  usd: number | null;
+}
+
 interface Props {
   balance: string | undefined;
   isLoading: boolean;
@@ -21,6 +27,15 @@ interface Props {
   slug?: string;
   onCreateInvoice: () => void;
   children: React.ReactNode; // recent payments
+  holdings?: TokenHolding[]; // non-USDC token balances (EURC, cirBTC)
+  totalUsd?: number;         // USDC-equivalent total across all tokens
+}
+
+function fmtAmount(amount: string): string {
+  const n = parseFloat(amount);
+  if (n === 0) return "0";
+  if (n < 0.0001) return n.toPrecision(2);
+  return n.toLocaleString(undefined, { maximumFractionDigits: n < 1 ? 6 : 2 });
 }
 
 /**
@@ -38,6 +53,8 @@ export default function WalletCard({
   slug,
   onCreateInvoice,
   children,
+  holdings,
+  totalUsd,
 }: Props) {
   const [copied, setCopied] = useState<null | "address" | "link">(null);
 
@@ -100,6 +117,26 @@ export default function WalletCard({
           <span className="text-base font-medium text-text-secondary/50 ml-1.5">USDC</span>
         </p>
       )}
+
+      {/* Other token holdings (EURC, cirBTC) + USDC-equivalent total */}
+      {(() => {
+        const others = (holdings ?? []).filter((t) => t.symbol !== "USDC" && parseFloat(t.amount) > 0);
+        if (others.length === 0) return null;
+        return (
+          <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
+            {others.map((t) => (
+              <span key={t.symbol} className="text-xs text-text-secondary bg-white/[0.05] rounded-md px-2 py-0.5">
+                {fmtAmount(t.amount)} {t.symbol}
+              </span>
+            ))}
+            {totalUsd != null && totalUsd > 0 && (
+              <span className="text-xs text-text-secondary/50">
+                ≈ ${totalUsd.toLocaleString(undefined, { maximumFractionDigits: 2 })} total
+              </span>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Secondary actions */}
       <div className="mt-3 pl-1 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-blue-primary">

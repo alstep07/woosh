@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useUSDCBalance } from "@/entities/wallet/hooks/useUSDCBalance";
+import { useTokenBalances } from "@/entities/wallet/hooks/useTokenBalances";
 import { useTransactionHistory } from "@/entities/payment/hooks/useTransactionHistory";
 import BrandHeader from "@/widgets/BrandHeader/ui/BrandHeader";
 import AccountBar from "@/widgets/AccountBar/ui/AccountBar";
@@ -34,6 +35,8 @@ export default function DashboardPage() {
     isError: balanceError,
     refetch: refetchBalance,
   } = useUSDCBalance(session?.walletAddress);
+
+  const { data: holdings } = useTokenBalances(session?.walletAddress);
 
   const [isTxRefreshing, setIsTxRefreshing] = useState(false);
   const { data: txs, isLoading: txsLoading, isError: txsError, refetch: refetchTxs } =
@@ -180,6 +183,8 @@ export default function DashboardPage() {
               walletAddress={session.walletAddress}
               slug={session.slug}
               onCreateInvoice={() => setCreateInvoiceOpen(true)}
+              holdings={holdings?.tokens}
+              totalUsd={holdings?.totalUsd}
             >
               {recentPayments}
             </WalletCard>
