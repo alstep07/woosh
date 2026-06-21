@@ -157,6 +157,8 @@ export default function DashboardPage() {
               walletAddress={session.walletAddress}
               slug={session.slug}
               onCreateInvoice={() => setCreateInvoiceOpen(true)}
+              holdings={holdings?.tokens}
+              totalUsd={holdings?.totalUsd}
             />
           </div>
 

@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { BalanceSummary } from "@/widgets/WalletCard/ui/BalanceSummary";
+import type { TokenHolding } from "@/entities/wallet/hooks/useTokenBalances";
 
 function CopyIcon() {
   return (
@@ -10,12 +12,6 @@ function CopyIcon() {
       <path d="M2.5 9.5H2a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1h6.5a1 1 0 0 1 1 1v.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
     </svg>
   );
-}
-
-interface TokenHolding {
-  symbol: string;
-  amount: string;
-  usd: number | null;
 }
 
 interface Props {
@@ -27,15 +23,8 @@ interface Props {
   slug?: string;
   onCreateInvoice: () => void;
   children: React.ReactNode; // recent payments
-  holdings?: TokenHolding[]; // non-USDC token balances (EURC, cirBTC)
+  holdings?: TokenHolding[]; // all token balances (USDC, EURC, cirBTC)
   totalUsd?: number;         // USDC-equivalent total across all tokens
-}
-
-function fmtAmount(amount: string): string {
-  const n = parseFloat(amount);
-  if (n === 0) return "0";
-  if (n < 0.0001) return n.toPrecision(2);
-  return n.toLocaleString(undefined, { maximumFractionDigits: n < 1 ? 6 : 2 });
 }
 
 /**
@@ -103,40 +92,14 @@ export default function WalletCard({
         </button>
       </div>
 
-      {/* Balance — focal point */}
-      <p className="text-xs font-semibold text-text-secondary uppercase tracking-widest mb-1">
-        Balance
-      </p>
-      {isLoading ? (
-        <div className="h-9 w-32 bg-border rounded animate-pulse" />
-      ) : isError ? (
-        <p className="text-3xl font-bold text-text-secondary/40">—</p>
-      ) : (
-        <p className="text-3xl font-bold text-text-primary">
-          {balance ?? "$0.00"}
-          <span className="text-base font-medium text-text-secondary/50 ml-1.5">USDC</span>
-        </p>
-      )}
-
-      {/* Other token holdings (EURC, cirBTC) + USDC-equivalent total */}
-      {(() => {
-        const others = (holdings ?? []).filter((t) => t.symbol !== "USDC" && parseFloat(t.amount) > 0);
-        if (others.length === 0) return null;
-        return (
-          <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
-            {others.map((t) => (
-              <span key={t.symbol} className="text-xs text-text-secondary bg-white/[0.05] rounded-md px-2 py-0.5">
-                {fmtAmount(t.amount)} {t.symbol}
-              </span>
-            ))}
-            {totalUsd != null && totalUsd > 0 && (
-              <span className="text-xs text-text-secondary/50">
-                ≈ ${totalUsd.toLocaleString(undefined, { maximumFractionDigits: 2 })} total
-              </span>
-            )}
-          </div>
-        );
-      })()}
+      {/* Balance — total in USDC-equivalent as the focal point, itemized below */}
+      <BalanceSummary
+        balance={balance}
+        isLoading={isLoading}
+        isError={isError}
+        holdings={holdings}
+        totalUsd={totalUsd}
+      />
 
       {/* Secondary actions */}
       <div className="mt-3 pl-1 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-blue-primary">

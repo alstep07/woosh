@@ -2,6 +2,8 @@
 
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
+import { BalanceSummary } from "@/widgets/WalletCard/ui/BalanceSummary";
+import type { TokenHolding } from "@/entities/wallet/hooks/useTokenBalances";
 
 interface Props {
   balance: string | undefined;
@@ -11,6 +13,8 @@ interface Props {
   walletAddress: string;
   slug?: string;
   onCreateInvoice?: () => void;
+  holdings?: TokenHolding[];
+  totalUsd?: number;
 }
 
 function CopyIcon() {
@@ -40,6 +44,8 @@ export default function AccountBar({
   walletAddress,
   slug,
   onCreateInvoice,
+  holdings,
+  totalUsd,
 }: Props) {
   const [copied, setCopied] = useState<null | "link" | "address">(null);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -79,20 +85,14 @@ export default function AccountBar({
   return (
     <div className="flex items-start justify-between py-5">
       {/* Left: balance */}
-      <div>
-        <p className="text-xs font-semibold text-text-secondary uppercase tracking-widest mb-1">
-          Balance
-        </p>
-        {isLoading ? (
-          <div className="h-8 w-28 bg-border rounded animate-pulse" />
-        ) : isError ? (
-          <p className="text-2xl font-bold text-text-secondary/40">—</p>
-        ) : (
-          <p className="text-3xl font-bold text-text-primary">
-            {balance ?? "$0.00"}
-            <span className="text-base font-medium text-text-secondary/50 ml-1.5">USDC</span>
-          </p>
-        )}
+      <div className="min-w-0">
+        <BalanceSummary
+          balance={balance}
+          isLoading={isLoading}
+          isError={isError}
+          holdings={holdings}
+          totalUsd={totalUsd}
+        />
       </div>
 
       {/* Right: copy-link chip + actions menu, same height side by side */}
