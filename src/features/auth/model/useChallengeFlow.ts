@@ -7,6 +7,7 @@ import {
   getPendingTokens,
   clearPendingTokens,
   getCachedTokens,
+  setCachedTokens,
   clearCachedTokens,
 } from "@/shared/lib/session";
 
@@ -44,6 +45,10 @@ export function useChallengeFlow(opts: {
   }, []);
   const auth = useAuth(env.circleAppId, stableOnSuccess);
   onAuthSuccessRef.current = (userToken: string, encryptionKey: string) => {
+    // Cache the freshly-verified session so the NEXT action (another strategy step, an
+    // invoice, a payment) skips OTP and goes straight to PIN — same as the chat flow. Without
+    // this every strategy action re-prompted for the email code even seconds apart.
+    setCachedTokens(userToken, encryptionKey);
     setPhase("running");
     setError(null);
     void execute(userToken, encryptionKey);
