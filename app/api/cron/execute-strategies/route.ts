@@ -3,7 +3,7 @@ import { formatUnits } from "viem";
 import { arcPublicClient } from "@/shared/lib/arc";
 import { STRATEGY_REGISTRY_ABI } from "@/entities/strategy/model/abi";
 import { dcwExecuteContract, dcwTransfer, waitForTx, getExecutorAddress } from "@/shared/lib/dcw";
-import { swapUsdcTo } from "@/shared/lib/swap";
+import { swapUsdcTo, canSwap } from "@/shared/lib/swap";
 import { tokenByAddress } from "@/shared/lib/tokens";
 import { env } from "@/shared/config/env";
 
@@ -51,6 +51,7 @@ async function runExecutor(): Promise<Record<string, unknown>> {
 
   let paid = 0;
   let swapped = 0;
+  let skippedNoRoute = 0;
   let failed = 0;
   let timedOut = false;
   const errors: { id: string; error: string }[] = [];
@@ -93,6 +94,16 @@ async function runExecutor(): Promise<Record<string, unknown>> {
           errors.push({ id: ids[i], error: `unsupported tokenOut ${s.tokenOut}` });
           continue;
         }
+        const amountIn = formatUnits(s.amountPerPeriod, 18);
+        // Estimate the route FIRST. If it isn't quotable, skip without releasing funds or
+        // advancing the schedule, so an unroutable pair (e.g. USDC->cirBTC) can't drain the
+        // vault into the executor with nothing delivered.
+        const route = await canSwap(symbol, amountIn, getExecutorAddress());
+        if (!route.ok) {
+          skippedNoRoute++;
+          errors.push({ id: ids[i], error: `no swap route: ${route.error}` });
+          continue;
+        }
         try {
           const rel = await dcwExecuteContract(registry, "releaseForSwap(bytes32)", [ids[i]]);
           const relId = (rel as { id?: string } | undefined)?.id;
@@ -104,7 +115,6 @@ async function runExecutor(): Promise<Record<string, unknown>> {
               continue;
             }
           }
-          const amountIn = formatUnits(s.amountPerPeriod, 18);
           const out = await swapUsdcTo(symbol, amountIn, getExecutorAddress());
           if (out.amountOut) {
             await dcwTransfer(s.owner, out.amountOut, s.tokenOut);
@@ -142,6 +152,7 @@ async function runExecutor(): Promise<Record<string, unknown>> {
     ok: true,
     paid,
     swapped,
+    skippedNoRoute,
     failed,
     timedOut,
     tookMs: Date.now() - startedAt,

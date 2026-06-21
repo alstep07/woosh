@@ -43,6 +43,31 @@ export type SwapOutcome = {
 };
 
 /**
+ * Check a route exists + is quotable BEFORE committing funds. Mirrors the Unified Balance
+ * Kit "estimate before spend" rule: the executor must NOT release a period of USDC to itself
+ * if the swap can't actually happen (e.g. no USDC->cirBTC route), otherwise the vault drains
+ * to the executor with nothing delivered. Returns ok:false (never throws) on any route error.
+ */
+export async function canSwap(
+  tokenOutSymbol: "EURC" | "cirBTC",
+  amountIn: string,
+  executorAddress: `0x${string}`
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    await getKit().estimate({
+      from: { adapter: getAdapter(), chain: "Arc_Testnet", address: executorAddress },
+      tokenIn: "USDC",
+      tokenOut: tokenOutSymbol,
+      amountIn,
+      config: { kitKey: getKitKey() },
+    });
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "no route" };
+  }
+}
+
+/**
  * Swap `amountIn` USDC into `tokenOutSymbol` ("EURC" | "cirBTC") from the executor wallet.
  * The output lands in the executor wallet; the caller forwards it to the strategy owner.
  */
