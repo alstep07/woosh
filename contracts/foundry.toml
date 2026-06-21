@@ -2,3 +2,9 @@
 src = "src"
 out = "out"
 libs = ["lib"]
+# Pinned so the deployed bytecode is reproducible AND verifiable on Blockscout.
+# Blockscout testnet only has 0.8.35-pre, not the final 0.8.35 release that the
+# previous deploy used, so that build can't be verified. 0.8.30 (release) + cancun
+# are both available on Blockscout's compiler list. See memory: invoice-registry-reverify-tomorrow.
+solc = "0.8.30"
+evm_version = "cancun"

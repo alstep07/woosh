@@ -4,6 +4,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getSession } from "@/shared/lib/session";
+import Footer from "@/widgets/Footer/ui/Footer";
 
 /**
  * Scroll-driven parallax landing. Seven full-viewport scenes; heads and stages drift in
@@ -22,43 +23,69 @@ export default function ParallaxLanding() {
 
   const appHref = hasSession ? "/dashboard" : "/signup";
   const go = (href: string) => () => router.push(href);
-  const seeHow = () =>
-    document.getElementById("plx-s-wallet")?.scrollIntoView({ behavior: "smooth" });
+  const seeHow = () => {
+    const target = document.getElementById("plx-s-wallet");
+    const scroller = rootRef.current;
+    if (!target || !scroller) return;
+    const scrollerRect = scroller.getBoundingClientRect();
+    const targetRect = target.getBoundingClientRect();
+    const top =
+      scroller.scrollTop +
+      targetRect.top -
+      scrollerRect.top -
+      (scroller.clientHeight - targetRect.height) / 2;
+    scroller.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
+  };
 
   useEffect(() => {
-    const root = rootRef.current;
-    if (!root) return;
-
-    // Gentle scroll-snap, scoped to this page only (reverted on unmount/navigate away).
-    const html = document.documentElement;
-    const prevSnap = html.style.scrollSnapType;
-    const prevPad = html.style.scrollPaddingTop;
-    html.style.scrollSnapType = "y proximity";
-    html.style.scrollPaddingTop = "64px";
+    const scroller = rootRef.current;
+    if (!scroller) return;
 
     const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const bar = root.querySelector<HTMLElement>(".plx-bar");
-    const neb = root.querySelector<HTMLElement>(".plx-nebula");
-    const grid = root.querySelector<HTMLElement>(".plx-grid");
-    const stages = [...root.querySelectorAll<HTMLElement>("[data-speed]")];
-    const scenes = [...root.querySelectorAll<HTMLElement>(".scene")];
+    const bar = scroller.querySelector<HTMLElement>(".plx-bar");
+    const neb = scroller.querySelector<HTMLElement>(".plx-nebula");
+    const grid = scroller.querySelector<HTMLElement>(".plx-grid");
+    const stages = [...scroller.querySelectorAll<HTMLElement>("[data-speed]")];
+    const scenes = [...scroller.querySelectorAll<HTMLElement>(".scene")];
+
+    // Chat reveal: add .vis to each bubble on a timer; removing .vis collapses it back.
+    const chatBubbles = [...scroller.querySelectorAll<HTMLElement>(".chat .bubble")];
+    const bubbleDelays = [0.36, 1.08, 1.92, 2.64, 3.48, 4.32, 5.16, 6.0];
+    let chatTimers: ReturnType<typeof setTimeout>[] = [];
+
+    const startChat = () => {
+      chatTimers.forEach(clearTimeout);
+      chatTimers = bubbleDelays.map((d, i) =>
+        setTimeout(() => chatBubbles[i]?.classList.add("vis"), d * 1000)
+      );
+    };
+    const resetChat = () => {
+      chatTimers.forEach(clearTimeout);
+      chatTimers = [];
+      chatBubbles.forEach((b) => b.classList.remove("vis"));
+    };
 
     // Reveal scenes on enter (hero stays revealed).
     const io = new IntersectionObserver(
       (entries) => {
         entries.forEach((e) => {
-          if (e.isIntersecting) e.target.classList.add("in");
-          else if (e.target.id !== "plx-hero") e.target.classList.remove("in");
+          if (e.isIntersecting) {
+            e.target.classList.add("in");
+            if (e.target.id === "plx-s-agent") startChat();
+          } else if (e.target.id !== "plx-hero") {
+            e.target.classList.remove("in");
+            if (e.target.id === "plx-s-agent") resetChat();
+          }
         });
       },
-      { threshold: 0.32 }
+      { root: scroller, threshold: 0.32 }
     );
     scenes.forEach((s) => io.observe(s));
 
     let ticking = false;
     function onScroll() {
-      const y = window.scrollY;
-      const vh = window.innerHeight;
+      const y = scroller.scrollTop;
+      const vh = scroller.clientHeight;
       bar?.classList.toggle("solid", y > vh * 0.6);
       if (reduceMotion) { ticking = false; return; }
       if (neb) neb.style.transform = `translate(${y * -0.03}px, ${y * 0.12}px)`;
@@ -76,14 +103,13 @@ export default function ParallaxLanding() {
     const handler = () => {
       if (!ticking) { requestAnimationFrame(onScroll); ticking = true; }
     };
-    window.addEventListener("scroll", handler, { passive: true });
+    scroller.addEventListener("scroll", handler, { passive: true });
     onScroll();
 
     return () => {
       io.disconnect();
-      window.removeEventListener("scroll", handler);
-      html.style.scrollSnapType = prevSnap;
-      html.style.scrollPaddingTop = prevPad;
+      scroller.removeEventListener("scroll", handler);
+      resetChat();
     };
   }, []);
 
@@ -99,17 +125,12 @@ export default function ParallaxLanding() {
           <img src="/woosh_logo.png" alt="Woosh" />
           <span className="wordmark">woosh</span>
         </div>
-        <button className="btn-g" onClick={go(appHref)}>Open app →</button>
+        <button className="btn-g" onClick={go(appHref)}>Open app</button>
       </div>
 
       <main>
         {/* Hero */}
         <section className="scene in hero" id="plx-hero">
-          <div className="hero-mark rise">
-            <img src="/woosh_logo.png" alt="Woosh" />
-            <span>woosh</span>
-          </div>
-          <div className="rise d1"><span className="chip"><span className="chip-dot" />Arc Testnet · USDC</span></div>
           <h1 className="rise d1">Get paid<br /><span className="grad">in seconds.</span></h1>
           <p className="sub rise d2">A self-custodial USDC wallet that starts with your email, and an agent that handles the rest.</p>
           <div className="cta-row rise d3">
@@ -147,7 +168,7 @@ export default function ParallaxLanding() {
         <section className="scene" id="plx-s-transfer">
           <div className="head" data-speed="22" data-speed-x="13">
             <p className="eyebrow rise">02 / Transfers</p>
-            <h2 className="rise d1">Money moves in <span className="grad">seconds.</span></h2>
+            <h2 className="rise d1">A name or a link. <span className="grad">That&apos;s it.</span></h2>
             <p className="sub rise d2">Send and receive USDC instantly on Arc. Fees are paid in USDC, no gas token to chase.</p>
           </div>
           <div className="stage xfer-wrap rise d2" data-speed="-46" data-speed-x="-20">
@@ -166,13 +187,11 @@ export default function ParallaxLanding() {
                 <animate attributeName="opacity" values="0.5;0;0.5" dur="2.6s" begin="1.3s" repeatCount="indefinite" />
               </circle>
               <circle r="3.5" fill="#22d3ee"><animateMotion dur="2.2s" repeatCount="indefinite"><mpath href="#plx-wire" /></animateMotion></circle>
-              <circle r="3" fill="#0ea5e9"><animateMotion dur="2.2s" begin="0.55s" repeatCount="indefinite"><mpath href="#plx-wire" /></animateMotion></circle>
-              <circle r="2.5" fill="#38bdf8"><animateMotion dur="2.2s" begin="1.1s" repeatCount="indefinite"><mpath href="#plx-wire" /></animateMotion></circle>
-              <circle r="3" fill="#22d3ee"><animateMotion dur="2.2s" begin="1.65s" repeatCount="indefinite"><mpath href="#plx-wire" /></animateMotion></circle>
+              <circle r="3" fill="#0ea5e9"><animateMotion dur="2.2s" begin="1.1s" repeatCount="indefinite"><mpath href="#plx-wire" /></animateMotion></circle>
             </svg>
             <div className="xfer-labels">
-              <div className="xlbl" style={{ left: "12.5%", top: "64%" }}><b>You</b><span>0x1a2b…9f4c</span></div>
-              <div className="xlbl" style={{ left: "87.5%", top: "64%" }}><b>@alex</b><span>+$20.00</span></div>
+              <div className="xlbl" style={{ left: "12.5%", top: "80%" }}><b>You</b><span>0x1a2b…9f4c</span></div>
+              <div className="xlbl" style={{ left: "87.5%", top: "80%" }}><b>@alex</b><span>+$20.00</span></div>
             </div>
           </div>
         </section>
@@ -182,13 +201,18 @@ export default function ParallaxLanding() {
           <div className="head" data-speed="22" data-speed-x="-13">
             <p className="eyebrow rise">03 / Woosh Agent</p>
             <h2 className="rise d1">Just <span className="grad">tell Woosh.</span></h2>
-            <p className="sub rise d2">A built-in agent that speaks plain language. Pay, request, and check balances, by chat.</p>
+            <p className="sub rise d2">A built-in AI agent that speaks plain language. Send, request, check balances, and set up strategies by chat.</p>
           </div>
           <div className="stage rise d2" data-speed="-42" data-speed-x="18">
             <div className="chat">
-              <div className="bubble user">send $20 to alex</div>
-              <div className="bubble agent">Sent <b>$20.00 USDC</b> to <b>@alex</b> <span className="tick">✓</span>, confirmed on Arc.</div>
+              <div className="bubble user">send $25 to @sara</div>
+              <div className="bubble agent">Sent <b>$25.00 USDC</b> to <b>@sara</b> <span className="tick">✓</span>, confirmed on Arc.</div>
               <div className="bubble user">what&apos;s my balance?</div>
+              <div className="bubble agent">Your balance is <b>143.50 USDC</b>.</div>
+              <div className="bubble user">request $80 from @mike for design work</div>
+              <div className="bubble agent">Invoice created. Share the link: <b>woosh.app/i/0x4f2a…</b> <span className="tick">✓</span></div>
+              <div className="bubble user">buy $50 of cirBTC every week automatically</div>
+              <div className="bubble agent">DCA strategy set up. <b>$50 USDC → cirBTC</b>, runs every 7 days <span className="tick">✓</span></div>
             </div>
           </div>
         </section>
@@ -198,16 +222,22 @@ export default function ParallaxLanding() {
           <div className="head" data-speed="22" data-speed-x="13">
             <p className="eyebrow rise">04 / Strategies</p>
             <h2 className="rise d1">Set a rule. <span className="grad">It runs itself.</span></h2>
-            <p className="sub rise d2">Teach the agent a strategy, split income, auto-save, schedule payouts, and let it execute onchain.</p>
+            <p className="sub rise d2">Recurring payments or DCA auto-buys. Runs on schedule, no PIN required, fully automated.</p>
           </div>
-          <div className="stage flow rise d2" data-speed="-40" data-speed-x="-18">
-            <div className="fnode"><span className="k">When</span><span className="v">Income arrives</span></div>
-            <div className="fwire" />
-            <div className="fnode"><span className="k">Agent splits</span><span className="v blue">70 / 30</span></div>
-            <div className="fwire" />
-            <div className="fsplit">
-              <div className="fnode"><span className="k">Save</span><span className="v green">→ Vault</span></div>
-              <div className="fnode"><span className="k">Spend</span><span className="v">→ Wallet</span></div>
+          <div className="stage strat-stack rise d2" data-speed="-40" data-speed-x="-18">
+            <div className="flow">
+              <div className="fnode"><span className="k">Every month</span><span className="v">Recurring</span></div>
+              <div className="fwire" />
+              <div className="fnode"><span className="k">Send</span><span className="v blue">$200 USDC</span></div>
+              <div className="fwire" />
+              <div className="fnode"><span className="k">To</span><span className="v green">@landlord</span></div>
+            </div>
+            <div className="flow">
+              <div className="fnode"><span className="k">Every week</span><span className="v">DCA Buy</span></div>
+              <div className="fwire" />
+              <div className="fnode"><span className="k">Swap</span><span className="v blue">$50 USDC</span></div>
+              <div className="fwire" />
+              <div className="fnode"><span className="k">Into</span><span className="v green">cirBTC</span></div>
             </div>
           </div>
         </section>
@@ -238,13 +268,15 @@ export default function ParallaxLanding() {
           <h2 className="rise d1">Your wallet is one <span className="grad">email away.</span></h2>
           <div className="cta-row rise d2">
             <button className="btn-p" onClick={go(appHref)}>{hasSession ? "Open your wallet" : "Create your wallet"}</button>
-            <button className="btn-g" style={{ padding: "13px 22px", fontSize: 15 }} onClick={go(appHref)}>Explore the app →</button>
+            <button className="btn-g" style={{ padding: "13px 22px", fontSize: 15 }} onClick={go(appHref)}>Explore the app</button>
           </div>
           <p className="sub rise d3" style={{ fontFamily: "var(--font-mono)", fontSize: 12, letterSpacing: "0.06em", marginTop: 30, opacity: 0.7 }}>
-            Powered by Arc · USDC · Onchain
+            Powered by Arc
           </p>
         </section>
       </main>
+
+      <div className="plx-footer-snap"><Footer /></div>
     </div>
   );
 }
