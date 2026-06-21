@@ -84,6 +84,7 @@ export default function ParallaxLanding() {
 
     let ticking = false;
     function onScroll() {
+      if (!scroller) { ticking = false; return; }
       const y = scroller.scrollTop;
       const vh = scroller.clientHeight;
       bar?.classList.toggle("solid", y > vh * 0.6);
