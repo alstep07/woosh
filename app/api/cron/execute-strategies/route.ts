@@ -3,7 +3,7 @@ import { formatUnits } from "viem";
 import { arcPublicClient } from "@/shared/lib/arc";
 import { STRATEGY_REGISTRY_ABI } from "@/entities/strategy/model/abi";
 import { dcwExecuteContract, dcwTransfer, waitForTx, getExecutorAddress } from "@/shared/lib/dcw";
-import { swapUsdcTo, canSwap, usdc18ToSwap6 } from "@/shared/lib/swap";
+import { executeSwap, canSwap, usdc18ToSwap6 } from "@/shared/lib/swap";
 import { tokenByAddress } from "@/shared/lib/tokens";
 import { env } from "@/shared/config/env";
 
@@ -103,7 +103,7 @@ async function runExecutor(): Promise<Record<string, unknown>> {
           continue;
         }
         const route = await canSwap(token.address, amountIn6, getExecutorAddress());
-        if (!route.ok) {
+        if (!route.ok || !route.plan) {
           skippedNoRoute++;
           errors.push({ id: ids[i], error: `no swap route: ${route.error}` });
           continue;
@@ -124,7 +124,8 @@ async function runExecutor(): Promise<Record<string, unknown>> {
           }
           released = true;
 
-          const out = await swapUsdcTo(token.address, amountIn6, getExecutorAddress());
+          // Execute the SAME quote we validated above (no second quote -> no route race).
+          const out = await executeSwap(route.plan);
           swapDone = true;
 
           if (out.amountOut && out.tokenOutDecimals != null) {

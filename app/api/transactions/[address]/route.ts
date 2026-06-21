@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { formatUnits } from "viem";
 import { getInvoice } from "@/entities/invoice/lib/readInvoice";
 
 const EXPLORER_BASE =
@@ -38,12 +39,17 @@ type RawTokenTransfer = {
   token?: { symbol?: string; decimals?: string | number };
 };
 
+/**
+ * Format a token amount for display. Uses full-precision formatUnits then trims trailing
+ * zeros, capping fractional digits at 8 — so a tiny cirBTC amount (0.00002204) stays
+ * meaningful instead of rounding to "0.00".
+ */
 function fmtUnits(value: string, decimals: number): string {
-  const d = BigInt(10) ** BigInt(decimals);
-  const v = BigInt(value);
-  const whole = v / d;
-  const frac = (v % d).toString().padStart(decimals, "0").slice(0, 2);
-  return `${whole}.${frac}`;
+  const full = formatUnits(BigInt(value), decimals);
+  if (!full.includes(".")) return full;
+  const [whole, frac] = full.split(".");
+  const trimmed = frac.replace(/0+$/, "").slice(0, 8);
+  return trimmed ? `${whole}.${trimmed}` : whole;
 }
 
 const addr = (a: { hash: string } | string | null): string | null =>

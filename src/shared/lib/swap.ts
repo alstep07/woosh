@@ -49,63 +49,68 @@ export function usdc18ToSwap6(amount18: bigint): string {
   return (amount18 / 10n ** 12n).toString();
 }
 
-export type SwapOutcome = {
-  amountInUsdc6: string;
+/** An executable swap plan: the LI.FI quote we validated, reused for execution. */
+export type SwapPlan = {
+  amountIn6: string;
+  tx: { to: string; data: string; value?: string };
+  approvalAddress?: string;
   amountOut?: string;       // base units in tokenOut decimals
   tokenOutDecimals?: number;
 };
 
+export type SwapOutcome = {
+  amountOut?: string;
+  tokenOutDecimals?: number;
+};
+
 /**
- * Does a route exist + quote successfully right now? Mirrors the Unified Balance Kit
+ * Quote a route ONCE and return an executable plan. Mirrors the Unified Balance Kit
  * "estimate before spend" rule: the executor must not release a period of USDC to itself
- * unless the swap can actually be built. Never throws.
+ * unless the swap can actually be built. The SAME plan is then executed (no second quote),
+ * which avoids a race where the route vanishes between the check and the swap. Never throws.
  */
 export async function canSwap(
   tokenOutAddress: string,
   amountIn6: string,
   fromAddress: string
-): Promise<{ ok: boolean; error?: string }> {
+): Promise<{ ok: boolean; error?: string; plan?: SwapPlan }> {
   try {
     const q = await lifiQuote(tokenOutAddress, amountIn6, fromAddress);
-    if (q.transactionRequest?.to && q.transactionRequest.data) return { ok: true };
-    return { ok: false, error: q.message ?? "no route" };
+    const tx = q.transactionRequest;
+    if (!tx?.to || !tx.data) return { ok: false, error: q.message ?? "no route" };
+    return {
+      ok: true,
+      plan: {
+        amountIn6,
+        tx: { to: tx.to, data: tx.data, value: tx.value },
+        approvalAddress: q.estimate?.approvalAddress,
+        amountOut: q.estimate?.toAmount,
+        tokenOutDecimals: q.action?.toToken?.decimals,
+      },
+    };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "quote failed" };
   }
 }
 
 /**
- * Swap `amountIn6` USDC (6-dec base units) into the token at `tokenOutAddress` from the
- * executor wallet. Approves the LI.FI router for the ERC-20 USDC first when required, sends
- * native value when LI.FI routes native. Output lands in the executor; the caller forwards it.
+ * Execute a previously-quoted swap plan from the executor wallet. Approves the LI.FI router
+ * for the ERC-20 USDC first when required, sends native value when LI.FI routes native.
+ * Output lands in the executor; the caller forwards it to the strategy owner.
  */
-export async function swapUsdcTo(
-  tokenOutAddress: string,
-  amountIn6: string,
-  fromAddress: string
-): Promise<SwapOutcome> {
-  const q = await lifiQuote(tokenOutAddress, amountIn6, fromAddress);
-  const tx = q.transactionRequest;
-  if (!tx?.to || !tx.data) {
-    throw new Error(`LI.FI no route: ${q.message ?? "unknown"}`);
-  }
-
-  // ERC-20 path: approve the router to pull USDC (0x3600) before swapping.
-  if (q.estimate?.approvalAddress) {
+export async function executeSwap(plan: SwapPlan): Promise<SwapOutcome> {
+  if (plan.approvalAddress) {
     await dcwExecuteContract(
       USDC_ERC20_ADDRESS,
       "approve(address,uint256)",
-      [q.estimate.approvalAddress, amountIn6]
+      [plan.approvalAddress, plan.amountIn6]
     );
   }
 
   // Native value (Arc USDC is the gas token) comes back as 18-dec wei; "0" for ERC-20 routes.
-  const nativeValue = tx.value && BigInt(tx.value) > 0n ? formatUnits(BigInt(tx.value), 18) : undefined;
-  await dcwExecuteRaw(tx.to, tx.data, nativeValue);
+  const nativeValue =
+    plan.tx.value && BigInt(plan.tx.value) > 0n ? formatUnits(BigInt(plan.tx.value), 18) : undefined;
+  await dcwExecuteRaw(plan.tx.to, plan.tx.data, nativeValue);
 
-  return {
-    amountInUsdc6: amountIn6,
-    amountOut: q.estimate?.toAmount,
-    tokenOutDecimals: q.action?.toToken?.decimals,
-  };
+  return { amountOut: plan.amountOut, tokenOutDecimals: plan.tokenOutDecimals };
 }
