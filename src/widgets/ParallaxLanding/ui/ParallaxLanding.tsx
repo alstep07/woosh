@@ -13,7 +13,7 @@ import { getSession } from "@/shared/lib/session";
  */
 export default function ParallaxLanding() {
   const router = useRouter();
-  const scrollerRef = useRef<HTMLDivElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
   const [hasSession, setHasSession] = useState(false);
 
   useEffect(() => {
@@ -23,18 +23,25 @@ export default function ParallaxLanding() {
   const appHref = hasSession ? "/dashboard" : "/signup";
   const go = (href: string) => () => router.push(href);
   const seeHow = () =>
-    scrollerRef.current?.querySelector("#plx-s-wallet")?.scrollIntoView({ behavior: "smooth" });
+    document.getElementById("plx-s-wallet")?.scrollIntoView({ behavior: "smooth" });
 
   useEffect(() => {
-    const scroller = scrollerRef.current;
-    if (!scroller) return;
+    const root = rootRef.current;
+    if (!root) return;
+
+    // Gentle scroll-snap, scoped to this page only (reverted on unmount/navigate away).
+    const html = document.documentElement;
+    const prevSnap = html.style.scrollSnapType;
+    const prevPad = html.style.scrollPaddingTop;
+    html.style.scrollSnapType = "y proximity";
+    html.style.scrollPaddingTop = "64px";
 
     const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const bar = scroller.querySelector<HTMLElement>(".plx-bar");
-    const neb = scroller.querySelector<HTMLElement>(".plx-nebula");
-    const grid = scroller.querySelector<HTMLElement>(".plx-grid");
-    const stages = [...scroller.querySelectorAll<HTMLElement>("[data-speed]")];
-    const scenes = [...scroller.querySelectorAll<HTMLElement>(".scene")];
+    const bar = root.querySelector<HTMLElement>(".plx-bar");
+    const neb = root.querySelector<HTMLElement>(".plx-nebula");
+    const grid = root.querySelector<HTMLElement>(".plx-grid");
+    const stages = [...root.querySelectorAll<HTMLElement>("[data-speed]")];
+    const scenes = [...root.querySelectorAll<HTMLElement>(".scene")];
 
     // Reveal scenes on enter (hero stays revealed).
     const io = new IntersectionObserver(
@@ -44,14 +51,14 @@ export default function ParallaxLanding() {
           else if (e.target.id !== "plx-hero") e.target.classList.remove("in");
         });
       },
-      { root: scroller, threshold: 0.32 }
+      { threshold: 0.32 }
     );
     scenes.forEach((s) => io.observe(s));
 
     let ticking = false;
     function onScroll() {
-      const y = scroller!.scrollTop;
-      const vh = scroller!.clientHeight;
+      const y = window.scrollY;
+      const vh = window.innerHeight;
       bar?.classList.toggle("solid", y > vh * 0.6);
       if (reduceMotion) { ticking = false; return; }
       if (neb) neb.style.transform = `translate(${y * -0.03}px, ${y * 0.12}px)`;
@@ -69,17 +76,19 @@ export default function ParallaxLanding() {
     const handler = () => {
       if (!ticking) { requestAnimationFrame(onScroll); ticking = true; }
     };
-    scroller.addEventListener("scroll", handler, { passive: true });
+    window.addEventListener("scroll", handler, { passive: true });
     onScroll();
 
     return () => {
       io.disconnect();
-      scroller.removeEventListener("scroll", handler);
+      window.removeEventListener("scroll", handler);
+      html.style.scrollSnapType = prevSnap;
+      html.style.scrollPaddingTop = prevPad;
     };
   }, []);
 
   return (
-    <div className="plx" ref={scrollerRef}>
+    <div className="plx" ref={rootRef}>
       <div className="plx-bg">
         <div className="plx-nebula" />
         <div className="plx-grid" />

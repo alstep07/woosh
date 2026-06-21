@@ -11,6 +11,7 @@ body {
   color: var(--foreground);
   background: var(--background);
   font-family: var(--font-sans), system-ui, sans-serif;
+  overflow-x: hidden;
 }
 
 @layer utilities {
@@ -150,14 +151,8 @@ input[type="number"]::-webkit-inner-spin-button {
   --plx-glow: 0 0 24px rgba(14, 165, 233, 0.25);
   --plx-ease: cubic-bezier(0.4, 0, 0.2, 1);
 
-  position: fixed;
-  inset: 0;
-  height: 100vh;
-  overflow-x: hidden;
-  overflow-y: auto;
-  scroll-snap-type: y proximity;
-  scroll-padding-top: 64px;
-  scroll-behavior: smooth;
+  position: relative;
+  min-height: 100vh;
   background: var(--plx-navy);
   color: var(--plx-tp);
 }
