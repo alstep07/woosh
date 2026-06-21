@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { Button } from "@/shared/ui/Button";
-import { Input } from "@/shared/ui/Input";
 import { Spinner } from "@/shared/ui/Spinner";
 import { EmailStep } from "@/features/auth/ui/EmailStep";
 import { useChallengeFlow } from "@/features/auth/model/useChallengeFlow";
@@ -13,12 +12,15 @@ const AMOUNT_RE = /^\d+(\.\d{1,6})?$/;
 
 export type StrategyAction = "pause" | "resume" | "cancel" | "fund";
 
-const COPY: Record<StrategyAction, { title: string; body: string; cta: string }> = {
-  pause: { title: "Pause strategy", body: "It stops running until you resume it. Funds stay in the vault.", cta: "Pause" },
-  resume: { title: "Resume strategy", body: "It starts running again on its schedule.", cta: "Resume" },
-  cancel: { title: "Cancel strategy", body: "It stops for good and the remaining balance is refunded to you.", cta: "Cancel strategy" },
-  fund: { title: "Add funds", body: "Top up the strategy's budget so it can keep running.", cta: "Add funds" },
+const COPY: Record<StrategyAction, { title: string; body: string; cta: string; glyph: string; cls: string }> = {
+  pause: { title: "Pause strategy", body: "It stops running until you resume it. Funds stay in the vault.", cta: "Pause", glyph: "⏸", cls: "bg-amber-400/10 text-amber-400" },
+  resume: { title: "Resume strategy", body: "It starts running again on its schedule.", cta: "Resume", glyph: "▶", cls: "bg-green-400/10 text-green-400" },
+  cancel: { title: "Cancel strategy", body: "It stops for good and the remaining balance is refunded to you.", cta: "Cancel strategy", glyph: "✕", cls: "bg-red-400/10 text-red-400" },
+  fund: { title: "Add funds", body: "Top up the strategy's budget so it can keep running.", cta: "Add funds", glyph: "+", cls: "bg-blue-primary/10 text-blue-primary" },
 };
+
+const FIELD_CLS =
+  "w-full bg-border/40 text-text-primary rounded-input px-3 py-2.5 text-sm border border-border focus:border-blue-primary outline-none transition-colors placeholder:text-text-secondary/40";
 
 interface Props {
   session: Session;
@@ -126,16 +128,28 @@ export default function StrategyActionModal({ session, strategy, action, onClose
           </div>
         ) : (
           <div className="space-y-4">
-            <h2 className="text-lg font-bold text-text-primary">{copy.title}</h2>
-            <p className="text-sm text-text-secondary">{copy.body}</p>
+            <div className="flex items-start gap-3">
+              <span className={`shrink-0 h-9 w-9 rounded-full grid place-items-center text-base font-bold ${copy.cls}`}>
+                {copy.glyph}
+              </span>
+              <div className="min-w-0">
+                <h2 className="text-lg font-bold text-text-primary leading-tight">{copy.title}</h2>
+                <p className="text-sm text-text-secondary mt-1">{copy.body}</p>
+              </div>
+            </div>
             {action === "fund" && (
-              <Input
-                type="number"
-                value={amount}
-                onChange={(e) => { setAmount(e.target.value); setFormError(null); }}
-                placeholder="Amount (USDC)"
-                autoFocus
-              />
+              <div className="relative">
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  value={amount}
+                  onChange={(e) => { setAmount(e.target.value); setFormError(null); }}
+                  placeholder="0.00"
+                  autoFocus
+                  className={`${FIELD_CLS} pr-16`}
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-text-secondary/50">USDC</span>
+              </div>
             )}
             {error && <p className="text-sm text-red-400">{error}</p>}
             <Button onClick={start}>{copy.cta}</Button>

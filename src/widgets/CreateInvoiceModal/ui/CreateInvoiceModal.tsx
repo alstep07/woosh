@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { Button } from "@/shared/ui/Button";
-import { Input } from "@/shared/ui/Input";
 import { Spinner } from "@/shared/ui/Spinner";
 import { EmailStep } from "@/features/auth/ui/EmailStep";
 import { useAuth } from "@/features/auth/model/useAuth";
@@ -18,6 +17,10 @@ import { buildRequestLink } from "@/entities/invoice/lib/buildRequestLink";
 import type { Session } from "@/entities/user/model/types";
 
 const AMOUNT_RE = /^\d+(\.\d{1,6})?$/;
+
+const FIELD_CLS =
+  "w-full bg-border/40 text-text-primary rounded-input px-3 py-2.5 text-sm border border-border focus:border-blue-primary outline-none transition-colors placeholder:text-text-secondary/40";
+const LABEL_CLS = "block text-xs font-medium text-text-secondary mb-1.5";
 
 function shortLink(url: string): string {
   const s = url.replace(/^https?:\/\//, "");
@@ -252,34 +255,46 @@ export default function CreateInvoiceModal({ session, onClose, onCreated }: Prop
           </div>
         ) : (
           <div className="space-y-4">
-            <h2 className="text-lg font-bold text-text-primary">Create invoice</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label htmlFor="amount" className="block text-sm font-medium text-text-secondary mb-1.5">
-                  Amount (USDC)
-                </label>
-                <Input
+            <div className="flex items-start gap-3">
+              <span className="shrink-0 h-9 w-9 rounded-full grid place-items-center bg-blue-primary/10 text-blue-primary">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h4m4 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+              </span>
+              <div className="min-w-0">
+                <h2 className="text-lg font-bold text-text-primary leading-tight">Create invoice</h2>
+                <p className="text-sm text-text-secondary mt-1">Share a link to request a fixed amount.</p>
+              </div>
+            </div>
+
+            <div>
+              <label htmlFor="amount" className={LABEL_CLS}>Amount</label>
+              <div className="relative">
+                <input
                   id="amount"
                   type="number"
+                  inputMode="decimal"
                   value={amount}
                   onChange={(e) => { setAmount(e.target.value); setError(null); }}
                   placeholder="0.00"
                   autoFocus
+                  className={`${FIELD_CLS} pr-16`}
                 />
-              </div>
-              <div>
-                <label htmlFor="memo" className="block text-sm font-medium text-text-secondary mb-1.5">
-                  Note (optional)
-                </label>
-                <Input
-                  id="memo"
-                  type="text"
-                  value={memo}
-                  onChange={(e) => setMemo(e.target.value)}
-                  placeholder="e.g. Brunch"
-                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-text-secondary/50">USDC</span>
               </div>
             </div>
+            <div>
+              <label htmlFor="memo" className={LABEL_CLS}>Note (optional)</label>
+              <input
+                id="memo"
+                type="text"
+                value={memo}
+                onChange={(e) => setMemo(e.target.value)}
+                placeholder="e.g. Brunch"
+                className={FIELD_CLS}
+              />
+            </div>
+
             {error && <p className="text-sm text-red-400">{error}</p>}
             <Button onClick={startCreate}>Create invoice</Button>
           </div>
