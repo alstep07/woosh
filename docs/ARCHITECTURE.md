@@ -57,11 +57,15 @@ chain. Read from chain; don't shadow it. Portability is already solved by Circle
 - Sending / signing: user enters PIN once per action
 - **Cannot be used for autonomous/scheduled operations**, requires human PIN each time
 
-### DCW, Developer-Controlled Wallets (agents, V3+)
-- Woosh holds `entitySecret` server-side
+### DCW, Developer-Controlled Wallets (executor, V3.0 ✅)
+- Woosh holds `entitySecret` server-side (`CIRCLE_ENTITY_SECRET`, never client-exposed)
 - Programmatic signing, no user interaction
-- Required for: recurring payments, DCA strategies, any no-human-in-loop operation
-- Not implemented yet, planned for V3
+- Implemented as the single shared **strategy executor** wallet (`src/shared/lib/dcw.ts`):
+  one DCW EOA, set as `WooshStrategyRegistry.executor`, funded with USDC for gas.
+- Triggers `executePayment`/`releaseForSwap` on schedule, and signs DCA swaps through the
+  Circle Wallets adapter (`createCircleWalletsAdapter`, `src/shared/lib/swap.ts`), no raw key.
+- It does NOT custody user funds: strategy budgets live in the contract vault per strategy.
+- Provision once via `POST /api/admin/provision-executor` (CRON_SECRET-protected).
 
 ### challenge/execute pattern (applies to ALL onchain actions)
 ```
@@ -81,6 +85,7 @@ Examples already in use:
 |----------|---------|-------|
 | `WooshSlugRegistry` | `NEXT_PUBLIC_SLUG_REGISTRY_ADDRESS` | Deployed via Foundry |
 | `WooshInvoiceRegistry` | `NEXT_PUBLIC_INVOICE_REGISTRY_ADDRESS` | Payment requests / invoices. `create(salt, amount, memo)` stores the request under `id = keccak256(creator, salt)`; `pay(id)` payable enforces exact `msg.value` and forwards it to the payee; `getInvoice(id)` / `getInvoiceIds(creator)` for reads. Custodies nothing between create and pay. |
+| `WooshStrategyRegistry` | `NEXT_PUBLIC_STRATEGY_REGISTRY_ADDRESS` | Automated strategies (V3.0). Vault custodies native USDC + stores schedule under `id = keccak256(owner, salt)`. Two kinds: Payment (contract forwards to recipient each period, trustless) and Swap/DCA (`releaseForSwap` hands one period to the `executor`, which swaps off-chain and forwards to owner). Owner: `create`/`fund`/`pause`/`resume`/`cancel` (refund). Executor-only: `executePayment`/`releaseForSwap` advance the schedule atomically. `getStrategy`/`getStrategyIds`/`getStrategiesBatch`/`allIds` reads. Statuses: Active/Paused/Completed/Cancelled/Depleted. |
 | USDC (native) | `0x3600000000000000000000000000000000000000` | 18 decimals on Arc |
 | EURC | `0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a` | 6 decimals, ERC-20 |
 | USYC | `0xe9185F0c5F296Ed1797AaE4238D26CCaBEadb86C` | Yield token, allowlist required |
@@ -88,9 +93,11 @@ Examples already in use:
 | Permit2 | `0x000000000022D473030F116dDEE9F6B43aC78BA3` | Required for StableFX |
 | CCTP TokenMessengerV2 | `0x8FE6B999Dc680CcFDD5Bf7EB0974218be2542DAA` | Bridge |
 
-Sources: `contracts/src/WooshSlugRegistry.sol`, `contracts/src/WooshInvoiceRegistry.sol`
-Deploy: `forge create contracts/src/WooshSlugRegistry.sol:WooshSlugRegistry --rpc-url https://rpc.testnet.arc.network --private-key $KEY`
-Deploy: `forge create contracts/src/WooshInvoiceRegistry.sol:WooshInvoiceRegistry --rpc-url https://rpc.testnet.arc.network --private-key $KEY`
+Sources: `contracts/src/WooshSlugRegistry.sol`, `contracts/src/WooshInvoiceRegistry.sol`, `contracts/src/WooshStrategyRegistry.sol`
+Deploy: `forge create contracts/src/WooshSlugRegistry.sol:WooshSlugRegistry --rpc-url https://rpc.testnet.arc.network --private-key $KEY --broadcast`
+Deploy: `forge create contracts/src/WooshInvoiceRegistry.sol:WooshInvoiceRegistry --rpc-url https://rpc.testnet.arc.network --private-key $KEY --broadcast`
+Deploy: `forge create contracts/src/WooshStrategyRegistry.sol:WooshStrategyRegistry --rpc-url https://rpc.testnet.arc.network --private-key $KEY --broadcast`
+After deploying the strategy registry: `cast send <addr> "setExecutor(address)" <EXECUTOR_ADDRESS> ...` and fund the executor with USDC for gas.
 
 ---
 
@@ -118,6 +125,7 @@ app/             thin Next.js routing shells + API routes
 | `/dashboard` | `DashboardPage` | Balance + chat + last 3 txs |
 | `/dashboard/history` | `DashboardHistoryPage` | Full tx list |
 | `/dashboard/invoices` | `RequestsPage` | "My invoices", reads `getInvoiceIds(creator)` from chain |
+| `/dashboard/strategies` | `StrategiesPage` | Recurring payments + DCA, reads `getStrategyIds(owner)` from chain; create/fund/pause/resume/cancel modals |
 | `/pay/[slug]` | `PayPage` | 0x address or slug, `?amount=` pre-fill |
 | `/i/[id]` | invoice pay page | Reads the invoice from `WooshInvoiceRegistry`, locks amount/memo |
 
@@ -133,6 +141,11 @@ app/             thin Next.js routing shells + API routes
 | `/api/wallet/send-payment` | POST | Create transfer challenge → `{challengeId}` |
 | `/api/wallet/create-invoice` | POST | Create `WooshInvoiceRegistry.create` challenge → `{challengeId}` |
 | `/api/wallet/pay-invoice` | POST | Create `WooshInvoiceRegistry.pay` challenge → `{challengeId}` |
+| `/api/wallet/create-strategy` | POST | Create `WooshStrategyRegistry.create` (payable) challenge; resolves payment recipient slug |
+| `/api/wallet/fund-strategy` | POST | Create `fund(id)` challenge |
+| `/api/wallet/manage-strategy` | POST | Create `pause`/`resume`/`cancel` challenge |
+| `/api/cron/execute-strategies` | GET/POST | Executor: runs due strategies (payments + DCA swaps). `CRON_SECRET`-auth, time-budgeted, idempotent |
+| `/api/admin/provision-executor` | POST | One-time: create the DCW executor wallet. `CRON_SECRET`-auth |
 | `/api/slug/register` | POST | Create contract execution challenge for slug |
 | `/api/transactions/[address]` | GET | Blockscout v2, last 20 txs |
 | `/api/chat` | POST | Agentic loop, max 4 iters, OpenRouter → Claude |

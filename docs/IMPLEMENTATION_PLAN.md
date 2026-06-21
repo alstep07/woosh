@@ -1,6 +1,6 @@
 # Woosh, Implementation Plan
 
-> Updated 2026-06-14 after shipping invoices. Self-contained: each task lists what
+> Updated 2026-06-21 after shipping V3.0 strategies. Self-contained: each task lists what
 > to build, **which tool/SDK to use**, why it's ordered where it is, and acceptance
 > criteria. Execute roughly top-to-bottom; two tracks can run in parallel (noted).
 
@@ -8,7 +8,13 @@
 
 ## Context snapshot
 
-- Phase 0 ✅ + Phase 1 ✅ + Payment requests/invoices ✅ shipped on `main`. App is **v2.2**.
+- Phase 0 ✅ + Phase 1 ✅ + invoices ✅ + **V3.0 strategies ✅** shipped. App is **v3.0**.
+- **Strategies SHIPPED (V3.0):** `WooshStrategyRegistry` onchain vault + DCW executor.
+  Recurring USDC payments (trustless) and DCA auto-buys (EURC/cirBTC via Circle Swap Kit,
+  `createCircleWalletsAdapter` so the DCW executor signs the swap, no raw key). UI at
+  `/dashboard/strategies`, chat tools `create_strategy`/`get_strategies`, Vercel Cron
+  executor (`/api/cron/execute-strategies`, scheduler-agnostic). This resolves the old
+  "DCW + cirBTC swap + Recurring = one deferred project" item below.
 - **Invoices shipped onchain, not stateless.** We built `WooshInvoiceRegistry` instead
   of the link-only `/pay/slug?amount=` approach this plan originally proposed. Reason:
   the contract stores amount/memo/payee so the share link (`/i/[id]`) carries only the
@@ -240,18 +246,18 @@ no hardcoded APY); deposit/redeem via your `challenge/execute` route pattern.
 **Blocker:** Circle USYC allowlist approval (KudiArc waited, approved Mar 2026).
 **Action:** submit allowlist application immediately, in parallel. Do NOT put on critical path.
 
-### DCW + cirBTC swap + Recurring, one mechanism unlocks all three
-**Tool / reference pattern:** DCW (`entitySecret` server-side) + StableFX API (swap) +
-scheduled executor (cron/agent loop) + spend policies.
-**Why deferred:** UCW requires PIN per tx; autonomous execution needs DCW. Build DCW
-infra ONCE → it unlocks: cirBTC swap (UCW can't reach cirBTC via StableFX), recurring
-payments, DCA strategies. Until then these are one project, not per-asset features.
-**Agent flow (chat-driven):** user asks agent to set up DCA → agent creates DCW
-server-side via new tool `setup_dca(tokenIn, tokenOut, amountPerDay, days)` → returns
-`pendingAction` to fund the strategy wallet → user confirms + transfers USDC (one PIN)
-→ server executes swaps autonomously on schedule. Same pattern for recurring payments.
-**Note on narrative:** lead with USDC↔EURC recurring (FX payments, salaries, SaaS).
-Keep "recurring buy cirBTC" low-key, Arc is stablecoin finance, not speculation.
+### DCW + cirBTC swap + Recurring — ✅ SHIPPED (V3.0)
+**What we built (diverged from the StableFX plan, on purpose):** one DCW executor +
+`WooshStrategyRegistry` onchain vault. Recurring payments run trustlessly (contract
+forwards). DCA swaps go through **Circle Swap Kit** (`@circle-fin/swap-kit` +
+`@circle-fin/adapter-circle-wallets`), NOT StableFX — the Circle Wallets adapter lets the
+DCW executor sign the swap directly, and Swap Kit supports cirBTC on Arc (StableFX did not).
+Flow: `releaseForSwap` hands the executor one period of USDC → `kit.swap` USDC→token →
+forward output to owner. Agent tool is `create_strategy` (kind = payment|swap) returning a
+`create_strategy` pendingAction. Cron executor at `/api/cron/execute-strategies`.
+**Narrative kept:** lead with USDC↔EURC recurring (FX/salaries/SaaS); cirBTC DCA stays low-key.
+**Still open from this cluster:** spend policies / per-strategy caps, and multiple executor
+wallets for parallelism (contract holds one `executor` today). Future hardening, not blocking.
 
 ### Also deferred (opportunistic, after human-side traction)
 - **Fiat off-ramp**, Ramp (cheap EU/SEPA) or Transak (virtual-IBAN, agent flows).

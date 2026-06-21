@@ -13,7 +13,9 @@
 | StableFX taker quickstart | https://developers.circle.com/stablefx/quickstarts/fx-trade-taker.md | Full taker flow |
 | StableFX OpenAPI | https://developers.circle.com/openapi/stablefx.yaml | All endpoints |
 | Circle App Kit (Arc) | https://docs.arc.io/app-kit | Bridge, Swap SDK |
-| App Kit adapter setups | https://docs.arc.io/app-kit/tutorials/adapter-setups | viem, ethers, Circle Wallets |
+| App Kit Swap guide | https://docs.arc.io/app-kit/swap | DCA swap rail used in V3.0 (USDC/EURC/cirBTC) |
+| App Kit adapter setups | https://docs.arc.io/app-kit/tutorials/adapter-setups | viem, ethers, **Circle Wallets** (DCW adapter we use) |
+| Swap Kit packages | `@circle-fin/swap-kit` + `@circle-fin/adapter-circle-wallets` | `SwapKit.swap()` + `createCircleWalletsAdapter({ apiKey, entitySecret })`, kit key via `config.kitKey` (server `CIRCLE_KIT_KEY`) |
 | Blockscout (Arc Testnet) | https://testnet.arcscan.app | Explorer + API |
 | Supabase | https://supabase.com/docs | V2c+ |
 | WalletConnect | https://cloud.walletconnect.com | Project ID |
@@ -79,6 +81,22 @@ RPC:         https://rpc.testnet.arc.network
 Explorer:    https://testnet.arcscan.app
 Faucet:      https://faucet.circle.com/
 ```
+
+---
+
+## Arc Testnet Network Updates (hardforks)
+
+We run through Circle's hosted RPC (`rpc.testnet.arc.network`), so node-operator
+upgrade deadlines do not apply to us, Circle upgrades the RPC. Important caveat: a
+chain feature landing does not mean the Circle wallet SDK exposes it. Always verify
+SDK support (`createTransaction` params, etc.) before building on a new capability.
+
+| Version | Activates | Adds | Relevance to Woosh |
+|---------|-----------|------|--------------------|
+| v0.7.2 | 2026-06-18 12:00 UTC (testnet only, no mainnet timing) | Transaction memos, batch transactions | **Memos:** native "note / what for" on a plain `/pay` send, no contract needed (today memos live only in `WooshInvoiceRegistry`). **Batch:** multi-recipient payouts and paying several invoices in one tx (maps to the treasury/disbursement direction). Both blocked on confirming Circle UCW `createTransaction` actually exposes them. |
+
+- Release notes: https://github.com/circlefin/arc-node/releases/tag/v0.7.2
+- Breaking changes: https://github.com/circlefin/arc-node/blob/main/BREAKING_CHANGES.md
 
 ---
 

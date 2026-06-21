@@ -15,7 +15,7 @@ USDC payment platform for humans and AI agents. Built on [Arc](https://arc.netwo
 
 ---
 
-## Shipped (v2.2)
+## Shipped (v3.0)
 
 ### V1: Web3 Payments
 Email sign-in. Circle User-Controlled embedded wallet. Payment link at `/pay/0x...`. Send USDC from any wallet or Woosh account.
@@ -40,6 +40,14 @@ Create an invoice with a fixed amount and a memo. The request lives onchain in `
 - Create from a dashboard modal or from chat. Agent tools: `create_payment_request` (returns a confirmation card) and `get_invoices` (totals, what's unpaid, what was invoiced)
 - Pay flow reuses challenge/execute: `/api/wallet/create-invoice` and `/api/wallet/pay-invoice` → PIN iframe, with inline email OTP fallback
 
+### V3.0: Automated Strategies (recurring payments + DCA)
+Set up a recurring USDC payment or a DCA auto-buy that runs onchain on a schedule, no PIN each time after a one-time setup.
+
+- `WooshStrategyRegistry` smart contract on Arc: a vault that custodies the budget and stores the schedule. Payment strategies are fully trustless (the contract forwards to the recipient each period); DCA strategies `releaseForSwap` one period to the executor, which swaps and forwards the output to the owner
+- **DCW executor:** a single Developer-Controlled wallet (`entitySecret`, no PIN) triggers due strategies. DCA swaps go through **Circle Swap Kit** with the Circle Wallets adapter, so the same DCW wallet signs the swap, no raw private key. Arc Testnet supports USDC/EURC/cirBTC
+- "Strategies" list at `/dashboard/strategies`: create/fund/pause/resume/cancel. Agent tools: `create_strategy` (confirmation card) and `get_strategies`
+- Executor runs via Vercel Cron (`/api/cron/execute-strategies`), scheduler-agnostic + idempotent; free Hobby cron = daily granularity
+
 ### Stabilization (v2.1)
 Stale-closure fix in PaymentForm · Shared Circle SDK singleton · Central session module · Circle token expiry → 401 · Rate limiting on `/api/chat` · Slug resolution in transaction list · Optimistic pending tx entries.
 
@@ -51,10 +59,7 @@ Stale-closure fix in PaymentForm · Shared Circle SDK singleton · Central sessi
 
 **Multi-token balances:** show EURC and cirBTC alongside USDC in the dashboard.
 
-**Swap USDC ↔ EURC**
-- External wallet: Circle App Kit `kit.swap()`
-- Woosh account (UCW): StableFX API + `signUserTypedData` challenge, two PIN entries, no bridge needed
-- Via chat: *"swap 50 USDC to EURC"* → confirmation card → executed
+**One-off swaps (USDC ↔ EURC ↔ cirBTC):** the DCA swap rail (Circle Swap Kit) is in place; expose it as a manual swap from the dashboard and chat (*"swap 50 USDC to EURC"*).
 
 **Gift cards (claim-by-secret):** fund a card, share a link with a secret; recipient claims onchain. Viral by nature: recipient sees Woosh → signs up → now has an account.
 
@@ -64,11 +69,11 @@ Stale-closure fix in PaymentForm · Shared Circle SDK singleton · Central sessi
 
 **Bridge / Unified Balance on PayPage:** Circle App Kit lets senders pay an Arc link with USDC from Base or Ethereum without knowing a bridge exists.
 
-### Later: needs external approval or DCW infrastructure
+### Later: needs external approval or further hardening
 
 **USYC yield on balance:** deposit idle USDC into USYC (yield-bearing treasury token on Arc). Blocked on Circle allowlist approval.
 
-**DCW agent wallets + cirBTC swap + recurring payments:** Developer-Controlled Wallets enable programmatic signing. Unlocks: swap into cirBTC (StableFX doesn't support cirBTC for UCW), recurring payments, DCA strategies set up via chat agent. Build the mechanism once, it unlocks all three.
+**Strategy hardening:** per-strategy spend caps / policies, and multiple executor wallets for parallelism (the contract holds one `executor` today).
 
 **Fiat on-ramp / off-ramp:** Transak or Ramp. Needs provider account + onboarding.
 
@@ -97,8 +102,10 @@ Stale-closure fix in PaymentForm · Shared Circle SDK singleton · Central sessi
 |----------|---------|
 | `WooshSlugRegistry` | `NEXT_PUBLIC_SLUG_REGISTRY_ADDRESS` (deploy via Foundry) |
 | `WooshInvoiceRegistry` | `NEXT_PUBLIC_INVOICE_REGISTRY_ADDRESS` (deploy via Foundry) |
+| `WooshStrategyRegistry` | `NEXT_PUBLIC_STRATEGY_REGISTRY_ADDRESS` (deploy via Foundry, then `setExecutor`) |
 | USDC (native) | `0x3600000000000000000000000000000000000000` |
 | EURC | `0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a` |
+| cirBTC | `NEXT_PUBLIC_CIRBTC_ADDRESS` (`0xf0C4a4CE82A5746AbAAd9425360Ab04fbBA432BF` on testnet) |
 | USYC | `0xe9185F0c5F296Ed1797AaE4238D26CCaBEadb86C` |
 
 ---
@@ -133,6 +140,15 @@ NEXT_PUBLIC_CIRCLE_APP_ID=
 # Smart contracts
 NEXT_PUBLIC_SLUG_REGISTRY_ADDRESS=
 NEXT_PUBLIC_INVOICE_REGISTRY_ADDRESS=
+NEXT_PUBLIC_STRATEGY_REGISTRY_ADDRESS=
+NEXT_PUBLIC_CIRBTC_ADDRESS=
+
+# Strategies executor (V3.0, server only)
+CIRCLE_ENTITY_SECRET=        # DCW entity secret (generate + register in Console)
+EXECUTOR_WALLET_ID=          # from POST /api/admin/provision-executor
+EXECUTOR_ADDRESS=            # set via WooshStrategyRegistry.setExecutor; fund with USDC for gas
+CIRCLE_KIT_KEY=              # Circle Swap Kit key for DCA (KIT_KEY:..., never NEXT_PUBLIC)
+CRON_SECRET=                 # secret the cron + admin routes check
 
 # Woosh Agent
 OPENROUTER_API_KEY=
@@ -158,6 +174,13 @@ forge create contracts/src/WooshInvoiceRegistry.sol:WooshInvoiceRegistry \
   --rpc-url https://rpc.testnet.arc.network \
   --private-key $PRIVATE_KEY
 # copy deployed address → NEXT_PUBLIC_INVOICE_REGISTRY_ADDRESS
+
+forge create contracts/src/WooshStrategyRegistry.sol:WooshStrategyRegistry \
+  --rpc-url https://rpc.testnet.arc.network \
+  --private-key $PRIVATE_KEY --broadcast
+# copy deployed address → NEXT_PUBLIC_STRATEGY_REGISTRY_ADDRESS
+# then: POST /api/admin/provision-executor → set EXECUTOR_* →
+#       cast send <addr> "setExecutor(address)" $EXECUTOR_ADDRESS ... → fund executor with USDC
 ```
 
 ---
