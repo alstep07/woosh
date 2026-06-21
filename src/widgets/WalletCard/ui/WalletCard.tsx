@@ -114,6 +114,10 @@ export default function WalletCard({
         <Link href="/dashboard/invoices" className="hover:text-blue-secondary transition-colors">
           My invoices
         </Link>
+        <span className="w-px h-4 bg-border" />
+        <Link href="/dashboard/strategies" className="hover:text-blue-secondary transition-colors">
+          Strategies
+        </Link>
       </div>
 
       <div className="my-4 border-t border-border shrink-0" />
