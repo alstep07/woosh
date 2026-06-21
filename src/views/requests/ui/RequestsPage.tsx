@@ -46,9 +46,9 @@ export default function RequestsPage() {
       <div className="flex-1 px-4 sm:px-6 lg:px-8 py-8 max-w-4xl mx-auto w-full">
         <Link
           href="/dashboard"
-          className="block text-sm text-blue-primary/60 hover:text-blue-primary transition-colors mb-6"
+          className="inline-flex items-center gap-1.5 text-sm text-blue-primary/60 hover:text-blue-primary transition-colors mb-6"
         >
-          Back
+          <span aria-hidden>←</span> Dashboard
         </Link>
 
         <div className="flex items-center justify-between gap-4 mb-6">

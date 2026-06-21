@@ -1,9 +1,14 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Hanken_Grotesk } from "next/font/google";
 import "./globals.css";
 import Providers from "@/app/Providers";
 
-const inter = Inter({ subsets: ["latin"] });
+const sans = Hanken_Grotesk({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-sans",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "Woosh | Get paid in seconds",
@@ -25,8 +30,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <body className={`${inter.className} antialiased bg-navy text-text-primary`}>
+    <html lang="en" className={sans.variable}>
+      <body className="font-sans antialiased bg-navy text-text-primary">
         <Providers>{children}</Providers>
       </body>
     </html>
