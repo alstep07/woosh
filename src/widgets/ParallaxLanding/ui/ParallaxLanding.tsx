@@ -44,7 +44,6 @@ export default function ParallaxLanding() {
     const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const bar = scroller.querySelector<HTMLElement>(".plx-bar");
     const neb = scroller.querySelector<HTMLElement>(".plx-nebula");
-    const grid = scroller.querySelector<HTMLElement>(".plx-grid");
     const stages = [...scroller.querySelectorAll<HTMLElement>("[data-speed]")];
     const scenes = [...scroller.querySelectorAll<HTMLElement>(".scene")];
 
@@ -89,13 +88,13 @@ export default function ParallaxLanding() {
       const vh = scroller.clientHeight;
       bar?.classList.toggle("solid", y > vh * 0.6);
       if (reduceMotion) { ticking = false; return; }
-      if (neb) neb.style.transform = `translate(${y * -0.03}px, ${y * 0.12}px)`;
-      if (grid) grid.style.transform = `translate(${y * -0.05}px, ${y * 0.06}px)`;
+      if (neb) neb.style.transform = `translate(${y * -0.03}px, ${y * 0.10}px)`;
+      const mobile = window.innerWidth < 768;
       for (const el of stages) {
         const r = el.getBoundingClientRect();
         const center = r.top + r.height / 2;
         const off = (center - vh / 2) / vh;
-        const sx = parseFloat(el.dataset.speedX || "0");
+        const sx = mobile ? 0 : parseFloat(el.dataset.speedX || "0");
         const sy = parseFloat(el.dataset.speed || "0");
         el.style.transform = `translate(${off * sx}px, ${off * sy}px)`;
       }
@@ -118,7 +117,8 @@ export default function ParallaxLanding() {
     <div className="plx" ref={rootRef}>
       <div className="plx-bg">
         <div className="plx-nebula" />
-        <div className="plx-grid" />
+        <div className="plx-aurora" />
+        <div className="plx-veil" />
       </div>
 
       <div className="plx-bar">
@@ -139,8 +139,7 @@ export default function ParallaxLanding() {
             <button className="btn-g" style={{ padding: "13px 22px", fontSize: 15 }} onClick={seeHow}>See how it works</button>
           </div>
           <div className="scroll-cue">
-            <span>Scroll</span>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M6 9l6 6 6-6" /></svg>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M6 9l6 6 6-6" /></svg>
           </div>
         </section>
 
@@ -274,10 +273,9 @@ export default function ParallaxLanding() {
           <p className="sub rise d3" style={{ fontFamily: "var(--font-mono)", fontSize: 12, letterSpacing: "0.06em", marginTop: 30, opacity: 0.7 }}>
             Powered by Arc
           </p>
+          <div className="plx-cta-footer"><Footer /></div>
         </section>
       </main>
-
-      <div className="plx-footer-snap"><Footer /></div>
     </div>
   );
 }
