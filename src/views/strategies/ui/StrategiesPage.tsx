@@ -10,7 +10,7 @@ import CreateStrategyModal from "@/widgets/CreateStrategyModal/ui/CreateStrategy
 import StrategyActionModal, { type StrategyAction } from "@/widgets/CreateStrategyModal/ui/StrategyActionModal";
 import { getSession as loadSession } from "@/shared/lib/session";
 import { useMyStrategies } from "@/entities/strategy/hooks/useMyStrategies";
-import { statusBadge, formatNextRun, intervalLabel } from "@/entities/strategy/lib/format";
+import { statusBadge, formatNextRun, intervalLabel, isOverdue } from "@/entities/strategy/lib/format";
 import { tokenByAddress } from "@/shared/lib/tokens";
 import type { OnchainStrategy } from "@/entities/strategy/model/types";
 import type { Session } from "@/entities/user/model/types";
@@ -99,6 +99,16 @@ function StrategyCard({
               value={s.status === "active" ? formatNextRun(s.nextRunAt, s.status) : badge.text}
             />
           </div>
+
+          {isOverdue(s) && (
+            <p className="mt-3 text-xs text-amber-400/80 flex items-start gap-1.5">
+              <span aria-hidden className="shrink-0">⚠</span>
+              <span>
+                Overdue. It hasn&apos;t run on schedule
+                {s.kind === "swap" ? " — the scheduler may be down or no swap route is available right now." : " — the scheduler may be down or the executor is low on gas."}
+              </span>
+            </p>
+          )}
         </div>
       </div>
 

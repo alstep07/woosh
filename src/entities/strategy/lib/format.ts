@@ -46,6 +46,19 @@ export function statusBadge(status: StrategyStatus): { text: string; cls: string
   }
 }
 
+/**
+ * Heuristic: an active strategy that should have run by now but hasn't. Without execution
+ * logs (no DB), this is how a silent stall surfaces — e.g. the scheduler isn't running, the
+ * executor is out of gas, or a DCA pair has no swap route. Flags only when overdue by more
+ * than a full interval (or 2h, whichever is larger) to avoid false positives right after
+ * creation or between normal daily ticks.
+ */
+export function isOverdue(s: OnchainStrategy): boolean {
+  if (s.status !== "active") return false;
+  const now = Math.floor(Date.now() / 1000);
+  return now - s.nextRunAt > Math.max(s.intervalSeconds, 7_200);
+}
+
 /** One-line summary of what a strategy does, for list rows and agent replies. */
 export function strategySummary(s: OnchainStrategy, tokenOutSymbol?: string): string {
   if (s.kind === "payment") {
