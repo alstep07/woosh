@@ -22,7 +22,20 @@ function shortenLink(url: string): string {
 
 type PendingAction =
   | { type: "send_payment"; to: string; amount: string; resolvedAddress?: string }
-  | { type: "create_request"; amount: string; memo: string };
+  | { type: "create_request"; amount: string; memo: string }
+  | {
+      type: "create_strategy";
+      kind: "payment" | "swap";
+      recipient?: string;
+      resolvedAddress?: string;
+      tokenSymbol?: string;
+      tokenOut?: string;
+      amountPerPeriod: string;
+      interval: string;
+      intervalSeconds: number;
+      periodsTotal: number;
+      funding: string;
+    };
 
 type ChatMessage = {
   id: string;
@@ -30,7 +43,7 @@ type ChatMessage = {
   text: string;
   isError?: boolean;
   pendingAction?: PendingAction;
-  actionStatus?: "confirmed" | "cancelled" | "sending" | "paid" | "created" | "send_error";
+  actionStatus?: "confirmed" | "cancelled" | "sending" | "paid" | "created" | "strategy_done" | "send_error";
   actionError?: string;
   txExplorerUrl?: string;
   requestLink?: string;
@@ -280,6 +293,52 @@ export default function ChatPanel({ name, walletAddress, userEmail, onPaymentSuc
     }
   }
 
+  async function executeCreateStrategy(
+    msgId: string,
+    pa: Extract<PendingAction, { type: "create_strategy" }>,
+    salt: string,
+    userToken: string,
+    encryptionKey: string,
+    sdk: W3SSdk
+  ): Promise<"ok" | "auth_error" | "error"> {
+    updateMsgStatus(msgId, "sending");
+    try {
+      const res = await fetch("/api/wallet/create-strategy", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userToken,
+          salt,
+          kind: pa.kind,
+          recipient: pa.kind === "payment" ? pa.resolvedAddress : undefined,
+          tokenOut: pa.kind === "swap" ? pa.tokenOut : undefined,
+          amountPerPeriod: pa.amountPerPeriod,
+          intervalSeconds: pa.intervalSeconds,
+          periodsTotal: pa.periodsTotal,
+          funding: pa.funding,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        if (res.status === 401 || res.status === 403) return "auth_error";
+        throw new Error(data.error ?? "Failed to create strategy");
+      }
+
+      sdk.setAuthentication({ userToken, encryptionKey });
+      sdk.execute(data.challengeId, (err) => {
+        if (err) {
+          updateMsgStatus(msgId, "send_error", "Couldn't set up the strategy. Please try again.");
+          return;
+        }
+        updateMsgStatus(msgId, "strategy_done");
+      });
+      return "ok";
+    } catch (err) {
+      updateMsgStatus(msgId, "send_error", err instanceof Error ? err.message : "Failed to create strategy.");
+      return "error";
+    }
+  }
+
   async function copyRequestLink(msgId: string, link: string) {
     await navigator.clipboard.writeText(link);
     setCopiedMsgId(msgId);
@@ -292,9 +351,12 @@ export default function ChatPanel({ name, walletAddress, userEmail, onPaymentSuc
 
     // If Circle not configured — fall back to a relevant page
     if (!env.circleAppId) {
-      window.location.href = pa.type === "send_payment"
-        ? `/pay/${pa.to}?amount=${pa.amount}`
-        : `/dashboard/invoices`;
+      window.location.href =
+        pa.type === "send_payment"
+          ? `/pay/${pa.to}?amount=${pa.amount}`
+          : pa.type === "create_strategy"
+          ? `/dashboard/strategies`
+          : `/dashboard/invoices`;
       return;
     }
     if (pa.type === "send_payment" && !pa.resolvedAddress) return;
@@ -308,10 +370,12 @@ export default function ChatPanel({ name, walletAddress, userEmail, onPaymentSuc
 
     // Build the executor for this action once, so the cached-token and OTP paths
     // (and a possible retry) all run the same thing with the same parameters.
-    const salt = pa.type === "create_request" ? newNonce() : "";
+    const salt = pa.type === "create_request" || pa.type === "create_strategy" ? newNonce() : "";
     const run = (userToken: string, encryptionKey: string, sdk: W3SSdk) =>
       pa.type === "send_payment"
         ? executePay(msg.id, pa.resolvedAddress!, pa.amount, userToken, encryptionKey, sdk)
+        : pa.type === "create_strategy"
+        ? executeCreateStrategy(msg.id, pa, salt, userToken, encryptionKey, sdk)
         : executeCreateRequest(msg.id, salt, pa.amount, pa.memo, userToken, encryptionKey, sdk);
     pendingRunRef.current = run;
 
@@ -425,12 +489,21 @@ export default function ChatPanel({ name, walletAddress, userEmail, onPaymentSuc
 
       // If LLM returned empty text alongside pendingAction, generate a summary
       // so the history always has meaningful assistant context
-      const assistantText = data.text ||
-        (data.pendingAction
-          ? data.pendingAction.type === "create_request"
-            ? `I'll create an invoice for $${Number(data.pendingAction.amount).toFixed(2)}${data.pendingAction.memo ? ` for ${data.pendingAction.memo}` : ""}.`
-            : `I'll send $${Number(data.pendingAction.amount).toFixed(2)} to ${data.pendingAction.to}.`
-          : "");
+      const pa = data.pendingAction;
+      let assistantText = data.text;
+      if (!assistantText && pa) {
+        if (pa.type === "create_request") {
+          assistantText = `I'll create an invoice for $${Number(pa.amount).toFixed(2)}${pa.memo ? ` for ${pa.memo}` : ""}.`;
+        } else if (pa.type === "send_payment") {
+          assistantText = `I'll send $${Number(pa.amount).toFixed(2)} to ${pa.to}.`;
+        } else {
+          const what = pa.kind === "payment"
+            ? `pay ${pa.amountPerPeriod} USDC to ${pa.recipient} ${pa.interval}`
+            : `buy ${pa.tokenSymbol} with ${pa.amountPerPeriod} USDC ${pa.interval}`;
+          assistantText = `I'll set up a strategy to ${what}.`;
+        }
+      }
+      assistantText = assistantText || "";
 
       setMessages((prev) => [
         ...prev,
@@ -530,6 +603,31 @@ export default function ChatPanel({ name, walletAddress, userEmail, onPaymentSuc
                         </p>
                         <p className="text-xs text-text-secondary/40 mb-2">Registered onchain · needs your PIN</p>
                       </>
+                    ) : msg.pendingAction.type === "create_strategy" ? (
+                      <>
+                        <p className="text-xs text-text-secondary mb-1">
+                          {msg.pendingAction.kind === "payment" ? (
+                            <>
+                              Set up a recurring payment of{" "}
+                              <span className="text-text-primary font-medium">{msg.pendingAction.amountPerPeriod} USDC</span>{" "}
+                              to <span className="text-text-primary font-medium">{msg.pendingAction.recipient}</span>{" "}
+                              {msg.pendingAction.interval}?
+                            </>
+                          ) : (
+                            <>
+                              Set up an auto-buy of{" "}
+                              <span className="text-text-primary font-medium">{msg.pendingAction.tokenSymbol}</span>{" "}
+                              with <span className="text-text-primary font-medium">{msg.pendingAction.amountPerPeriod} USDC</span>{" "}
+                              {msg.pendingAction.interval}?
+                            </>
+                          )}
+                        </p>
+                        <p className="text-xs text-text-secondary/40 mb-2">
+                          Deposit {msg.pendingAction.funding} USDC ·{" "}
+                          {msg.pendingAction.periodsTotal > 0 ? `${msg.pendingAction.periodsTotal} runs` : "until funds run out"} ·
+                          {" "}needs your PIN once
+                        </p>
+                      </>
                     ) : (
                       <>
                         <p className="text-xs text-text-secondary mb-1">
@@ -590,6 +688,24 @@ export default function ChatPanel({ name, walletAddress, userEmail, onPaymentSuc
                         </>
                       )}
                     </button>
+                  </div>
+                )}
+
+                {/* Strategy created */}
+                {msg.pendingAction && msg.actionStatus === "strategy_done" && (
+                  <div className={`${msg.text ? "mt-2 pt-2 border-t border-white/10" : ""}`}>
+                    <p className="text-xs text-green-400 flex items-center gap-1.5">
+                      <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 16 16" fill="none">
+                        <circle cx="8" cy="8" r="7" fill="currentColor" fillOpacity="0.15" />
+                        <path d="M5 8l2 2 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                      <span>
+                        Strategy is live, it runs automatically.{" "}
+                        <a href="/dashboard/strategies" className="underline underline-offset-2 opacity-70 hover:opacity-100 transition-opacity">
+                          Manage
+                        </a>
+                      </span>
+                    </p>
                   </div>
                 )}
 

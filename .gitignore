@@ -37,3 +37,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# internal docs (kept locally, not in repo)
+/docs
+/design_handoff_parallax_landing

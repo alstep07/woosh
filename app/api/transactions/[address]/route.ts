@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
+import { formatUnits } from "viem";
 import { getInvoice } from "@/entities/invoice/lib/readInvoice";
 
 const EXPLORER_BASE =
   process.env.NEXT_PUBLIC_ARC_EXPLORER_URL ?? "https://explorer.testnet.arc.network";
 const REGISTRY = (process.env.NEXT_PUBLIC_INVOICE_REGISTRY_ADDRESS ?? "").toLowerCase();
+const STRATEGY_REGISTRY = (process.env.NEXT_PUBLIC_STRATEGY_REGISTRY_ADDRESS ?? "").toLowerCase();
+const EXECUTOR = (process.env.EXECUTOR_ADDRESS ?? "").toLowerCase();
 
 type RawTx = {
   hash?: string;
@@ -23,7 +26,31 @@ type OutTx = {
   timestamp: number;
   note?: string;
   memo?: string;
+  token?: string;
 };
+
+type RawTokenTransfer = {
+  transaction_hash?: string;
+  tx_hash?: string;
+  from: { hash: string } | string;
+  to: { hash: string } | string | null;
+  timestamp?: string;
+  total?: { value?: string; decimals?: string | number };
+  token?: { symbol?: string; decimals?: string | number };
+};
+
+/**
+ * Format a token amount for display. Uses full-precision formatUnits then trims trailing
+ * zeros, capping fractional digits at 8 — so a tiny cirBTC amount (0.00002204) stays
+ * meaningful instead of rounding to "0.00".
+ */
+function fmtUnits(value: string, decimals: number): string {
+  const full = formatUnits(BigInt(value), decimals);
+  if (!full.includes(".")) return full;
+  const [whole, frac] = full.split(".");
+  const trimmed = frac.replace(/0+$/, "").slice(0, 8);
+  return trimmed ? `${whole}.${trimmed}` : whole;
+}
 
 const addr = (a: { hash: string } | string | null): string | null =>
   a ? (typeof a === "string" ? a : a.hash).toLowerCase() : null;
@@ -100,9 +127,10 @@ export async function GET(
   try {
     // Top-level txs miss invoice receipts (the registry forwards funds to the payee
     // as an INTERNAL tx), so we also read internal-transactions and merge them.
-    const [topItems, internalItems] = await Promise.all([
+    const [topItems, internalItems, tokenItems] = await Promise.all([
       fetchItems("transactions"),
       fetchItems("internal-transactions"),
+      fetchItems("token-transfers") as Promise<unknown[]>,
     ]);
 
     const fromTop: OutTx[] = topItems
@@ -113,6 +141,7 @@ export async function GET(
         const direction = from === lower ? "sent" : "received";
         const counterparty = (direction === "sent" ? to : from) ?? from;
         const isInvoice = !!REGISTRY && to === REGISTRY; // paying an invoice
+        const isStrategy = !!STRATEGY_REGISTRY && to === STRATEGY_REGISTRY; // fund/create a strategy
         return {
           hash: (tx.hash ?? tx.transaction_hash) as string,
           from,
@@ -120,19 +149,22 @@ export async function GET(
           direction,
           amount: (Number(BigInt(tx.value)) / 1e18).toFixed(2),
           timestamp: Math.floor(new Date(tx.timestamp).getTime() / 1000),
-          ...(isInvoice ? { note: "Invoice" } : {}),
+          ...(isInvoice ? { note: "Invoice" } : isStrategy ? { note: "Strategy" } : {}),
         };
       });
 
-    // Invoice receipts: registry -> payee internal transfers.
+    // Receipts forwarded by a registry to the recipient (internal txs): invoice payouts and
+    // recurring strategy payments both arrive this way.
     const fromInternal: OutTx[] = internalItems
       .filter((tx) => {
         const to = addr(tx.to);
         const from = addr(tx.from);
-        return !!tx.value && BigInt(tx.value) > 0n && to === lower && !!REGISTRY && from === REGISTRY;
+        const fromRegistry = (!!REGISTRY && from === REGISTRY) || (!!STRATEGY_REGISTRY && from === STRATEGY_REGISTRY);
+        return !!tx.value && BigInt(tx.value) > 0n && to === lower && fromRegistry;
       })
       .map((tx) => {
         const from = addr(tx.from)!;
+        const isStrategy = !!STRATEGY_REGISTRY && from === STRATEGY_REGISTRY;
         return {
           hash: (tx.transaction_hash ?? tx.hash) as string,
           from,
@@ -140,13 +172,39 @@ export async function GET(
           direction: "received" as const,
           amount: (Number(BigInt(tx.value)) / 1e18).toFixed(2),
           timestamp: Math.floor(new Date(tx.timestamp).getTime() / 1000),
-          note: "Invoice",
+          note: isStrategy ? "Strategy payment" : "Invoice",
         };
       });
 
+    // ERC-20 receipts (DCA output: cirBTC / EURC sent by the executor to the owner).
+    const fromTokens: OutTx[] = (tokenItems as RawTokenTransfer[])
+      .map((t) => {
+        const from = addr(t.from);
+        const to = addr(t.to);
+        const value = t.total?.value;
+        const decimals = Number(t.total?.decimals ?? t.token?.decimals ?? 18);
+        const symbol = t.token?.symbol;
+        if (!from || !to || !value || !symbol) return null;
+        const direction: "sent" | "received" = from === lower ? "sent" : "received";
+        const counterparty = direction === "sent" ? to : from;
+        const fromExecutor = !!EXECUTOR && from === EXECUTOR;
+        const ts = t.timestamp ? Math.floor(new Date(t.timestamp).getTime() / 1000) : 0;
+        return {
+          hash: (t.transaction_hash ?? t.tx_hash) as string,
+          from,
+          counterparty,
+          direction,
+          amount: fmtUnits(value, decimals),
+          timestamp: ts,
+          token: symbol,
+          ...(direction === "received" && fromExecutor ? { note: "DCA" } : {}),
+        } as OutTx;
+      })
+      .filter((x): x is OutTx => x !== null && !!x.hash);
+
     // Enrich BEFORE sorting: internal receipts get their authoritative timestamp here,
     // so they order correctly (and aren't dropped from the dashboard's top 3).
-    const all = await enrichInvoices([...fromInternal, ...fromTop]);
+    const all = await enrichInvoices([...fromInternal, ...fromTop, ...fromTokens]);
 
     const seen = new Set<string>();
     const merged = all

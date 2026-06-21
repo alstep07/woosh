@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { BalanceSummary } from "@/widgets/WalletCard/ui/BalanceSummary";
+import type { TokenHolding } from "@/entities/wallet/hooks/useTokenBalances";
 
 function CopyIcon() {
   return (
@@ -21,6 +23,8 @@ interface Props {
   slug?: string;
   onCreateInvoice: () => void;
   children: React.ReactNode; // recent payments
+  holdings?: TokenHolding[]; // all token balances (USDC, EURC, cirBTC)
+  totalUsd?: number;         // USDC-equivalent total across all tokens
 }
 
 /**
@@ -38,6 +42,8 @@ export default function WalletCard({
   slug,
   onCreateInvoice,
   children,
+  holdings,
+  totalUsd,
 }: Props) {
   const [copied, setCopied] = useState<null | "address" | "link">(null);
 
@@ -86,20 +92,14 @@ export default function WalletCard({
         </button>
       </div>
 
-      {/* Balance — focal point */}
-      <p className="text-xs font-semibold text-text-secondary uppercase tracking-widest mb-1">
-        Balance
-      </p>
-      {isLoading ? (
-        <div className="h-9 w-32 bg-border rounded animate-pulse" />
-      ) : isError ? (
-        <p className="text-3xl font-bold text-text-secondary/40">—</p>
-      ) : (
-        <p className="text-3xl font-bold text-text-primary">
-          {balance ?? "$0.00"}
-          <span className="text-base font-medium text-text-secondary/50 ml-1.5">USDC</span>
-        </p>
-      )}
+      {/* Balance — total in USDC-equivalent as the focal point, itemized below */}
+      <BalanceSummary
+        balance={balance}
+        isLoading={isLoading}
+        isError={isError}
+        holdings={holdings}
+        totalUsd={totalUsd}
+      />
 
       {/* Secondary actions */}
       <div className="mt-3 pl-1 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-blue-primary">
@@ -113,6 +113,10 @@ export default function WalletCard({
         <span className="w-px h-4 bg-border" />
         <Link href="/dashboard/invoices" className="hover:text-blue-secondary transition-colors">
           My invoices
+        </Link>
+        <span className="w-px h-4 bg-border" />
+        <Link href="/dashboard/strategies" className="hover:text-blue-secondary transition-colors">
+          Strategies
         </Link>
       </div>
 

@@ -13,7 +13,7 @@ integration (UCW, CCTP, StableFX, USYC). "No second token ever" is the killer fe
 
 ---
 
-## Current State, v2.2
+## Current State, v3.0
 
 | Version | Status | What shipped |
 |---------|--------|-------------|
@@ -22,7 +22,8 @@ integration (UCW, CCTP, StableFX, USYC). "No second token ever" is the killer fe
 | V2a | ✅ | Woosh Agent chat (Claude via OpenRouter, 4 tools) |
 | V2b | ✅ | Direct payment execution from chat (PIN inline) |
 | V2.2 | ✅ | Payment requests / invoices, onchain via `WooshInvoiceRegistry` (`/i/[id]` links, "My invoices" list, chat tools) |
-| V2c+ | 🔄 | See [Implementation Plan](docs/IMPLEMENTATION_PLAN.md) |
+| V3.0 | ✅ | Automated strategies, onchain via `WooshStrategyRegistry`: recurring USDC payments + DCA auto-buys (EURC/cirBTC). DCW executor (no PIN), Vercel Cron, swaps via Circle Swap Kit. `/dashboard/strategies`, chat tools. |
+| V3.1+ | 🔄 | See [Implementation Plan](docs/IMPLEMENTATION_PLAN.md) |
 
 ---
 
@@ -48,15 +49,23 @@ server creates challenge → client `sdk.execute(challengeId)` → PIN iframe �
 Never invent a new signing path. See `src/shared/lib/circle.ts`.
 
 **UCW vs DCW**, UCW (user holds keys, PIN per tx) for humans. DCW (entitySecret,
-no PIN) for autonomous agent operations. UCW cannot do recurring/scheduled actions.
-See [Architecture](docs/ARCHITECTURE.md#wallet-architecture).
+no PIN) for autonomous operations. UCW cannot do recurring/scheduled actions. DCW is
+implemented as the single shared **strategy executor** wallet (`src/shared/lib/dcw.ts`):
+it triggers `WooshStrategyRegistry` executions on schedule and signs DCA swaps via the
+Circle Wallets adapter, no raw private key. See [Architecture](docs/ARCHITECTURE.md#wallet-architecture).
+
+**Strategies**, recurring payments are fully trustless (the contract forwards funds; the
+executor only pays gas to trigger). DCA swaps are semi-custodial for one period at a time:
+`releaseForSwap` hands the executor one period of USDC, it swaps via Circle Swap Kit and
+forwards the output to the owner. Cron is scheduler-agnostic (`/api/cron/execute-strategies`,
+`CRON_SECRET`); free Vercel Cron tick = daily granularity (finer needs an external pinger).
 
 **Session storage**, all `woosh_*` keys managed via `src/shared/lib/session.ts`.
 All calls wrapped in try/catch (Safari private mode). Never write raw sessionStorage
 outside this module.
 
 **Amount handling**, always string or bigint. No float arithmetic, no rounding.
-Arc native USDC = 18 decimals. StableFX/EURC = 6 decimals.
+Arc native USDC = 18 decimals. EURC = 6 decimals. cirBTC = 8 decimals.
 
 **Agent integration is mandatory**, every new feature ships with a chat tool or at
 minimum an updated system prompt so the agent can answer "can I do X?" and guide the
@@ -90,6 +99,15 @@ NEXT_PUBLIC_BASE_URL=
 # Smart Contracts
 NEXT_PUBLIC_SLUG_REGISTRY_ADDRESS=      # WooshSlugRegistry on Arc
 NEXT_PUBLIC_INVOICE_REGISTRY_ADDRESS=   # WooshInvoiceRegistry on Arc (payment requests)
+NEXT_PUBLIC_STRATEGY_REGISTRY_ADDRESS=  # WooshStrategyRegistry on Arc (strategies)
+NEXT_PUBLIC_CIRBTC_ADDRESS=             # cirBTC token (DCA target); EURC has a built-in default
+
+# Strategies executor (V3.0, server only — autonomous, no PIN)
+CIRCLE_ENTITY_SECRET=                # DCW entity secret (generate + register in Console)
+EXECUTOR_WALLET_ID=                  # DCW executor wallet id (from /api/admin/provision-executor)
+EXECUTOR_ADDRESS=                    # executor address; set via WooshStrategyRegistry.setExecutor
+CIRCLE_KIT_KEY=                      # Circle Swap Kit key for DCA swaps (KIT_KEY:..., never NEXT_PUBLIC)
+CRON_SECRET=                         # shared secret the cron + admin routes check
 
 # Woosh Agent
 OPENROUTER_API_KEY=

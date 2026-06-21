@@ -36,7 +36,27 @@
       "Bash(npm run:*)",
       "Bash(git add *)",
       "Bash(git commit -m ' *)",
-      "Bash(git merge *)"
+      "Bash(git merge *)",
+      "Bash(forge build *)",
+      "Bash(git commit *)",
+      "Bash(sed -n '1,80p' tailwind.config.ts)",
+      "Bash(sed -n '1,80p' tailwind.config.js)",
+      "Bash(curl -s --max-time 120 http://localhost:3000/api/cron/execute-strategies -H \"Authorization: Bearer a37478b8b42d2b8bf9292f50bb04adbeef3f3d3bc9ebc8b995795f774cf1b58e\")",
+      "Bash(node -e \"let d='';process.stdin.on\\('data',c=>d+=c\\);process.stdin.on\\('end',\\(\\)=>{try{console.log\\(JSON.stringify\\(JSON.parse\\(d\\),null,2\\)\\);}catch{console.log\\('RAW:',d.slice\\(0,600\\)\\);}}\\)\")",
+      "Bash(echo \"=== DCA strategy #1 after run ===\")",
+      "Bash(cast call *)",
+      "Bash(echo \"=== executor USDC \\(native\\) bal ===\")",
+      "Bash(cast balance *)",
+      "Bash(node scripts/test-swap-route.mjs)",
+      "Bash(curl -s --max-time 30 \"https://li.quest/v1/chains?chainTypes=EVM\")",
+      "Bash(node -e \"let d='';process.stdin.on\\('data',c=>d+=c\\);process.stdin.on\\('end',\\(\\)=>{try{const j=JSON.parse\\(d\\);const arc=\\(j.chains||[]\\).filter\\(c=>/arc/i.test\\(c.name||''\\)||c.id===5042002||c.id===10242||c.chainId===5042002\\);console.log\\('matches:',JSON.stringify\\(arc.map\\(c=>\\({name:c.name,id:c.id,key:c.key}\\)\\),null,1\\)\\);console.log\\('total chains:',\\(j.chains||[]\\).length\\);}catch\\(e\\){console.log\\('RAW:',d.slice\\(0,200\\)\\)}}\\)\")",
+      "Bash(curl -s --max-time 30 \"https://li.quest/v1/tokens?chains=5042002\")",
+      "Bash(node -e \"let d='';process.stdin.on\\('data',c=>d+=c\\);process.stdin.on\\('end',\\(\\)=>{try{const j=JSON.parse\\(d\\);const t=\\(j.tokens&&j.tokens['5042002']\\)||[];console.log\\('count:',t.length\\);t.forEach\\(x=>console.log\\(x.symbol,x.address,'dec'+x.decimals\\)\\);}catch\\(e\\){console.log\\('RAW:',d.slice\\(0,300\\)\\)}}\\)\")",
+      "Bash(node scripts/test-appkit-swap.mjs)",
+      "WebFetch(domain:community.arc.network)",
+      "WebFetch(domain:api.github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(npx next *)"
     ]
   }
 }
