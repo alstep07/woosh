@@ -28,6 +28,15 @@ export const USDC: SupportedToken = {
   swapRail: null,
 };
 
+/**
+ * USDC as an ERC-20 for swaps. On Arc, USDC is the native gas token (18-decimal value via
+ * msg.value / getBalance), but the ERC-20 interface at this precompile reports 6 decimals
+ * over the SAME balance. LI.FI / DEX swaps use this 6-decimal representation, so swap amounts
+ * must be converted from native 18-dec to 6-dec (divide by 1e12).
+ */
+export const USDC_ERC20_ADDRESS = "0x3600000000000000000000000000000000000000" as const;
+export const USDC_SWAP_DECIMALS = 6;
+
 export const EURC: SupportedToken = {
   symbol: "EURC",
   label: "Euro Coin",

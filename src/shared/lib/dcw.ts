@@ -89,6 +89,27 @@ export async function dcwExecuteContract(
 }
 
 /**
+ * Programmatic raw-calldata contract execution from the executor wallet (no PIN). Used to
+ * run a pre-built transaction (e.g. a LI.FI swap transactionRequest). `amount` is optional
+ * native value (USDC, human decimal) for payable calls.
+ */
+export async function dcwExecuteRaw(
+  contractAddress: string,
+  callData: string,
+  amount?: string,
+) {
+  const client = getClient();
+  const res = await client.createContractExecutionTransaction({
+    walletId: getExecutorWalletId(),
+    contractAddress,
+    callData: callData as `0x${string}`,
+    ...(amount ? { amount } : {}),
+    fee: { type: "level", config: { feeLevel: "MEDIUM" } },
+  });
+  return res.data;
+}
+
+/**
  * Programmatic token transfer from the executor wallet (no PIN). Used in DCA to forward
  * the swapped output token to the strategy owner. `tokenAddress` is the ERC-20 contract
  * (EURC/cirBTC); leave it "" for native USDC. The blockchain is inferred from the wallet.

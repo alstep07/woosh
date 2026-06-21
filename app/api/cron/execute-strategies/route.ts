@@ -3,7 +3,7 @@ import { formatUnits } from "viem";
 import { arcPublicClient } from "@/shared/lib/arc";
 import { STRATEGY_REGISTRY_ABI } from "@/entities/strategy/model/abi";
 import { dcwExecuteContract, dcwTransfer, waitForTx, getExecutorAddress } from "@/shared/lib/dcw";
-import { swapUsdcTo, canSwap } from "@/shared/lib/swap";
+import { swapUsdcTo, canSwap, usdc18ToSwap6 } from "@/shared/lib/swap";
 import { tokenByAddress } from "@/shared/lib/tokens";
 import { env } from "@/shared/config/env";
 
@@ -52,6 +52,7 @@ async function runExecutor(): Promise<Record<string, unknown>> {
   let paid = 0;
   let swapped = 0;
   let skippedNoRoute = 0;
+  let refunded = 0;
   let failed = 0;
   let timedOut = false;
   const errors: { id: string; error: string }[] = [];
@@ -83,27 +84,33 @@ async function runExecutor(): Promise<Record<string, unknown>> {
       if (s.balance < s.amountPerPeriod) continue;
 
       if (s.kind === 1) {
-        // Swap / DCA: release one period of USDC to the executor, swap it via Circle Swap
-        // Kit (Circle Wallets adapter = this same DCW executor), then forward the output
-        // token to the strategy owner. releaseForSwap advances the schedule atomically, so
-        // even if the swap step fails the released USDC stays in the executor wallet (Woosh
-        // controlled, recoverable), never lost.
-        const symbol = tokenByAddress(s.tokenOut)?.symbol;
-        if (symbol !== "EURC" && symbol !== "cirBTC") {
+        // Swap / DCA via LI.FI: quote the route FIRST; only if it's buildable do we release
+        // one period of USDC to the executor, swap it, and forward the output to the owner.
+        // releaseForSwap advances the schedule atomically. If the swap itself then fails, we
+        // refund the released USDC back to the owner so nothing is stuck in the executor.
+        const token = tokenByAddress(s.tokenOut);
+        if (!token?.address) {
           failed++;
           errors.push({ id: ids[i], error: `unsupported tokenOut ${s.tokenOut}` });
           continue;
         }
-        const amountIn = formatUnits(s.amountPerPeriod, 18);
-        // Estimate the route FIRST. If it isn't quotable, skip without releasing funds or
-        // advancing the schedule, so an unroutable pair (e.g. USDC->cirBTC) can't drain the
-        // vault into the executor with nothing delivered.
-        const route = await canSwap(symbol, amountIn, getExecutorAddress());
+        // USDC swaps use the 6-dec ERC-20 representation; convert from the contract's 18-dec
+        // native unit. Guard against a per-period amount that rounds to zero at 6 decimals.
+        const amountIn6 = usdc18ToSwap6(s.amountPerPeriod);
+        if (BigInt(amountIn6) <= 0n) {
+          failed++;
+          errors.push({ id: ids[i], error: "amountPerPeriod rounds to 0 at 6 decimals" });
+          continue;
+        }
+        const route = await canSwap(token.address, amountIn6, getExecutorAddress());
         if (!route.ok) {
           skippedNoRoute++;
           errors.push({ id: ids[i], error: `no swap route: ${route.error}` });
           continue;
         }
+
+        let released = false;
+        let swapDone = false;
         try {
           const rel = await dcwExecuteContract(registry, "releaseForSwap(bytes32)", [ids[i]]);
           const relId = (rel as { id?: string } | undefined)?.id;
@@ -115,14 +122,30 @@ async function runExecutor(): Promise<Record<string, unknown>> {
               continue;
             }
           }
-          const out = await swapUsdcTo(symbol, amountIn, getExecutorAddress());
-          if (out.amountOut) {
-            await dcwTransfer(s.owner, out.amountOut, s.tokenOut);
+          released = true;
+
+          const out = await swapUsdcTo(token.address, amountIn6, getExecutorAddress());
+          swapDone = true;
+
+          if (out.amountOut && out.tokenOutDecimals != null) {
+            const human = formatUnits(BigInt(out.amountOut), out.tokenOutDecimals);
+            await dcwTransfer(s.owner, human, s.tokenOut);
           }
           swapped++;
         } catch (err) {
           failed++;
           errors.push({ id: ids[i], error: err instanceof Error ? err.message : "swap failed" });
+          // Refund only when the swap itself didn't happen. If swapDone, the output token is
+          // already in the executor (only the forward failed) — refunding USDC would double-pay;
+          // leave it for manual/next-run recovery instead.
+          if (released && !swapDone) {
+            try {
+              await dcwTransfer(s.owner, formatUnits(s.amountPerPeriod, 18), "");
+              refunded++;
+            } catch {
+              /* refund best-effort; funds remain in the executor, recoverable */
+            }
+          }
         }
         continue;
       }
@@ -153,6 +176,7 @@ async function runExecutor(): Promise<Record<string, unknown>> {
     paid,
     swapped,
     skippedNoRoute,
+    refunded,
     failed,
     timedOut,
     tookMs: Date.now() - startedAt,
