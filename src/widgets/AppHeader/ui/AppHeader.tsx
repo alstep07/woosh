@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -27,16 +27,41 @@ export default function AppHeader() {
   const pathname = usePathname();
   const router = useRouter();
   const [email, setEmail] = useState<string | undefined>(undefined);
+  const [slug, setSlug] = useState<string | undefined>(undefined);
   const [open, setOpen] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
+  const accountRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    setEmail(getSession()?.email);
+    const s = getSession();
+    setEmail(s?.email);
+    setSlug(s?.slug);
   }, []);
 
-  // Close the mobile drawer whenever the route changes.
+  // Close the mobile drawer + account menu whenever the route changes.
   useEffect(() => {
     setOpen(false);
+    setAccountOpen(false);
   }, [pathname]);
+
+  // Close the account menu on outside click or Escape.
+  useEffect(() => {
+    if (!accountOpen) return;
+    function onDown(e: MouseEvent) {
+      if (accountRef.current && !accountRef.current.contains(e.target as Node)) setAccountOpen(false);
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setAccountOpen(false);
+    }
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [accountOpen]);
+
+  const initial = (slug ?? email ?? "?").charAt(0).toUpperCase();
 
   // Lock body scroll + close on Escape while the drawer is open.
   useEffect(() => {
@@ -84,12 +109,38 @@ export default function AppHeader() {
         })}
       </div>
 
-      {/* Desktop right: email + logout */}
-      <div className="hidden md:flex items-center gap-4 shrink-0">
-        {email && <span className="text-xs text-text-secondary/50">{email}</span>}
-        <button onClick={handleLogout} className="text-sm text-text-secondary hover:text-text-primary transition-colors">
-          Log out
+      {/* Desktop right: account avatar + dropdown */}
+      <div className="hidden md:block relative shrink-0" ref={accountRef}>
+        <button
+          onClick={() => setAccountOpen((v) => !v)}
+          aria-label="Account"
+          aria-haspopup="menu"
+          aria-expanded={accountOpen}
+          className="flex items-center justify-center h-9 w-9 rounded-full bg-blue-primary/15 text-blue-primary text-sm font-semibold hover:bg-blue-primary/25 transition-colors"
+        >
+          {initial}
         </button>
+
+        {accountOpen && (
+          <div
+            role="menu"
+            className="absolute right-0 top-full mt-2 z-30 min-w-[200px] rounded-input border border-border bg-[#0d1222] py-1 shadow-[0_12px_32px_rgba(0,0,0,0.5)]"
+          >
+            {(slug || email) && (
+              <div className="px-4 py-2.5 border-b border-border">
+                {slug && <p className="text-sm text-text-primary font-medium truncate">@{slug}</p>}
+                {email && <p className="text-xs text-text-secondary/50 truncate">{email}</p>}
+              </div>
+            )}
+            <button
+              role="menuitem"
+              onClick={handleLogout}
+              className="block w-full text-left px-4 py-2.5 text-sm text-text-primary hover:bg-white/5 transition-colors"
+            >
+              Log out
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Mobile burger */}

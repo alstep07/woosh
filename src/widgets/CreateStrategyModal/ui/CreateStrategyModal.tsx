@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { Button } from "@/shared/ui/Button";
+import { Modal } from "@/shared/ui/Modal";
 import { Spinner } from "@/shared/ui/Spinner";
 import { EmailStep } from "@/features/auth/ui/EmailStep";
 import { useChallengeFlow } from "@/features/auth/model/useChallengeFlow";
@@ -119,24 +120,7 @@ export default function CreateStrategyModal({ session, onClose, onCreated }: Pro
       : "Runs until the deposit runs out";
 
   return (
-    <div
-      className="fixed inset-0 z-[70] flex items-center justify-center px-4 bg-black/60 backdrop-blur-sm"
-      onClick={() => { if (flow.phase !== "running") onClose(); }}
-    >
-      <div
-        className="w-full max-w-md glass-card rounded-card p-6 relative max-h-[90vh] overflow-y-auto no-scrollbar"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {flow.phase !== "running" && (
-          <button
-            onClick={onClose}
-            aria-label="Close"
-            className="absolute top-4 right-4 text-text-secondary/40 hover:text-text-primary text-sm transition-colors"
-          >
-            ✕
-          </button>
-        )}
-
+    <Modal onClose={onClose} dismissible={flow.phase !== "running"} size="md">
         {createdId ? (
           <div className="text-center">
             <div className="w-12 h-12 rounded-full bg-green-400/10 flex items-center justify-center mx-auto mb-3 text-2xl">
@@ -366,7 +350,6 @@ export default function CreateStrategyModal({ session, onClose, onCreated }: Pro
             </p>
           </div>
         )}
-      </div>
-    </div>
+    </Modal>
   );
 }

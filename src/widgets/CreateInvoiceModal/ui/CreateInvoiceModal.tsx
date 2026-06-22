@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { Button } from "@/shared/ui/Button";
+import { Modal } from "@/shared/ui/Modal";
 import { Spinner } from "@/shared/ui/Spinner";
 import { EmailStep } from "@/features/auth/ui/EmailStep";
 import { useAuth } from "@/features/auth/model/useAuth";
@@ -157,24 +158,7 @@ export default function CreateInvoiceModal({ session, onClose, onCreated }: Prop
   }
 
   return (
-    <div
-      className="fixed inset-0 z-[70] flex items-center justify-center px-4 bg-black/60 backdrop-blur-sm"
-      onClick={() => { if (phase !== "creating") onClose(); }}
-    >
-      <div
-        className="w-full max-w-md glass-card rounded-card p-6 relative"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {phase !== "creating" && (
-          <button
-            onClick={onClose}
-            aria-label="Close"
-            className="absolute top-4 right-4 text-text-secondary/40 hover:text-text-primary text-sm transition-colors"
-          >
-            ✕
-          </button>
-        )}
-
+    <Modal onClose={onClose} dismissible={phase !== "creating"} size="md">
         {lastLink ? (
           <div className="text-center">
             <div className="w-12 h-12 rounded-full bg-green-400/10 flex items-center justify-center mx-auto mb-3 text-2xl">
@@ -299,7 +283,6 @@ export default function CreateInvoiceModal({ session, onClose, onCreated }: Prop
             <Button onClick={startCreate}>Create invoice</Button>
           </div>
         )}
-      </div>
-    </div>
+    </Modal>
   );
 }

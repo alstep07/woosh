@@ -20,6 +20,17 @@ body {
   }
 }
 
+/* Prevent iOS Safari from auto-zooming when a form control gains focus: any
+   control whose font-size is < 16px triggers the zoom. Force >= 16px on small
+   screens (overrides Tailwind text-sm on inputs); desktop keeps its sizing. */
+@media (max-width: 767px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}
+
 /* Remove the default spinner arrows from all number inputs */
 input[type="number"] {
   -moz-appearance: textfield;
