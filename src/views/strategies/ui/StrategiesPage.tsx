@@ -51,10 +51,10 @@ function FlowNode({ k, v, tone = "plain" }: { k: string; v: string; tone?: Tone 
   );
 }
 
-/** Compact cadence → amount → target chain, echoing the landing-page animation. */
-function FlowChain({ s, symbol, animate }: { s: OnchainStrategy; symbol?: string; animate: boolean }) {
+/** Compact cadence → amount → target chain — a static visual, no motion. */
+function FlowChain({ s, symbol }: { s: OnchainStrategy; symbol?: string }) {
   const cadence = cadencePhrase(s.intervalSeconds);
-  const wireCls = `flow-wire w-4 sm:w-7 shrink-0 self-center ${animate ? "run" : ""}`;
+  const wireCls = "flow-wire w-4 sm:w-7 shrink-0 self-center";
   const nodes = s.kind === "payment"
     ? [
         { k: cadence, v: "Recurring" as string, tone: "plain" as Tone },
@@ -123,7 +123,7 @@ function StrategyCard({
       </div>
 
       {/* Flow chain — cadence → amount → target */}
-      <FlowChain s={s} symbol={symbol} animate={s.status === "active" && !overdue} />
+      <FlowChain s={s} symbol={symbol} />
 
       {capped && (
         <div className="mt-3.5">
