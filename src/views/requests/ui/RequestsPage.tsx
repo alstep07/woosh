@@ -2,8 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
-import BrandHeader from "@/widgets/BrandHeader/ui/BrandHeader";
+import AppHeader from "@/widgets/AppHeader/ui/AppHeader";
 import Footer from "@/widgets/Footer/ui/Footer";
 import { Spinner } from "@/shared/ui/Spinner";
 import CreateInvoiceModal from "@/widgets/CreateInvoiceModal/ui/CreateInvoiceModal";
@@ -42,15 +41,8 @@ export default function RequestsPage() {
 
   return (
     <main className="min-h-screen bg-navy flex flex-col">
-      <BrandHeader />
+      <AppHeader />
       <div className="flex-1 px-4 sm:px-6 lg:px-8 py-8 max-w-4xl mx-auto w-full">
-        <Link
-          href="/dashboard"
-          className="inline-flex items-center gap-1.5 text-sm text-blue-primary/60 hover:text-blue-primary transition-colors mb-6"
-        >
-          Dashboard
-        </Link>
-
         <div className="flex items-center justify-between gap-4 mb-6">
           <h1 className="text-2xl font-bold text-text-primary">My invoices</h1>
           <button

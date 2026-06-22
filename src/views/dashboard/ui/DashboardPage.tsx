@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useUSDCBalance } from "@/entities/wallet/hooks/useUSDCBalance";
 import { useTokenBalances } from "@/entities/wallet/hooks/useTokenBalances";
 import { useTransactionHistory } from "@/entities/payment/hooks/useTransactionHistory";
-import BrandHeader from "@/widgets/BrandHeader/ui/BrandHeader";
+import AppHeader from "@/widgets/AppHeader/ui/AppHeader";
 import AccountBar from "@/widgets/AccountBar/ui/AccountBar";
 import WalletCard from "@/widgets/WalletCard/ui/WalletCard";
 import CreateInvoiceModal from "@/widgets/CreateInvoiceModal/ui/CreateInvoiceModal";
@@ -15,7 +15,7 @@ import TransactionList from "@/widgets/TransactionList/ui/TransactionList";
 import Footer from "@/widgets/Footer/ui/Footer";
 import { Spinner } from "@/shared/ui/Spinner";
 import { env } from "@/shared/config/env";
-import { getSession as loadSession, clearAll } from "@/shared/lib/session";
+import { getSession as loadSession } from "@/shared/lib/session";
 import type { Session } from "@/entities/user/model/types";
 
 export default function DashboardPage() {
@@ -76,19 +76,8 @@ export default function DashboardPage() {
     }, 10_000);
   }
 
-  function formatEmail(email: string, maxLocal = 6): string {
-    const at = email.indexOf("@");
-    if (at === -1 || at <= maxLocal) return email;
-    return `${email.slice(0, maxLocal)}…${email.slice(at)}`;
-  }
-
   const identifier = session ? (session.slug ?? session.walletAddress) : "";
   const paymentLink = session ? `${env.baseUrl}/pay/${identifier}` : "";
-
-  function handleLogout() {
-    clearAll();
-    router.replace("/");
-  }
 
   if (!session) {
     return (
@@ -124,25 +113,8 @@ export default function DashboardPage() {
   return (
     <main className="h-screen bg-navy flex flex-col overflow-hidden">
       <div className="woosh-bg" aria-hidden="true" />
-      <div className="relative z-10 shrink-0">
-        <BrandHeader
-          rightSlot={
-            <div className="flex flex-col items-end gap-0.5 sm:flex-row sm:items-center sm:gap-4">
-              {session.email && (
-                <span className="text-xs text-text-secondary/50 order-2 sm:order-1">
-                  <span className="sm:hidden">{formatEmail(session.email)}</span>
-                  <span className="hidden sm:inline">{session.email}</span>
-                </span>
-              )}
-              <button
-                onClick={handleLogout}
-                className="text-sm text-text-secondary hover:text-text-primary transition-colors order-1 sm:order-2"
-              >
-                Log out
-              </button>
-            </div>
-          }
-        />
+      <div className="relative z-20 shrink-0">
+        <AppHeader />
       </div>
       <div className="relative z-10 flex-1 min-h-0 overflow-y-auto lg:overflow-hidden px-4 sm:px-6 pt-6 lg:pt-8 pb-6">
         <div className="max-w-6xl mx-auto w-full min-w-0 lg:h-full lg:px-8 lg:grid lg:grid-cols-12 lg:gap-6 lg:items-start">

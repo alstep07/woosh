@@ -150,22 +150,6 @@ export default function AccountBar({
               >
                 Create invoice
               </button>
-              <Link
-                href="/dashboard/invoices"
-                role="menuitem"
-                onClick={() => setMenuOpen(false)}
-                className={itemClass}
-              >
-                My invoices
-              </Link>
-              <Link
-                href="/dashboard/strategies"
-                role="menuitem"
-                onClick={() => setMenuOpen(false)}
-                className={itemClass}
-              >
-                Strategies
-              </Link>
             </div>
           )}
         </div>
