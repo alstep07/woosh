@@ -19,19 +19,62 @@ function short(addr?: string | null): string {
 }
 
 /** Leading badge glyph + accent colour per strategy kind / target token. */
-function kindVisual(s: OnchainStrategy): { glyph: string; accent: string } {
-  if (s.kind === "payment") return { glyph: "↻", accent: "text-blue-primary bg-blue-primary/10" };
+function kindVisual(s: OnchainStrategy): { glyph: string; accent: string; label: string } {
+  if (s.kind === "payment") return { glyph: "↻", accent: "text-blue-primary bg-blue-primary/10", label: "Recurring payment" };
   const sym = tokenByAddress(s.tokenOut)?.symbol;
-  if (sym === "cirBTC") return { glyph: "₿", accent: "text-amber-400 bg-amber-400/10" };
-  return { glyph: "€", accent: "text-blue-secondary bg-blue-secondary/10" };
+  if (sym === "cirBTC") return { glyph: "₿", accent: "text-amber-400 bg-amber-400/10", label: "DCA auto-buy" };
+  return { glyph: "€", accent: "text-blue-secondary bg-blue-secondary/10", label: "DCA auto-buy" };
 }
 
-function titleFor(s: OnchainStrategy, symbol?: string): { title: string; subtitle: string } {
-  const cadence = intervalLabel(s.intervalSeconds);
-  if (s.kind === "payment") {
-    return { title: `Pay ${s.amountPerPeriod} USDC ${cadence}`, subtitle: `to ${short(s.recipient)}` };
-  }
-  return { title: `Buy ${symbol ?? "token"} ${cadence}`, subtitle: `${s.amountPerPeriod} USDC per run` };
+/** "Every day/week/month" phrasing for the leading flow node. */
+function cadencePhrase(seconds: number): string {
+  const l = intervalLabel(seconds);
+  if (l === "daily") return "Every day";
+  if (l === "weekly") return "Every week";
+  if (l === "monthly") return "Every month";
+  return l.charAt(0).toUpperCase() + l.slice(1);
+}
+
+type Tone = "blue" | "green" | "amber" | "plain";
+
+function FlowNode({ k, v, tone = "plain" }: { k: string; v: string; tone?: Tone }) {
+  const toneCls =
+    tone === "blue" ? "text-blue-primary"
+    : tone === "green" ? "text-green-400"
+    : tone === "amber" ? "text-amber-400"
+    : "text-text-primary";
+  return (
+    <div className="flex-1 min-w-0 rounded-input border border-border bg-white/[0.02] px-2.5 py-2">
+      <p className="font-mono text-[9px] uppercase tracking-[0.1em] text-text-secondary/45 truncate">{k}</p>
+      <p className={`text-xs font-semibold truncate ${toneCls}`}>{v}</p>
+    </div>
+  );
+}
+
+/** Compact cadence → amount → target chain, echoing the landing-page animation. */
+function FlowChain({ s, symbol, animate }: { s: OnchainStrategy; symbol?: string; animate: boolean }) {
+  const cadence = cadencePhrase(s.intervalSeconds);
+  const wireCls = `flow-wire w-4 sm:w-7 shrink-0 self-center ${animate ? "run" : ""}`;
+  const nodes = s.kind === "payment"
+    ? [
+        { k: cadence, v: "Recurring" as string, tone: "plain" as Tone },
+        { k: "Send", v: `${s.amountPerPeriod} USDC`, tone: "blue" as Tone },
+        { k: "To", v: short(s.recipient) || "—", tone: "green" as Tone },
+      ]
+    : [
+        { k: cadence, v: "DCA buy", tone: "plain" as Tone },
+        { k: "Spend", v: `${s.amountPerPeriod} USDC`, tone: "blue" as Tone },
+        { k: "Into", v: symbol ?? "token", tone: "amber" as Tone },
+      ];
+  return (
+    <div className="flex items-stretch">
+      <FlowNode k={nodes[0].k} v={nodes[0].v} tone={nodes[0].tone} />
+      <div className={wireCls} />
+      <FlowNode k={nodes[1].k} v={nodes[1].v} tone={nodes[1].tone} />
+      <div className={wireCls} />
+      <FlowNode k={nodes[2].k} v={nodes[2].v} tone={nodes[2].tone} />
+    </div>
+  );
 }
 
 function Stat({ label, value }: { label: string; value: string }) {
@@ -52,8 +95,8 @@ function StrategyCard({
 }) {
   const badge = statusBadge(s.status);
   const symbol = s.kind === "swap" ? tokenByAddress(s.tokenOut)?.symbol : undefined;
-  const { glyph, accent } = kindVisual(s);
-  const { title, subtitle } = titleFor(s, symbol);
+  const { glyph, accent, label } = kindVisual(s);
+  const overdue = isOverdue(s);
 
   const capped = s.periodsTotal > 0;
   const progress = capped ? Math.min(100, Math.round((s.periodsDone / s.periodsTotal) * 100)) : 0;
@@ -66,50 +109,48 @@ function StrategyCard({
 
   return (
     <div className="glass-card rounded-card p-4 sm:p-5">
-      <div className="flex items-start gap-3.5">
-        <div className={`shrink-0 h-10 w-10 rounded-full grid place-items-center text-lg font-bold ${accent}`}>
-          {glyph}
+      {/* Kind + status */}
+      <div className="flex items-center justify-between gap-3 mb-3.5">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className={`shrink-0 h-7 w-7 rounded-full grid place-items-center text-sm font-bold ${accent}`}>
+            {glyph}
+          </span>
+          <span className="text-sm font-semibold text-text-primary truncate">{label}</span>
         </div>
-
-        <div className="flex-1 min-w-0">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <p className="text-text-primary font-semibold truncate">{title}</p>
-              <p className="text-xs text-text-secondary/60 mt-0.5 truncate font-mono">{subtitle}</p>
-            </div>
-            <span className={`shrink-0 text-xs font-medium px-2 py-1 rounded-full ${badge.cls}`}>
-              {badge.text}
-            </span>
-          </div>
-
-          {capped && (
-            <div className="mt-3">
-              <div className="h-1.5 w-full rounded-full bg-border overflow-hidden">
-                <div className="h-full rounded-full bg-blue-primary transition-all" style={{ width: `${progress}%` }} />
-              </div>
-            </div>
-          )}
-
-          <div className="grid grid-cols-3 gap-3 mt-3">
-            <Stat label="Left" value={`${s.balance} USDC`} />
-            <Stat label="Runs" value={capped ? `${s.periodsDone} / ${s.periodsTotal}` : `${s.periodsDone}`} />
-            <Stat
-              label={s.status === "active" ? "Next run" : "Status"}
-              value={s.status === "active" ? formatNextRun(s.nextRunAt, s.status) : badge.text}
-            />
-          </div>
-
-          {isOverdue(s) && (
-            <p className="mt-3 text-xs text-amber-400/80 flex items-start gap-1.5">
-              <span aria-hidden className="shrink-0">⚠</span>
-              <span>
-                Overdue. It hasn&apos;t run on schedule
-                {s.kind === "swap" ? " — the scheduler may be down or no swap route is available right now." : " — the scheduler may be down or the executor is low on gas."}
-              </span>
-            </p>
-          )}
-        </div>
+        <span className={`shrink-0 text-xs font-medium px-2 py-1 rounded-full ${badge.cls}`}>
+          {badge.text}
+        </span>
       </div>
+
+      {/* Flow chain — cadence → amount → target */}
+      <FlowChain s={s} symbol={symbol} animate={s.status === "active" && !overdue} />
+
+      {capped && (
+        <div className="mt-3.5">
+          <div className="h-1.5 w-full rounded-full bg-border overflow-hidden">
+            <div className="h-full rounded-full bg-blue-primary transition-all" style={{ width: `${progress}%` }} />
+          </div>
+        </div>
+      )}
+
+      <div className="grid grid-cols-3 gap-3 mt-3.5">
+        <Stat label="Left" value={`${s.balance} USDC`} />
+        <Stat label="Runs" value={capped ? `${s.periodsDone} / ${s.periodsTotal}` : `${s.periodsDone}`} />
+        <Stat
+          label={s.status === "active" ? "Next run" : "Status"}
+          value={s.status === "active" ? formatNextRun(s.nextRunAt, s.status) : badge.text}
+        />
+      </div>
+
+      {overdue && (
+        <p className="mt-3 text-xs text-amber-400/80 flex items-start gap-1.5">
+          <span aria-hidden className="shrink-0">⚠</span>
+          <span>
+            Overdue. It hasn&apos;t run on schedule
+            {s.kind === "swap" ? " — the scheduler may be down or no swap route is available right now." : " — the scheduler may be down or the executor is low on gas."}
+          </span>
+        </p>
+      )}
 
       {hasActions && (
         <div className="flex items-center gap-1 mt-4 pt-3 border-t border-border/50 text-xs">
@@ -171,6 +212,9 @@ export default function StrategiesPage() {
         <div className="flex items-start justify-between gap-4 mb-6">
           <div>
             <h1 className="text-2xl font-bold text-text-primary">Strategies</h1>
+            <p className="text-sm text-text-secondary/60 mt-1">
+              Recurring payments and DCA auto-buys. They run on schedule, no PIN each time.
+            </p>
           </div>
           <button
             onClick={() => setCreateOpen(true)}
