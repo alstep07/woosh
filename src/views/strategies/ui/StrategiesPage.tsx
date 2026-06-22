@@ -77,6 +77,15 @@ function FlowChain({ s, symbol }: { s: OnchainStrategy; symbol?: string }) {
   );
 }
 
+function formatDate(unixSeconds: number): string {
+  if (!unixSeconds) return "—";
+  return new Date(unixSeconds * 1000).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div className="min-w-0">
@@ -136,10 +145,11 @@ function StrategyCard({
       <div className="grid grid-cols-3 gap-3 mt-3.5">
         <Stat label="Left" value={`${s.balance} USDC`} />
         <Stat label="Runs" value={capped ? `${s.periodsDone} / ${s.periodsTotal}` : `${s.periodsDone}`} />
-        <Stat
-          label={s.status === "active" ? "Next run" : "Status"}
-          value={s.status === "active" ? formatNextRun(s.nextRunAt, s.status) : badge.text}
-        />
+        {s.status === "active" ? (
+          <Stat label="Next run" value={formatNextRun(s.nextRunAt, s.status)} />
+        ) : (
+          <Stat label="Started" value={formatDate(s.createdAt)} />
+        )}
       </div>
 
       {overdue && (
