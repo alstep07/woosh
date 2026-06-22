@@ -114,6 +114,34 @@ export async function createPaymentChallenge(
 }
 
 /**
+ * Creates a challenge to transfer an ERC-20 token (e.g. EURC/cirBTC) from the user's wallet,
+ * used to fund a reverse swap (token -> USDC) into the executor. For native USDC use
+ * createPaymentChallenge (tokenAddress is the empty string there).
+ */
+export async function createTokenTransferChallenge(
+  userToken: string,
+  walletId: string,
+  destinationAddress: string,
+  amount: string,
+  tokenAddress: string
+) {
+  if (!/^\d+(\.\d+)?$/.test(amount) || parseFloat(amount) <= 0) {
+    throw new Error(`Invalid amount: ${amount}`);
+  }
+  const client = getClient();
+  const res = await client.createTransaction({
+    userToken,
+    walletId,
+    destinationAddress,
+    amounts: [amount],
+    blockchain: Blockchain.ArcTestnet,
+    tokenAddress,
+    fee: { type: "level", config: { feeLevel: "MEDIUM" } },
+  });
+  return { challengeId: res.data!.challengeId! };
+}
+
+/**
  * Creates a challenge to register a payment request on-chain via
  * WooshInvoiceRegistry.create(salt, amount, memo). Stores amount + memo on-chain.
  */

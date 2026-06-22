@@ -13,6 +13,7 @@ type NavItem = { href: string; label: string; match: (path: string) => boolean }
 const NAV: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", match: (p) => p === "/dashboard" },
   { href: "/pay", label: "Send", match: (p) => p === "/pay" || p.startsWith("/pay/") },
+  { href: "/dashboard/swap", label: "Swap", match: (p) => p.startsWith("/dashboard/swap") },
   { href: "/dashboard/strategies", label: "Strategies", match: (p) => p.startsWith("/dashboard/strategies") },
   { href: "/dashboard/invoices", label: "Invoices", match: (p) => p.startsWith("/dashboard/invoices") },
 ];

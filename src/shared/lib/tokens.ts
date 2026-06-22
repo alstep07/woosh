@@ -61,3 +61,9 @@ export function tokenByAddress(address?: string | null): SupportedToken | undefi
   const lower = address.toLowerCase();
   return [USDC, EURC, CIRBTC].find((t) => t.address?.toLowerCase() === lower);
 }
+
+export function tokenBySymbol(symbol?: string | null): SupportedToken | undefined {
+  if (!symbol) return undefined;
+  const lower = symbol.toLowerCase();
+  return [USDC, EURC, CIRBTC].find((t) => t.symbol.toLowerCase() === lower);
+}
