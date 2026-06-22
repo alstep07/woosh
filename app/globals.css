@@ -18,6 +18,14 @@ body {
   .text-balance {
     text-wrap: balance;
   }
+  /* Brand gradient text — matches the parallax landing's invoice total. */
+  .text-grad {
+    background: linear-gradient(90deg, #2563eb 0%, #0ea5e9 50%, #22d3ee 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
+  }
 }
 
 /* Prevent iOS Safari from auto-zooming when a form control gains focus: any
