@@ -495,6 +495,27 @@ input[type="number"]::-webkit-inner-spin-button {
   .plx .srow.pending { opacity: 0.5 !important; }
 }
 
+/* Mobile: this scene's two stacked cards overflow 100vh — compact it so it fits.
+   Scoped to #plx-s-strategy so no other scene is affected. */
+@media (max-width: 640px) {
+  #plx-s-strategy { padding-top: 92px; padding-bottom: 40px; }
+  #plx-s-strategy h2 { font-size: clamp(1.7rem, 7vw, 2.2rem); }
+  #plx-s-strategy .sub { margin-top: 12px; font-size: 14px; }
+  #plx-s-strategy .stage { margin-top: clamp(20px, 4vh, 40px); }
+
+  #plx-s-strategy .scard { padding: 12px 14px; }
+  #plx-s-strategy .scard-ic { width: 26px; height: 26px; font-size: 13px; }
+  #plx-s-strategy .scard-head .t { font-size: 13px; }
+  #plx-s-strategy .srow { padding: 6px 0; font-size: 12px; gap: 8px; }
+  #plx-s-strategy .srow .d { width: 40px; font-size: 10px; }
+  #plx-s-strategy .scard-total { margin-top: 8px; padding-top: 10px; }
+  #plx-s-strategy .scard-total .val { font-size: 16px; }
+
+  /* Trim one historical row from each card to save vertical space. */
+  #plx-s-strategy .scard:nth-child(1) .srow:nth-child(2),
+  #plx-s-strategy .scard:nth-child(2) .srow:nth-child(2) { display: none; }
+}
+
 .plx .invoice {
   width: min(380px, 92vw); position: relative;
   background: var(--plx-glass-fill); backdrop-filter: var(--plx-glass-blur);
