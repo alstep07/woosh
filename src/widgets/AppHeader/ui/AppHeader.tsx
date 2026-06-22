@@ -109,7 +109,7 @@ export default function AppHeader() {
       {/* Mobile drawer */}
       {open && (
         <>
-          <div className="md:hidden fixed inset-0 top-[57px] z-10 bg-black/50 backdrop-blur-sm" onClick={() => setOpen(false)} />
+          <div className="md:hidden fixed inset-0 z-10 bg-black/50 backdrop-blur-sm" onClick={() => setOpen(false)} />
           <div className="md:hidden absolute left-0 right-0 top-full z-20 mx-3 mt-1 rounded-card border border-border bg-[#0d1222] p-2 shadow-[0_12px_32px_rgba(0,0,0,0.5)]">
             <div className="flex flex-col">
               {NAV.map((item) => {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { BalanceSummary } from "@/widgets/WalletCard/ui/BalanceSummary";
 import type { TokenHolding } from "@/entities/wallet/hooks/useTokenBalances";
@@ -12,7 +12,6 @@ interface Props {
   paymentLink: string;
   walletAddress: string;
   slug?: string;
-  onCreateInvoice?: () => void;
   holdings?: TokenHolding[];
   totalUsd?: number;
 }
@@ -26,16 +25,11 @@ function CopyIcon() {
   );
 }
 
-function KebabIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" className="shrink-0">
-      <circle cx="3" cy="8" r="1.4" />
-      <circle cx="8" cy="8" r="1.4" />
-      <circle cx="13" cy="8" r="1.4" />
-    </svg>
-  );
-}
-
+/**
+ * Mobile-only compact account summary: balance + the public identity chip (copies the
+ * share link) and a quiet copy-address control. Navigation now lives in the app header
+ * burger, so this no longer carries an actions menu.
+ */
 export default function AccountBar({
   balance,
   isLoading,
@@ -43,35 +37,10 @@ export default function AccountBar({
   paymentLink,
   walletAddress,
   slug,
-  onCreateInvoice,
   holdings,
   totalUsd,
 }: Props) {
   const [copied, setCopied] = useState<null | "link" | "address">(null);
-  const [menuOpen, setMenuOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement | null>(null);
-
-  // Close the menu on outside click or Escape
-  useEffect(() => {
-    if (!menuOpen) return;
-    function onDown(e: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
-    }
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") setMenuOpen(false);
-    }
-    document.addEventListener("mousedown", onDown);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDown);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [menuOpen]);
-
-  // Reset the "Copied!" hint whenever the menu reopens
-  useEffect(() => {
-    if (menuOpen) setCopied(null);
-  }, [menuOpen]);
 
   async function copy(which: "link" | "address") {
     await navigator.clipboard.writeText(which === "link" ? paymentLink : walletAddress);
@@ -79,11 +48,11 @@ export default function AccountBar({
     setTimeout(() => setCopied(null), 2000);
   }
 
-  const itemClass = "block w-full text-left px-4 py-2.5 text-sm text-text-primary hover:bg-white/5 transition-colors";
-  const chipClass = "flex items-center gap-1.5 h-9 px-3 sm:px-4 rounded-input bg-blue-primary/10 hover:bg-blue-primary/20 text-blue-primary text-xs sm:text-sm font-medium transition-colors whitespace-nowrap";
+  const chipClass =
+    "flex items-center gap-1.5 h-9 px-3 rounded-input bg-blue-primary/10 hover:bg-blue-primary/20 text-blue-primary text-xs font-medium transition-colors whitespace-nowrap";
 
   return (
-    <div className="flex items-start justify-between py-5">
+    <div className="flex items-start justify-between py-2">
       {/* Left: balance */}
       <div className="min-w-0">
         <BalanceSummary
@@ -95,13 +64,11 @@ export default function AccountBar({
         />
       </div>
 
-      {/* Right: copy-link chip + actions menu, same height side by side */}
-      <div className="flex items-center gap-1.5 ml-4">
+      {/* Right: share-link chip + copy-address */}
+      <div className="flex flex-col items-end gap-1.5 ml-4 shrink-0">
         {slug ? (
           <button onClick={() => copy("link")} className={chipClass}>
-            {copied === "link" ? (
-              "Copied!"
-            ) : (
+            {copied === "link" ? "Copied!" : (
               <>
                 <span>{slug}</span>
                 <CopyIcon />
@@ -114,45 +81,18 @@ export default function AccountBar({
           </Link>
         )}
 
-        <div className="relative" ref={menuRef}>
-          <button
-            onClick={() => setMenuOpen((v) => !v)}
-            aria-label="Account actions"
-            aria-haspopup="menu"
-            aria-expanded={menuOpen}
-            className="flex items-center justify-center h-9 w-9 rounded-input bg-blue-primary/10 hover:bg-blue-primary/20 text-blue-primary transition-colors"
-          >
-            <KebabIcon />
-          </button>
-
-          {menuOpen && (
-            <div
-              role="menu"
-              className="absolute right-0 top-full mt-1.5 z-[60] min-w-[200px] rounded-input border border-[#1E293B] bg-[#0d1222] py-1"
-              style={{ boxShadow: "0 8px 24px rgba(0,0,0,0.4)" }}
-            >
-              <button role="menuitem" onClick={() => copy("address")} className={itemClass}>
-                {copied === "address" ? "Copied!" : "Copy wallet address"}
-              </button>
-              <div className="my-1 border-t border-border" />
-              <Link
-                href="/pay"
-                role="menuitem"
-                onClick={() => setMenuOpen(false)}
-                className={itemClass}
-              >
-                Send payment
-              </Link>
-              <button
-                role="menuitem"
-                onClick={() => { setMenuOpen(false); onCreateInvoice?.(); }}
-                className={itemClass}
-              >
-                Create invoice
-              </button>
-            </div>
+        <button
+          onClick={() => copy("address")}
+          title="Copy wallet address"
+          className="flex items-center gap-1.5 font-mono text-xs text-text-secondary/50 hover:text-text-primary transition-colors"
+        >
+          {copied === "address" ? "Copied!" : (
+            <>
+              <span>{walletAddress.slice(0, 6)}…{walletAddress.slice(-4)}</span>
+              <CopyIcon />
+            </>
           )}
-        </div>
+        </button>
       </div>
     </div>
   );

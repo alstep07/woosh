@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import BrandHeader from "@/widgets/BrandHeader/ui/BrandHeader";
+import AppHeader from "@/widgets/AppHeader/ui/AppHeader";
 import Footer from "@/widgets/Footer/ui/Footer";
 import { Button } from "@/shared/ui/Button";
 import { Input } from "@/shared/ui/Input";
@@ -40,7 +40,7 @@ export default function PayEntryPage() {
 
   return (
     <main className="min-h-screen bg-navy flex flex-col">
-      <BrandHeader />
+      <AppHeader />
       <div className="flex-1 flex flex-col items-center justify-center px-6">
         <div className="w-full max-w-md">
           <h1 className="text-2xl font-bold text-text-primary mb-2">Send a payment</h1>

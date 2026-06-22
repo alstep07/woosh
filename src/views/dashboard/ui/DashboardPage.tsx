@@ -9,7 +9,6 @@ import { useTransactionHistory } from "@/entities/payment/hooks/useTransactionHi
 import AppHeader from "@/widgets/AppHeader/ui/AppHeader";
 import AccountBar from "@/widgets/AccountBar/ui/AccountBar";
 import WalletCard from "@/widgets/WalletCard/ui/WalletCard";
-import CreateInvoiceModal from "@/widgets/CreateInvoiceModal/ui/CreateInvoiceModal";
 import ChatPanel from "@/widgets/ChatPanel/ui/ChatPanel";
 import TransactionList from "@/widgets/TransactionList/ui/TransactionList";
 import Footer from "@/widgets/Footer/ui/Footer";
@@ -21,7 +20,6 @@ import type { Session } from "@/entities/user/model/types";
 export default function DashboardPage() {
   const router = useRouter();
   const [session, setSession] = useState<Session | null>(null);
-  const [createInvoiceOpen, setCreateInvoiceOpen] = useState(false);
 
   useEffect(() => {
     const s = loadSession();
@@ -128,7 +126,6 @@ export default function DashboardPage() {
               paymentLink={paymentLink}
               walletAddress={session.walletAddress}
               slug={session.slug}
-              onCreateInvoice={() => setCreateInvoiceOpen(true)}
               holdings={holdings?.tokens}
               totalUsd={holdings?.totalUsd}
             />
@@ -156,7 +153,6 @@ export default function DashboardPage() {
               paymentLink={paymentLink}
               walletAddress={session.walletAddress}
               slug={session.slug}
-              onCreateInvoice={() => setCreateInvoiceOpen(true)}
               holdings={holdings?.tokens}
               totalUsd={holdings?.totalUsd}
             >
@@ -171,10 +167,6 @@ export default function DashboardPage() {
       <div className="relative z-10 shrink-0">
         <Footer />
       </div>
-
-      {createInvoiceOpen && (
-        <CreateInvoiceModal session={session} onClose={() => setCreateInvoiceOpen(false)} />
-      )}
     </main>
   );
 }

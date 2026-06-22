@@ -21,7 +21,6 @@ interface Props {
   paymentLink: string;
   walletAddress: string;
   slug?: string;
-  onCreateInvoice: () => void;
   children: React.ReactNode; // recent payments
   holdings?: TokenHolding[]; // all token balances (USDC, EURC, cirBTC)
   totalUsd?: number;         // USDC-equivalent total across all tokens
@@ -40,7 +39,6 @@ export default function WalletCard({
   paymentLink,
   walletAddress,
   slug,
-  onCreateInvoice,
   children,
   holdings,
   totalUsd,
@@ -101,26 +99,7 @@ export default function WalletCard({
         totalUsd={totalUsd}
       />
 
-      {/* Secondary actions */}
-      <div className="mt-3 pl-1 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-blue-primary">
-        <Link href="/pay" className="hover:text-blue-secondary transition-colors">
-          Send payment
-        </Link>
-        <span className="w-px h-4 bg-border" />
-        <button onClick={onCreateInvoice} className="hover:text-blue-secondary transition-colors">
-          Create invoice
-        </button>
-        <span className="w-px h-4 bg-border" />
-        <Link href="/dashboard/invoices" className="hover:text-blue-secondary transition-colors">
-          My invoices
-        </Link>
-        <span className="w-px h-4 bg-border" />
-        <Link href="/dashboard/strategies" className="hover:text-blue-secondary transition-colors">
-          Strategies
-        </Link>
-      </div>
-
-      <div className="my-4 border-t border-border shrink-0" />
+      <div className="mt-4 mb-4 border-t border-border shrink-0" />
 
       {/* Recent payments — fills the remaining height, scrolls internally if long */}
       <div className="flex-1 min-h-0 overflow-y-auto no-scrollbar">
