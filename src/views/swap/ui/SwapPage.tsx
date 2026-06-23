@@ -14,13 +14,22 @@ import { SWAP_TARGETS } from "@/shared/lib/tokens";
 import type { Session } from "@/entities/user/model/types";
 
 const AMOUNT_RE = /^\d+(\.\d{1,8})?$/;
-// USDC is the native gas token on Arc, so a 100% USDC swap keeps a little back for gas.
 const GAS_RESERVE = 0.1;
-
 const PERCENTS = [25, 50, 100] as const;
 
-function tokenGlyph(sym: string): string {
-  return sym === "cirBTC" ? "₿" : sym === "EURC" ? "€" : "$";
+function TokenBadge({ symbol }: { symbol: string }) {
+  const isCircBTC = symbol === "cirBTC";
+  const isUSDC = symbol === "USDC";
+  return (
+    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold tracking-wide ${
+      isCircBTC ? "bg-amber-400/10 text-amber-400" :
+      isUSDC ? "bg-blue-primary/10 text-blue-primary" :
+      "bg-cyan-400/10 text-cyan-400"
+    }`}>
+      <span className="opacity-70">{isCircBTC ? "₿" : isUSDC ? "$" : "€"}</span>
+      {symbol}
+    </span>
+  );
 }
 
 export default function SwapPage() {
@@ -29,7 +38,7 @@ export default function SwapPage() {
 
   const swapTargets = SWAP_TARGETS.filter((t) => t.address);
   const [token, setToken] = useState<string>(swapTargets[0]?.symbol ?? "EURC");
-  const [direction, setDirection] = useState<"buy" | "sell">("buy"); // buy = USDC->token, sell = token->USDC
+  const [direction, setDirection] = useState<"buy" | "sell">("buy");
   const [amount, setAmount] = useState("");
   const [quote, setQuote] = useState<{ loading: boolean; out?: string; error?: string }>({ loading: false });
   const [formError, setFormError] = useState<string | null>(null);
@@ -50,7 +59,6 @@ export default function SwapPage() {
     const h = holdings?.tokens.find((t) => t.symbol === tokenIn);
     return h ? parseFloat(h.amount) : 0;
   }, [holdings, tokenIn]);
-  // Only USDC needs a gas reserve (it IS gas on Arc); token balances are fully spendable.
   const spendable = tokenIn === "USDC" ? Math.max(balanceNum - GAS_RESERVE, 0) : balanceNum;
 
   const flow = useChallengeFlow({
@@ -85,7 +93,6 @@ export default function SwapPage() {
     }
   }
 
-  // Live quote, debounced on amount/token/direction changes.
   const quoteSeq = useRef(0);
   useEffect(() => {
     const a = amount.trim();
@@ -125,10 +132,18 @@ export default function SwapPage() {
     setFormError(null);
   }
 
+  function selectToken(sym: string) {
+    setToken(sym);
+    setAmount("");
+    setQuote({ loading: false });
+    setFormError(null);
+  }
+
   const amountNum = parseFloat(amount);
   const validAmount = AMOUNT_RE.test(amount.trim()) && amountNum > 0;
   const exceeds = validAmount && amountNum > spendable + 1e-9;
-  const canSubmit = validAmount && !exceeds && !!quote.out && !swapping && flow.phase !== "running";
+  const busy = flow.phase === "running" || swapping;
+  const canSubmit = validAmount && !exceeds && !!quote.out && !busy;
 
   function startSwap() {
     if (!validAmount) { setFormError("Enter a valid amount"); return; }
@@ -146,173 +161,222 @@ export default function SwapPage() {
   }
 
   const error = formError ?? flow.error;
-  const fieldCls =
-    "w-full bg-border/40 text-text-primary rounded-input px-3 py-2.5 text-sm border border-border focus:border-blue-primary outline-none transition-colors placeholder:text-text-secondary/40";
-  const busy = flow.phase === "running" || swapping;
-  const balanceStr = balanceNum > 0 ? `${balanceNum.toLocaleString(undefined, { maximumFractionDigits: 8 })} ${tokenIn}` : `0 ${tokenIn}`;
+  const balanceFmt = balanceNum > 0
+    ? balanceNum.toLocaleString(undefined, { maximumFractionDigits: 8 })
+    : "0";
+
+  const busyLabel = swapping
+    ? "Swapping via Synthra…"
+    : flow.phase === "running"
+    ? "Confirm in the PIN window…"
+    : null;
 
   return (
     <main className="min-h-screen bg-navy flex flex-col">
       <AppHeader />
-      <div className="flex-1 px-4 sm:px-6 lg:px-8 py-8 max-w-md mx-auto w-full">
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold text-text-primary">Swap</h1>
-          <p className="text-sm text-text-secondary/60 mt-1">
-            Convert between USDC and EURC or cirBTC. One PIN, the result lands in your wallet.
-          </p>
-        </div>
 
-        <div className="glass-card rounded-card p-6">
-          {result ? (
-            <div className="text-center">
-              <div className="w-12 h-12 rounded-full bg-green-400/10 flex items-center justify-center mx-auto mb-3 text-2xl">✓</div>
-              <h2 className="text-lg font-bold text-text-primary mb-1">Swap complete</h2>
-              <p className="text-text-secondary text-sm mb-4">
-                You received <span className="text-text-primary font-semibold">{result.amountOut} {result.tokenOut}</span>.
-              </p>
-              <button
-                onClick={() => { setResult(null); setAmount(""); setQuote({ loading: false }); }}
-                className="text-xs text-blue-primary/70 hover:text-blue-primary transition-colors"
-              >
-                Make another swap
-              </button>
-            </div>
-          ) : busy ? (
-            <div className="text-center py-4">
-              <div className="flex justify-center mb-3"><Spinner size="lg" /></div>
-              <p className="text-text-secondary text-sm">
-                {swapping ? "Swapping…" : "Confirm the transfer in the PIN window…"}
-              </p>
-            </div>
-          ) : flow.phase === "auth" ? (
-            <div className="space-y-3">
-              <h2 className="text-lg font-bold text-text-primary">Confirm it&apos;s you</h2>
-              <p className="text-sm text-text-secondary">We need to verify you to fund the swap onchain.</p>
-              {flow.auth.step === "email" && !flow.auth.loading && (
-                <EmailStep
-                  email={flow.auth.email}
-                  onEmailChange={flow.auth.setEmail}
-                  onSubmit={flow.auth.sendOtp}
-                  loading={false}
-                  deviceIdLoading={flow.auth.deviceIdLoading}
-                  deviceIdError={flow.auth.deviceIdError}
-                  onRetry={flow.auth.retryDeviceId}
-                  error={flow.auth.error}
-                  deviceId={flow.auth.deviceId}
-                />
-              )}
-              {flow.auth.step === "email" && flow.auth.loading && (
-                <div className="text-center py-2"><div className="flex justify-center mb-2"><Spinner size="lg" /></div><p className="text-text-secondary text-sm">Sending your code…</p></div>
-              )}
-              {flow.auth.step === "verify" && (
-                <div className="text-center py-2">
-                  <div className="flex justify-center mb-2"><Spinner size="lg" /></div>
-                  <p className="text-text-secondary text-sm">Enter the code from <span className="text-text-primary">{flow.auth.email}</span> in the window that opened.</p>
-                  {flow.auth.error && <p className="text-sm text-red-400 mt-2">{flow.auth.error}</p>}
-                </div>
-              )}
-              <button onClick={flow.backToIdle} className="w-full text-sm text-blue-primary/60 hover:text-blue-primary transition-colors">Back</button>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {/* Token to swap against + direction */}
-              <div>
-                <span className="block text-xs font-medium text-text-secondary mb-1.5">Token</span>
-                <div className="grid grid-cols-2 gap-2">
-                  {swapTargets.map((t) => {
-                    const active = token === t.symbol;
-                    return (
-                      <button
-                        key={t.symbol}
-                        onClick={() => { setToken(t.symbol); setAmount(""); setQuote({ loading: false }); setFormError(null); }}
-                        className={`flex items-center gap-2 rounded-input border px-3 py-2.5 text-sm transition-colors ${
-                          active
-                            ? "border-blue-primary bg-blue-primary/10 text-text-primary"
-                            : "border-border bg-border/30 text-text-secondary hover:text-text-primary"
-                        }`}
-                      >
-                        <span className={`h-6 w-6 shrink-0 rounded-full grid place-items-center text-xs font-bold ${
-                          t.symbol === "cirBTC" ? "bg-amber-400/15 text-amber-400" : "bg-blue-secondary/15 text-blue-secondary"
-                        }`}>{tokenGlyph(t.symbol)}</span>
-                        <span className="font-semibold">{t.symbol}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
+      {/* Mobile: edge-to-edge. Desktop: centered card. */}
+      <div className="flex-1 flex flex-col sm:items-center sm:justify-start sm:py-10 sm:px-4">
+        <div className="w-full sm:max-w-md">
 
-              {/* Direction: from -> to with a flip button */}
-              <div className="flex items-center justify-center gap-3 text-sm">
-                <span className="px-3 py-1.5 rounded-input bg-border/40 text-text-primary font-medium">{tokenIn}</span>
-                <button
-                  onClick={flipDirection}
-                  aria-label="Flip direction"
-                  className="h-8 w-8 grid place-items-center rounded-full bg-blue-primary/10 text-blue-primary hover:bg-blue-primary/20 transition-colors"
-                >
-                  ⇄
-                </button>
-                <span className="px-3 py-1.5 rounded-input bg-border/40 text-text-primary font-medium">{tokenOut}</span>
-              </div>
+          {/* Page header */}
+          <div className="px-5 pt-7 pb-5 sm:px-0 sm:mb-4">
+            <h1 className="text-2xl font-bold text-text-primary tracking-tight">Swap</h1>
+            <p className="text-sm text-text-secondary/50 mt-1">
+              One PIN. Output lands straight in your wallet.
+            </p>
+          </div>
 
-              {/* Amount + balance */}
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label htmlFor="amount" className="text-xs font-medium text-text-secondary">You pay</label>
-                  <span className="text-xs text-text-secondary/50">Balance: {balanceStr}</span>
+          {/* Card shell — only on desktop */}
+          <div className="sm:glass-card sm:rounded-card sm:overflow-hidden">
+            <div className="px-4 pb-6 sm:px-6 sm:pt-6">
+
+              {/* ── Result state ── */}
+              {result ? (
+                <div className="py-10 text-center">
+                  <div className="w-14 h-14 rounded-full bg-green-400/10 border border-green-400/20 flex items-center justify-center mx-auto mb-4 text-2xl text-green-400">✓</div>
+                  <h2 className="text-lg font-bold text-text-primary mb-1">Done</h2>
+                  <p className="text-text-secondary text-sm">
+                    You received{" "}
+                    <span className="text-text-primary font-semibold">{result.amountOut} {result.tokenOut}</span>.
+                  </p>
+                  <button
+                    onClick={() => { setResult(null); setAmount(""); setQuote({ loading: false }); }}
+                    className="mt-5 text-xs text-blue-primary/60 hover:text-blue-primary transition-colors"
+                  >
+                    Make another swap
+                  </button>
                 </div>
-                <div className="relative">
-                  <input
-                    id="amount"
-                    type="number"
-                    inputMode="decimal"
-                    value={amount}
-                    onChange={(e) => { setAmount(e.target.value); setFormError(null); }}
-                    placeholder="0.00"
-                    autoFocus
-                    className={`${fieldCls} pr-20`}
-                  />
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-text-secondary/50">{tokenIn}</span>
+
+              /* ── Auth / OTP flow ── */
+              ) : flow.phase === "auth" ? (
+                <div className="space-y-3 py-2">
+                  {flow.auth.step === "verify" && (
+                    <>
+                      <h2 className="text-base font-bold text-text-primary">Confirm it&apos;s you</h2>
+                      <p className="text-sm text-text-secondary/60">We need to verify you to fund the swap onchain.</p>
+                    </>
+                  )}
+                  {flow.auth.step === "email" && (
+                    <EmailStep
+                      email={flow.auth.email}
+                      onEmailChange={flow.auth.setEmail}
+                      onSubmit={flow.auth.sendOtp}
+                      loading={flow.auth.loading}
+                      deviceIdLoading={flow.auth.deviceIdLoading}
+                      deviceIdError={flow.auth.deviceIdError}
+                      onRetry={flow.auth.retryDeviceId}
+                      error={flow.auth.error}
+                      deviceId={flow.auth.deviceId}
+                    />
+                  )}
+                  {flow.auth.step === "verify" && (
+                    <div className="text-center py-2">
+                      <div className="flex justify-center mb-2"><Spinner size="lg" /></div>
+                      <p className="text-text-secondary text-sm">
+                        Enter the code from <span className="text-text-primary">{flow.auth.email}</span> in the window that opened.
+                      </p>
+                      {flow.auth.error && <p className="text-sm text-red-400 mt-2">{flow.auth.error}</p>}
+                    </div>
+                  )}
+                  <button onClick={flow.backToIdle} className="w-full text-sm text-text-secondary/40 hover:text-text-secondary transition-colors pt-1">
+                    ← Back
+                  </button>
                 </div>
-                <div className="grid grid-cols-3 gap-2 mt-2">
-                  {PERCENTS.map((p) => (
+
+              /* ── Main form — stays visible when busy, just dimmed ── */
+              ) : (
+                <div className={`space-y-2 transition-opacity duration-200 ${busy ? "opacity-40 pointer-events-none" : ""}`}>
+
+                  {/* Alt-token tabs */}
+                  <div className="flex gap-2 pb-2">
+                    {swapTargets.map((t) => {
+                      const active = token === t.symbol;
+                      const isCircBTC = t.symbol === "cirBTC";
+                      return (
+                        <button
+                          key={t.symbol}
+                          onClick={() => selectToken(t.symbol)}
+                          className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-input text-sm font-semibold transition-all ${
+                            active
+                              ? isCircBTC
+                                ? "bg-amber-400/10 text-amber-400 border border-amber-400/20"
+                                : "bg-cyan-400/10 text-cyan-400 border border-cyan-400/20"
+                              : "bg-white/[0.04] text-text-secondary/50 border border-transparent hover:text-text-secondary"
+                          }`}
+                        >
+                          <span className={`w-5 h-5 rounded-full text-[10px] font-bold flex items-center justify-center ${
+                            isCircBTC ? "bg-amber-400/15 text-amber-400" : "bg-cyan-400/15 text-cyan-400"
+                          }`}>
+                            {isCircBTC ? "₿" : "€"}
+                          </span>
+                          {t.symbol}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* FROM panel */}
+                  <div className="rounded-card bg-white/[0.04] border border-white/[0.07] px-4 pt-4 pb-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs text-text-secondary/50 font-medium uppercase tracking-widest">You pay</span>
+                      <TokenBadge symbol={tokenIn} />
+                    </div>
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      value={amount}
+                      onChange={(e) => { setAmount(e.target.value); setFormError(null); }}
+                      placeholder="0"
+                      autoFocus
+                      className="w-full bg-transparent text-4xl font-light text-text-primary outline-none placeholder:text-text-secondary/15 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                    />
+                    <div className="flex items-center justify-between mt-3">
+                      <span className="text-xs text-text-secondary/40">
+                        {balanceFmt} {tokenIn} available
+                      </span>
+                      <div className="flex gap-1.5">
+                        {PERCENTS.map((p) => (
+                          <button
+                            key={p}
+                            onClick={() => setPercent(p)}
+                            disabled={spendable <= 0}
+                            className="px-2 py-0.5 rounded text-[11px] font-medium bg-white/[0.05] text-text-secondary/50 hover:text-text-primary hover:bg-white/[0.1] disabled:opacity-25 transition-colors"
+                          >
+                            {p === 100 ? "Max" : `${p}%`}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    {tokenIn === "USDC" && spendable < balanceNum && (
+                      <p className="text-[10px] text-text-secondary/30 mt-1.5">
+                        ${GAS_RESERVE.toFixed(2)} reserved for gas
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Flip button */}
+                  <div className="flex justify-center relative z-10 -my-0.5">
                     <button
-                      key={p}
-                      onClick={() => setPercent(p)}
-                      disabled={spendable <= 0}
-                      className="rounded-input border border-border bg-border/30 py-1.5 text-xs font-medium text-text-secondary hover:text-text-primary hover:border-blue-primary/40 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                      onClick={flipDirection}
+                      aria-label="Flip swap direction"
+                      className="w-9 h-9 rounded-full bg-navy border border-white/[0.12] flex items-center justify-center text-text-secondary/50 hover:text-blue-primary hover:border-blue-primary/30 hover:bg-blue-primary/5 transition-all"
                     >
-                      {p === 100 ? "Max" : `${p}%`}
+                      <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                        <path d="M7 1v12M3.5 4L7 1l3.5 3M3.5 10L7 13l3.5-3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
                     </button>
-                  ))}
+                  </div>
+
+                  {/* TO panel */}
+                  <div className={`rounded-card bg-white/[0.04] border px-4 pt-4 pb-3 transition-colors ${
+                    quote.out ? "border-blue-primary/15" : "border-white/[0.07]"
+                  }`}>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs text-text-secondary/50 font-medium uppercase tracking-widest">You receive</span>
+                      <TokenBadge symbol={tokenOut} />
+                    </div>
+                    <div className="text-4xl font-light min-h-[48px] flex items-center">
+                      {quote.loading ? (
+                        <span className="text-base text-text-secondary/30">estimating…</span>
+                      ) : quote.out ? (
+                        <span className="text-text-primary">≈ {quote.out}</span>
+                      ) : (
+                        <span className="text-text-secondary/15">0</span>
+                      )}
+                    </div>
+                    {quote.error && (
+                      <p className="text-xs text-amber-400/60 mt-1">{quote.error}</p>
+                    )}
+                  </div>
+
+                  {error && !busy && (
+                    <p className="text-sm text-red-400/80 text-center pt-1">{error}</p>
+                  )}
+
+                  <div className="pt-2">
+                    {busy ? (
+                      <div className="flex items-center justify-center gap-2.5 py-3">
+                        <Spinner size="sm" />
+                        <span className="text-sm text-text-secondary/60">{busyLabel}</span>
+                      </div>
+                    ) : (
+                      <Button onClick={startSwap} disabled={!canSubmit}>
+                        Swap {tokenIn} → {tokenOut}
+                      </Button>
+                    )}
+                  </div>
+
+                  <p className="text-[11px] text-text-secondary/25 text-center pt-1">
+                    Routed via Circle App Kit, onchain DEX fallback
+                  </p>
                 </div>
-                {tokenIn === "USDC" && (
-                  <p className="text-[11px] text-text-secondary/40 mt-1.5">Max keeps ${GAS_RESERVE.toFixed(2)} back for gas.</p>
-                )}
-              </div>
-
-              {/* Quote */}
-              <div className="rounded-input bg-blue-primary/5 border border-blue-primary/15 px-3.5 py-2.5 min-h-[44px] flex items-center justify-between text-sm">
-                <span className="text-text-secondary/60">You receive</span>
-                {quote.loading ? (
-                  <span className="text-text-secondary/50">estimating…</span>
-                ) : quote.error ? (
-                  <span className="text-amber-400/80 text-xs">{quote.error}</span>
-                ) : quote.out ? (
-                  <span className="text-text-primary font-semibold">≈ {quote.out} {tokenOut}</span>
-                ) : (
-                  <span className="text-text-secondary/40">—</span>
-                )}
-              </div>
-
-              {error && <p className="text-sm text-red-400">{error}</p>}
-              <Button onClick={startSwap} disabled={!canSubmit}>Swap</Button>
-              <p className="text-xs text-text-secondary/40 text-center">
-                Routed via Circle App Kit, with an onchain DEX fallback. You send {tokenIn} once, {tokenOut} comes straight back.
-              </p>
+              )}
             </div>
-          )}
+          </div>
         </div>
       </div>
+
       <Footer />
     </main>
   );

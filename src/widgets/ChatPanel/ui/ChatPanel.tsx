@@ -23,6 +23,7 @@ function shortenLink(url: string): string {
 type PendingAction =
   | { type: "send_payment"; to: string; amount: string; resolvedAddress?: string }
   | { type: "create_request"; amount: string; memo: string }
+  | { type: "swap"; tokenIn: string; tokenOut: string; amount: string }
   | {
       type: "create_strategy";
       kind: "payment" | "swap";
@@ -43,10 +44,11 @@ type ChatMessage = {
   text: string;
   isError?: boolean;
   pendingAction?: PendingAction;
-  actionStatus?: "confirmed" | "cancelled" | "sending" | "paid" | "created" | "strategy_done" | "send_error";
+  actionStatus?: "confirmed" | "cancelled" | "sending" | "paid" | "created" | "strategy_done" | "swap_done" | "send_error";
   actionError?: string;
   txExplorerUrl?: string;
   requestLink?: string;
+  swapOut?: string;
   cancelled?: boolean;
 };
 
@@ -339,6 +341,59 @@ export default function ChatPanel({ name, walletAddress, userEmail, onPaymentSuc
     }
   }
 
+  async function executeSwapAction(
+    msgId: string,
+    pa: Extract<PendingAction, { type: "swap" }>,
+    userToken: string,
+    encryptionKey: string,
+    sdk: W3SSdk
+  ): Promise<"ok" | "auth_error" | "error"> {
+    updateMsgStatus(msgId, "sending");
+    try {
+      // Step 1: build the funding transfer (user sends tokenIn to the executor).
+      const res = await fetch("/api/wallet/swap", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userToken, tokenIn: pa.tokenIn, tokenOut: pa.tokenOut, amount: pa.amount }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        if (res.status === 401 || res.status === 403) return "auth_error";
+        throw new Error(data.error ?? "Swap unavailable");
+      }
+
+      sdk.setAuthentication({ userToken, encryptionKey });
+      sdk.execute(data.challengeId, async (err) => {
+        if (err) {
+          updateMsgStatus(msgId, "send_error", "Couldn't confirm the swap. Please try again.");
+          return;
+        }
+        // Step 2: the executor swaps and sends the output back to the user.
+        try {
+          const ex = await fetch("/api/wallet/swap/execute", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ userToken, tokenIn: pa.tokenIn, tokenOut: pa.tokenOut, amount: pa.amount }),
+          });
+          const exData = await ex.json();
+          if (!ex.ok || !exData.ok) {
+            updateMsgStatus(msgId, "send_error", exData.error ?? "Swap failed. Please try again.");
+            return;
+          }
+          setMessages((prev) =>
+            prev.map((m) => (m.id === msgId ? { ...m, actionStatus: "swap_done", swapOut: exData.amountOut ?? undefined } : m))
+          );
+        } catch {
+          updateMsgStatus(msgId, "send_error", "Swap failed. Please try again.");
+        }
+      });
+      return "ok";
+    } catch (err) {
+      updateMsgStatus(msgId, "send_error", err instanceof Error ? err.message : "Swap failed.");
+      return "error";
+    }
+  }
+
   async function copyRequestLink(msgId: string, link: string) {
     await navigator.clipboard.writeText(link);
     setCopiedMsgId(msgId);
@@ -356,6 +411,8 @@ export default function ChatPanel({ name, walletAddress, userEmail, onPaymentSuc
           ? `/pay/${pa.to}?amount=${pa.amount}`
           : pa.type === "create_strategy"
           ? `/dashboard/strategies`
+          : pa.type === "swap"
+          ? `/dashboard/swap`
           : `/dashboard/invoices`;
       return;
     }
@@ -376,6 +433,8 @@ export default function ChatPanel({ name, walletAddress, userEmail, onPaymentSuc
         ? executePay(msg.id, pa.resolvedAddress!, pa.amount, userToken, encryptionKey, sdk)
         : pa.type === "create_strategy"
         ? executeCreateStrategy(msg.id, pa, salt, userToken, encryptionKey, sdk)
+        : pa.type === "swap"
+        ? executeSwapAction(msg.id, pa, userToken, encryptionKey, sdk)
         : executeCreateRequest(msg.id, salt, pa.amount, pa.memo, userToken, encryptionKey, sdk);
     pendingRunRef.current = run;
 
@@ -496,6 +555,8 @@ export default function ChatPanel({ name, walletAddress, userEmail, onPaymentSuc
           assistantText = `I'll create an invoice for $${Number(pa.amount).toFixed(2)}${pa.memo ? ` for ${pa.memo}` : ""}.`;
         } else if (pa.type === "send_payment") {
           assistantText = `I'll send $${Number(pa.amount).toFixed(2)} to ${pa.to}.`;
+        } else if (pa.type === "swap") {
+          assistantText = `I'll swap ${pa.amount} ${pa.tokenIn} for ${pa.tokenOut}.`;
         } else {
           const what = pa.kind === "payment"
             ? `pay ${pa.amountPerPeriod} USDC to ${pa.recipient} ${pa.interval}`
@@ -628,6 +689,16 @@ export default function ChatPanel({ name, walletAddress, userEmail, onPaymentSuc
                           {" "}needs your PIN once
                         </p>
                       </>
+                    ) : msg.pendingAction.type === "swap" ? (
+                      <>
+                        <p className="text-xs text-text-secondary mb-1">
+                          Swap{" "}
+                          <span className="text-text-primary font-medium">{msg.pendingAction.amount} {msg.pendingAction.tokenIn}</span>
+                          {" "}for{" "}
+                          <span className="text-text-primary font-medium">{msg.pendingAction.tokenOut}</span>?
+                        </p>
+                        <p className="text-xs text-text-secondary/40 mb-2">One PIN to fund, executor delivers the output straight back</p>
+                      </>
                     ) : (
                       <>
                         <p className="text-xs text-text-secondary mb-1">
@@ -704,6 +775,23 @@ export default function ChatPanel({ name, walletAddress, userEmail, onPaymentSuc
                         <a href="/dashboard/strategies" className="underline underline-offset-2 opacity-70 hover:opacity-100 transition-opacity">
                           Manage
                         </a>
+                      </span>
+                    </p>
+                  </div>
+                )}
+
+                {/* Swap done */}
+                {msg.pendingAction && msg.actionStatus === "swap_done" && (
+                  <div className={`${msg.text ? "mt-2 pt-2 border-t border-white/10" : ""}`}>
+                    <p className="text-xs text-green-400 flex items-center gap-1.5">
+                      <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 16 16" fill="none">
+                        <circle cx="8" cy="8" r="7" fill="currentColor" fillOpacity="0.15" />
+                        <path d="M5 8l2 2 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                      <span>
+                        Swapped{msg.swapOut ? (
+                          <> — you received <strong>{msg.swapOut} {(msg.pendingAction as { tokenOut: string }).tokenOut}</strong></>
+                        ) : null}.
                       </span>
                     </p>
                   </div>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, FormEvent } from "react";
+import type { W3SSdk } from "@circle-fin/w3s-pw-web-sdk";
 import type { OtpTokens } from "@/entities/user/model/types";
 import { getW3SSdk, setLoginHandler, fetchDeviceId } from "@/shared/lib/w3s";
 
@@ -10,7 +11,9 @@ export function useAuth(
 ) {
   // Keep sdkRef pointing to the singleton so consumers (SignupPage) can call
   // sdk.setAuthentication / sdk.execute without going through this hook.
-  const sdkRef = useRef(circleAppId ? getW3SSdk(circleAppId) : null);
+  // Initialized to null — useEffect below sets it client-side to avoid SSR crash
+  // (W3SSdk constructor accesses window, which doesn't exist during server render).
+  const sdkRef = useRef<W3SSdk | null>(null);
 
   // onSuccessRef ensures the handler always calls the latest onSuccess closure
   // even though the handler is only registered once in the effect.

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { parseUnits } from "viem";
+import { parseUnits, formatUnits } from "viem";
 import { getUserWallets } from "@/shared/lib/circle";
-import { canSwapPair, executePair, type SwapSym } from "@/shared/lib/swap";
+import { canSwapPair, executePair, clampDecimals, type SwapSym } from "@/shared/lib/swap";
 import { getExecutorAddress, dcwTransfer } from "@/shared/lib/dcw";
 import { tokenBySymbol } from "@/shared/lib/tokens";
 import { arcPublicClient } from "@/shared/lib/arc";
@@ -41,9 +41,31 @@ function fundedDecimals(tokenIn: SwapSym): number {
   return tokenIn === "USDC" ? 18 : tokenBySymbol(tokenIn)!.decimals;
 }
 
-async function refund(tokenIn: SwapSym, owner: string, amount: string) {
-  const tokenAddr = tokenIn === "USDC" ? "" : tokenBySymbol(tokenIn)!.address!;
-  await dcwTransfer(owner, amount, tokenAddr).catch(() => {});
+// Native USDC pays gas on Arc, so a USDC refund can't send the executor's full balance —
+// leave a small buffer for the refund tx's own gas.
+const REFUND_GAS_BUFFER = parseUnits("0.02", 18); // native USDC is 18-dec
+
+// Refund whatever tokenIn the executor ACTUALLY holds, not the nominal `amount`. Gas burned
+// on the approve/swap attempts already reduced a USDC balance, so transferring `amount` would
+// revert and strand the funds on the executor (the original "money left UCW, never came back").
+async function refund(tokenIn: SwapSym, owner: string, executor: `0x${string}`) {
+  try {
+    let bal = await executorBalance(tokenIn, executor);
+    if (tokenIn === "USDC") {
+      if (bal <= REFUND_GAS_BUFFER) return;
+      bal -= REFUND_GAS_BUFFER;
+    }
+    if (bal <= 0n) return;
+    const tokenAddr = tokenIn === "USDC" ? "" : tokenBySymbol(tokenIn)!.address!;
+    // formatUnits uses the native/ERC-20 magnitude (USDC native = 18-dec), but Circle's transfer
+    // API expects USDC as a 6-dec token — clamp so it doesn't 400 with "API parameter invalid".
+    const transferDp = tokenIn === "USDC" ? 6 : tokenBySymbol(tokenIn)!.decimals;
+    const human = clampDecimals(formatUnits(bal, fundedDecimals(tokenIn)), transferDp);
+    await dcwTransfer(owner, human, tokenAddr);
+  } catch (err) {
+    const data = (err as { response?: { data?: unknown } })?.response?.data;
+    console.error("[swap/execute] refund failed", data ?? err);
+  }
 }
 
 export async function POST(req: NextRequest) {
@@ -79,7 +101,7 @@ export async function POST(req: NextRequest) {
     // Route could have dried up between funding and now — refund if so.
     const route = await canSwapPair(inSym, outSym, String(amount), executor);
     if (!route.ok) {
-      await refund(inSym, owner, String(amount));
+      await refund(inSym, owner, executor);
       return NextResponse.json(
         { error: `No swap route available; your ${inSym} was refunded.` },
         { status: 409 }
@@ -90,9 +112,10 @@ export async function POST(req: NextRequest) {
       const out = await executePair(inSym, outSym, String(amount), executor, owner as `0x${string}`);
       return NextResponse.json({ ok: true, amountOut: out.amountOut ?? null, tokenOut: outSym });
     } catch (err) {
-      await refund(inSym, owner, String(amount));
+      await refund(inSym, owner, executor);
       const msg = err instanceof Error ? err.message : `Swap failed; your ${inSym} was refunded.`;
-      console.error("[swap/execute]", msg, err);
+      const data = (err as { response?: { data?: unknown } })?.response?.data;
+      console.error("[swap/execute]", msg, data ?? err);
       return NextResponse.json({ error: msg }, { status: 500 });
     }
   } catch (err) {

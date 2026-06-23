@@ -10,7 +10,6 @@
  */
 import { AppKit } from "@circle-fin/app-kit";
 import { createCircleWalletsAdapter } from "@circle-fin/adapter-circle-wallets";
-import { formatUnits } from "viem";
 import { dcwTransfer } from "@/shared/lib/dcw";
 import { synthraQuote, synthraSwap } from "@/shared/lib/synthra";
 import { USDC_ERC20_ADDRESS, USDC_SWAP_DECIMALS, tokenBySymbol } from "@/shared/lib/tokens";
@@ -18,6 +17,18 @@ import { USDC_ERC20_ADDRESS, USDC_SWAP_DECIMALS, tokenBySymbol } from "@/shared/
 export type SwapToken = "EURC" | "cirBTC";
 /** A swap pair always has USDC on one side. */
 export type SwapSym = "USDC" | "EURC" | "cirBTC";
+
+/**
+ * Trim a decimal string to at most `decimals` places (no rounding). Circle's transfer API
+ * rejects amounts carrying more decimals than the token supports ("API parameter invalid"),
+ * so every human amount handed to dcwTransfer must pass through this first.
+ */
+export function clampDecimals(amount: string, decimals: number): string {
+  const [int, frac = ""] = amount.split(".");
+  if (decimals <= 0) return int;
+  const trimmed = frac.slice(0, decimals);
+  return trimmed ? `${int}.${trimmed}` : int;
+}
 
 function getKitKey(): string {
   const k = process.env.CIRCLE_KIT_KEY;
@@ -127,17 +138,20 @@ export async function executePair(
       appKitOut = undefined;
     }
     if (appKitOut) {
-      // App Kit swapped into the executor — forward to the recipient. A forward failure is NOT
-      // retried on Synthra (that would double-swap); it propagates so the caller can refund.
+      // App Kit amountOut is already a human-readable decimal string (e.g. "0.999") — NOT base
+      // units. Never call BigInt/formatUnits on it. Clamp to the token's decimals: Circle's
+      // transfer API rejects amounts with more decimal places than the token supports.
       const t = refFor(tokenOut);
-      const human = formatUnits(BigInt(appKitOut), t.decimals);
-      await dcwTransfer(recipient, human, t.address);
-      return { amountOut: human, rail: "appkit" };
+      const safeOut = clampDecimals(appKitOut, t.decimals);
+      await dcwTransfer(recipient, safeOut, t.address);
+      return { amountOut: safeOut, rail: "appkit" };
     }
   }
 
   const quote = await synthraQuote(refFor(tokenIn), refFor(tokenOut), amountInHuman);
-  const res = await synthraSwap(refFor(tokenIn), refFor(tokenOut), amountInHuman, recipient);
+  // Pass executor so synthraSwap can read the post-approve balance (gas on Arc is USDC,
+  // so the approve tx reduces the ERC-20 balance before the swap runs).
+  const res = await synthraSwap(refFor(tokenIn), refFor(tokenOut), amountInHuman, recipient, executor);
   if (!res.ok) throw new Error(`swap failed (${res.state})`);
   return { amountOut: quote.estimatedOutput, rail: "synthra" };
 }
