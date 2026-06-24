@@ -1,11 +1,32 @@
 import { NextRequest, NextResponse } from "next/server";
-import { formatUnits } from "viem";
+import { formatUnits, encodeFunctionData } from "viem";
 import { arcPublicClient } from "@/shared/lib/arc";
 import { STRATEGY_REGISTRY_ABI } from "@/entities/strategy/model/abi";
-import { dcwExecuteContract, dcwTransfer, waitForTx, getExecutorAddress } from "@/shared/lib/dcw";
+import { dcwExecuteContract, dcwExecuteRaw, waitForTx, getExecutorAddress } from "@/shared/lib/dcw";
 import { executeSwap, canSwap, type SwapToken } from "@/shared/lib/swap";
 import { tokenByAddress } from "@/shared/lib/tokens";
 import { env } from "@/shared/config/env";
+
+const USDC_ADDRESS = "0x3600000000000000000000000000000000000000";
+const USDC_DECIMALS = 18;
+const ERC20_TRANSFER_ABI = [{
+  name: "transfer",
+  type: "function",
+  stateMutability: "nonpayable",
+  inputs: [{ name: "to", type: "address" }, { name: "amount", type: "uint256" }],
+  outputs: [{ type: "bool" }],
+}] as const;
+
+async function refundUSDC(to: `0x${string}`, amountPerPeriod: bigint): Promise<void> {
+  const data = encodeFunctionData({
+    abi: ERC20_TRANSFER_ABI,
+    functionName: "transfer",
+    args: [to, amountPerPeriod],
+  });
+  const r = await dcwExecuteRaw(USDC_ADDRESS, data);
+  const id = (r as { id?: string } | undefined)?.id;
+  if (id) await waitForTx(id, 30_000);
+}
 
 const FAILED_STATES = new Set(["FAILED", "CANCELLED", "DENIED"]);
 
@@ -127,7 +148,7 @@ async function runExecutor(): Promise<Record<string, unknown>> {
           // atomic Synthra path, so a throw here means no swap happened.)
           if (released) {
             try {
-              await dcwTransfer(s.owner, formatUnits(s.amountPerPeriod, 18), "");
+              await refundUSDC(s.owner, s.amountPerPeriod);
               refunded++;
             } catch {
               /* refund best-effort; funds remain in the executor, recoverable */

@@ -56,6 +56,10 @@ const ERC20_ABI = [
     inputs: [{ name: "account", type: "address" }],
     outputs: [{ type: "uint256" }] },
 ] as const;
+// Synthra's router is a Uniswap SwapRouter02 (synthra-swap/swap-router-contract). Its
+// IV3SwapRouter.ExactInputSingleParams has NO `deadline` field (deadline moved to multicall) —
+// 7 fields, in this exact order. Including a deadline changes the function selector and the
+// swap silently never executes.
 const EXACT_INPUT_SINGLE_ABI = [
   {
     name: "exactInputSingle",
@@ -68,7 +72,6 @@ const EXACT_INPUT_SINGLE_ABI = [
         { name: "tokenOut",          type: "address" },
         { name: "fee",               type: "uint24"  },
         { name: "recipient",         type: "address" },
-        { name: "deadline",          type: "uint256" },
         { name: "amountIn",          type: "uint256" },
         { name: "amountOutMinimum",  type: "uint256" },
         { name: "sqrtPriceLimitX96", type: "uint160" },
@@ -195,8 +198,8 @@ export async function synthraSwap(
     amountIn = usable < requestedAmountIn ? usable : requestedAmountIn;
   }
 
-  // Step 2: exactInputSingle — output delivered directly to recipient.
-  const deadline = BigInt(Math.floor(Date.now() / 1000) + 600);
+  // Step 2: exactInputSingle — output delivered directly to recipient. SwapRouter02 has no
+  // deadline in the params struct (it lives on multicall, which we don't use here).
   const swapCalldata = encodeFunctionData({
     abi: EXACT_INPUT_SINGLE_ABI,
     functionName: "exactInputSingle",
@@ -205,7 +208,6 @@ export async function synthraSwap(
       tokenOut:          tokenOut.address,
       fee:               FEE,
       recipient,
-      deadline,
       amountIn,
       amountOutMinimum:  0n,
       sqrtPriceLimitX96: 0n,

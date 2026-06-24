@@ -89,14 +89,14 @@ export default function ParallaxLanding() {
       bar?.classList.toggle("solid", y > vh * 0.6);
       if (reduceMotion) { ticking = false; return; }
       if (neb) neb.style.transform = `translate(${y * -0.03}px, ${y * 0.10}px)`;
-      const mobile = window.innerWidth < 768;
       for (const el of stages) {
         const r = el.getBoundingClientRect();
         const center = r.top + r.height / 2;
         const off = (center - vh / 2) / vh;
-        const sx = mobile ? 0 : parseFloat(el.dataset.speedX || "0");
-        const sy = parseFloat(el.dataset.speed || "0");
-        el.style.transform = `translate(${off * sx}px, ${off * sy}px)`;
+        // Vertical-only depth, no horizontal shear (nothing drifts in from the side); halved
+        // so scenes settle crisply at their snap position instead of sliding around.
+        const sy = parseFloat(el.dataset.speed || "0") * 0.5;
+        el.style.transform = `translateY(${off * sy}px)`;
       }
       ticking = false;
     }

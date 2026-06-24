@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import AppHeader from "@/widgets/AppHeader/ui/AppHeader";
 import Footer from "@/widgets/Footer/ui/Footer";
 import { Button } from "@/shared/ui/Button";
 import { Spinner } from "@/shared/ui/Spinner";
-import { EmailStep } from "@/features/auth/ui/EmailStep";
+import { Modal } from "@/shared/ui/Modal";
 import { useChallengeFlow } from "@/features/auth/model/useChallengeFlow";
 import { useTokenBalances } from "@/entities/wallet/hooks/useTokenBalances";
 import { getSession as loadSession, getCachedTokens } from "@/shared/lib/session";
@@ -16,6 +17,7 @@ import type { Session } from "@/entities/user/model/types";
 const AMOUNT_RE = /^\d+(\.\d{1,8})?$/;
 const GAS_RESERVE = 0.1;
 const PERCENTS = [25, 50, 100] as const;
+const SLIPPAGE_OPTIONS = [0.1, 1, 5, 15];
 
 function TokenBadge({ symbol }: { symbol: string }) {
   const isCircBTC = symbol === "cirBTC";
@@ -34,6 +36,7 @@ function TokenBadge({ symbol }: { symbol: string }) {
 
 export default function SwapPage() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [session, setSession] = useState<Session | null>(null);
 
   const swapTargets = SWAP_TARGETS.filter((t) => t.address);
@@ -43,7 +46,9 @@ export default function SwapPage() {
   const [quote, setQuote] = useState<{ loading: boolean; out?: string; error?: string }>({ loading: false });
   const [formError, setFormError] = useState<string | null>(null);
   const [swapping, setSwapping] = useState(false);
+  const [slippage, setSlippage] = useState(1);
   const [result, setResult] = useState<{ amountOut: string; tokenOut: string } | null>(null);
+  const [failure, setFailure] = useState<{ tokenIn: string; refunded: boolean } | null>(null);
 
   const tokenIn = direction === "buy" ? "USDC" : token;
   const tokenOut = direction === "buy" ? token : "USDC";
@@ -54,7 +59,7 @@ export default function SwapPage() {
     setSession(s);
   }, [router]);
 
-  const { data: holdings } = useTokenBalances(session?.walletAddress);
+  const { data: holdings, refetch: refetchBalances } = useTokenBalances(session?.walletAddress);
   const balanceNum = useMemo(() => {
     const h = holdings?.tokens.find((t) => t.symbol === tokenIn);
     return h ? parseFloat(h.amount) : 0;
@@ -77,18 +82,42 @@ export default function SwapPage() {
     if (!tokens) { setFormError("Session expired. Please try again."); return; }
     setSwapping(true);
     setFormError(null);
+
+    const ac = new AbortController();
+    // Synthra API + approve tx + swap tx can take up to ~110s total. Give a generous buffer.
+    const timer = setTimeout(() => ac.abort(), 130_000);
+
     try {
       const res = await fetch("/api/wallet/swap/execute", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userToken: tokens.userToken, tokenIn, tokenOut, amount: amount.trim() }),
+        body: JSON.stringify({ userToken: tokens.userToken, tokenIn, tokenOut, amount: amount.trim(), slippage }),
+        signal: ac.signal,
       });
-      const data = (await res.json()) as { ok?: boolean; amountOut?: string; tokenOut?: string; error?: string };
-      if (!res.ok || !data.ok) { setFormError(data.error ?? "Swap failed. Please try again."); return; }
+      const data = (await res.json()) as { ok?: boolean; amountOut?: string; tokenOut?: string; error?: string; refunded?: boolean };
+      if (!res.ok || !data.ok) {
+        if (data.refunded) {
+          setFailure({ tokenIn, refunded: true });
+        } else {
+          setFormError(data.error ?? "Swap failed. Please try again.");
+        }
+        return;
+      }
+      setAmount("");
+      setQuote({ loading: false });
       setResult({ amountOut: data.amountOut ?? "—", tokenOut: data.tokenOut ?? tokenOut });
-    } catch {
-      setFormError("Network error. Please try again.");
+      setTimeout(() => {
+        void queryClient.invalidateQueries({ queryKey: ["token-balances", session?.walletAddress] });
+        void refetchBalances();
+      }, 3_000);
+    } catch (err) {
+      if ((err as { name?: string }).name === "AbortError") {
+        setFailure({ tokenIn, refunded: false });
+      } else {
+        setFormError("Network error. Please try again.");
+      }
     } finally {
+      clearTimeout(timer);
       setSwapping(false);
     }
   }
@@ -117,6 +146,29 @@ export default function SwapPage() {
     return () => clearTimeout(t);
   }, [amount, tokenIn, tokenOut]);
 
+  // Keep auth.email in sync with session email so sendOtp() sees a non-empty value.
+  useEffect(() => {
+    if (session?.email) flow.auth.setEmail(session.email);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.email]);
+
+  // Auto-send OTP once auth.email is confirmed set (avoids sendOtp silently bailing on "").
+  const sendOtpRef = useRef(flow.auth.sendOtp);
+  sendOtpRef.current = flow.auth.sendOtp;
+  useEffect(() => {
+    if (
+      flow.phase === "auth" &&
+      flow.auth.step === "email" &&
+      flow.auth.email &&
+      flow.auth.deviceId &&
+      !flow.auth.loading &&
+      !flow.auth.deviceIdLoading
+    ) {
+      void sendOtpRef.current({ preventDefault: () => {} } as FormEvent);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [flow.phase, flow.auth.step, flow.auth.email, flow.auth.deviceId, flow.auth.loading, flow.auth.deviceIdLoading]);
+
   function setPercent(pct: number) {
     if (spendable <= 0) return;
     const raw = pct === 100 ? spendable : Math.min((balanceNum * pct) / 100, spendable);
@@ -142,7 +194,7 @@ export default function SwapPage() {
   const amountNum = parseFloat(amount);
   const validAmount = AMOUNT_RE.test(amount.trim()) && amountNum > 0;
   const exceeds = validAmount && amountNum > spendable + 1e-9;
-  const busy = flow.phase === "running" || swapping;
+  const busy = flow.phase === "auth" || flow.phase === "running" || swapping;
   const canSubmit = validAmount && !exceeds && !!quote.out && !busy;
 
   function startSwap() {
@@ -165,88 +217,47 @@ export default function SwapPage() {
     ? balanceNum.toLocaleString(undefined, { maximumFractionDigits: 8 })
     : "0";
 
-  const busyLabel = swapping
-    ? "Swapping via Synthra…"
-    : flow.phase === "running"
-    ? "Confirm in the PIN window…"
-    : null;
-
   return (
     <main className="min-h-screen bg-navy flex flex-col">
       <AppHeader />
+
+      {/* Success modal */}
+      {result && (
+        <Modal onClose={() => setResult(null)} size="sm">
+          <div className="py-6 text-center">
+            <div className="w-14 h-14 rounded-full bg-green-400/10 border border-green-400/20 flex items-center justify-center mx-auto mb-4 text-2xl text-green-400">✓</div>
+            <h2 className="text-lg font-bold text-text-primary mb-1">Swap complete</h2>
+            <p className="text-text-secondary text-sm">
+              You received{" "}
+              <span className="text-text-primary font-semibold">{result.amountOut} {result.tokenOut}</span>.
+            </p>
+            <Button onClick={() => setResult(null)} className="mt-6 w-full">
+              Done
+            </Button>
+          </div>
+        </Modal>
+      )}
+
 
       {/* Mobile: edge-to-edge. Desktop: centered card. */}
       <div className="flex-1 flex flex-col sm:items-center sm:justify-start sm:py-10 sm:px-4">
         <div className="w-full sm:max-w-md">
 
           {/* Page header */}
-          <div className="px-5 pt-7 pb-5 sm:px-0 sm:mb-4">
+          <div className="px-5 pt-7 pb-5 sm:px-0 sm:mb-4 text-center">
             <h1 className="text-2xl font-bold text-text-primary tracking-tight">Swap</h1>
-            <p className="text-sm text-text-secondary/50 mt-1">
-              One PIN. Output lands straight in your wallet.
-            </p>
           </div>
 
           {/* Card shell — only on desktop */}
           <div className="sm:glass-card sm:rounded-card sm:overflow-hidden">
             <div className="px-4 pb-6 sm:px-6 sm:pt-6">
 
-              {/* ── Result state ── */}
-              {result ? (
-                <div className="py-10 text-center">
-                  <div className="w-14 h-14 rounded-full bg-green-400/10 border border-green-400/20 flex items-center justify-center mx-auto mb-4 text-2xl text-green-400">✓</div>
-                  <h2 className="text-lg font-bold text-text-primary mb-1">Done</h2>
-                  <p className="text-text-secondary text-sm">
-                    You received{" "}
-                    <span className="text-text-primary font-semibold">{result.amountOut} {result.tokenOut}</span>.
-                  </p>
-                  <button
-                    onClick={() => { setResult(null); setAmount(""); setQuote({ loading: false }); }}
-                    className="mt-5 text-xs text-blue-primary/60 hover:text-blue-primary transition-colors"
-                  >
-                    Make another swap
-                  </button>
-                </div>
+              {/* ── Main form — always visible; dimmed while any flow runs ── */}
+              {true && (
+                <div className="space-y-2 transition-opacity duration-200">
 
-              /* ── Auth / OTP flow ── */
-              ) : flow.phase === "auth" ? (
-                <div className="space-y-3 py-2">
-                  {flow.auth.step === "verify" && (
-                    <>
-                      <h2 className="text-base font-bold text-text-primary">Confirm it&apos;s you</h2>
-                      <p className="text-sm text-text-secondary/60">We need to verify you to fund the swap onchain.</p>
-                    </>
-                  )}
-                  {flow.auth.step === "email" && (
-                    <EmailStep
-                      email={flow.auth.email}
-                      onEmailChange={flow.auth.setEmail}
-                      onSubmit={flow.auth.sendOtp}
-                      loading={flow.auth.loading}
-                      deviceIdLoading={flow.auth.deviceIdLoading}
-                      deviceIdError={flow.auth.deviceIdError}
-                      onRetry={flow.auth.retryDeviceId}
-                      error={flow.auth.error}
-                      deviceId={flow.auth.deviceId}
-                    />
-                  )}
-                  {flow.auth.step === "verify" && (
-                    <div className="text-center py-2">
-                      <div className="flex justify-center mb-2"><Spinner size="lg" /></div>
-                      <p className="text-text-secondary text-sm">
-                        Enter the code from <span className="text-text-primary">{flow.auth.email}</span> in the window that opened.
-                      </p>
-                      {flow.auth.error && <p className="text-sm text-red-400 mt-2">{flow.auth.error}</p>}
-                    </div>
-                  )}
-                  <button onClick={flow.backToIdle} className="w-full text-sm text-text-secondary/40 hover:text-text-secondary transition-colors pt-1">
-                    ← Back
-                  </button>
-                </div>
-
-              /* ── Main form — stays visible when busy, just dimmed ── */
-              ) : (
-                <div className={`space-y-2 transition-opacity duration-200 ${busy ? "opacity-40 pointer-events-none" : ""}`}>
+                  {/* Form controls — dimmed while a flow is running, but action row stays interactive */}
+                  <div className={`space-y-2 transition-opacity duration-200 ${busy ? "opacity-40 pointer-events-none" : ""}`}>
 
                   {/* Alt-token tabs */}
                   <div className="flex gap-2 pb-2">
@@ -345,30 +356,128 @@ export default function SwapPage() {
                         <span className="text-text-secondary/15">0</span>
                       )}
                     </div>
+                    {/* USDC equivalent: shown when buying a non-USDC token */}
+                    {quote.out && tokenIn === "USDC" && validAmount && (
+                      <p className="text-xs text-text-secondary/35 mt-1">≈ {amount} USDC</p>
+                    )}
                     {quote.error && (
                       <p className="text-xs text-amber-400/60 mt-1">{quote.error}</p>
                     )}
+                  </div>
+
+                  {/* Slippage selector */}
+                  <div className="flex items-center gap-2 pt-1">
+                    <span className="text-[11px] text-text-secondary/40 shrink-0">Slippage</span>
+                    <div className="flex gap-1.5 flex-1">
+                      {SLIPPAGE_OPTIONS.map((pct) => (
+                        <button
+                          key={pct}
+                          onClick={() => setSlippage(pct)}
+                          className={`flex-1 py-1 rounded text-[11px] font-semibold transition-colors ${
+                            slippage === pct
+                              ? "bg-blue-primary/15 text-blue-primary border border-blue-primary/30"
+                              : "bg-white/[0.04] text-text-secondary/40 border border-transparent hover:text-text-secondary/70"
+                          }`}
+                        >
+                          {pct}%
+                        </button>
+                      ))}
+                    </div>
                   </div>
 
                   {error && !busy && (
                     <p className="text-sm text-red-400/80 text-center pt-1">{error}</p>
                   )}
 
-                  <div className="pt-2">
-                    {busy ? (
-                      <div className="flex items-center justify-center gap-2.5 py-3">
-                        <Spinner size="sm" />
-                        <span className="text-sm text-text-secondary/60">{busyLabel}</span>
+                  </div>{/* end dimmed form controls */}
+
+                  <div className="pt-2 space-y-2">
+                    {/* Inline failure banner */}
+                    {failure && !busy && (
+                      <div className="rounded-card border border-red-400/20 bg-red-400/[0.04] px-4 py-3 space-y-3">
+                        <div className="flex items-start gap-2.5">
+                          <span className="text-red-400 text-sm leading-5 mt-px">✕</span>
+                          <div>
+                            <p className="text-sm font-semibold text-text-primary leading-5">Swap failed</p>
+                            <p className="text-xs text-text-secondary/60 mt-0.5">
+                              {failure.refunded
+                                ? `Your ${failure.tokenIn} was refunded. Try increasing slippage.`
+                                : `The swap timed out. Check your balance — your ${failure.tokenIn} may have been refunded or the swap may still complete.`}
+                            </p>
+                          </div>
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-text-secondary/40 mb-1.5">Slippage tolerance</p>
+                          <div className="flex gap-1.5">
+                            {SLIPPAGE_OPTIONS.map((pct) => (
+                              <button
+                                key={pct}
+                                onClick={() => setSlippage(pct)}
+                                className={`flex-1 py-1 rounded text-[11px] font-semibold transition-colors ${
+                                  slippage === pct
+                                    ? "bg-blue-primary/15 text-blue-primary border border-blue-primary/30"
+                                    : "bg-white/[0.04] text-text-secondary/40 border border-transparent hover:text-text-secondary/70"
+                                }`}
+                              >
+                                {pct}%
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => setFailure(null)}
+                          className="w-full text-[11px] text-text-secondary/30 hover:text-text-secondary/60 transition-colors text-center"
+                        >
+                          Dismiss
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Status / action row */}
+                    {swapping ? (
+                      <div className="py-3 text-center">
+                        <span className="shimmer-text text-sm font-medium">Swapping via Synthra…</span>
+                      </div>
+                    ) : flow.phase === "running" ? (
+                      <div className="py-3 text-center space-y-2">
+                        <span className="shimmer-text text-sm font-medium">Confirm in the PIN window…</span>
+                        <div>
+                          <button
+                            onClick={flow.cancel}
+                            className="text-xs text-text-secondary/30 hover:text-text-secondary/60 transition-colors"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    ) : flow.phase === "auth" ? (
+                      <div className="py-3 text-center space-y-2">
+                        <span className="shimmer-text text-sm font-medium">
+                          {flow.auth.step === "email"
+                            ? (flow.auth.deviceIdLoading ? "Initializing…" : "Sending verification code…")
+                            : `Enter the code from ${flow.auth.email || session?.email}…`}
+                        </span>
+                        {flow.auth.error && (
+                          <p className="text-xs text-red-400/80">{flow.auth.error}</p>
+                        )}
+                        <div>
+                          <button
+                            onClick={flow.backToIdle}
+                            className="text-xs text-text-secondary/30 hover:text-text-secondary/60 transition-colors"
+                          >
+                            Cancel
+                          </button>
+                        </div>
                       </div>
                     ) : (
-                      <Button onClick={startSwap} disabled={!canSubmit}>
-                        Swap {tokenIn} → {tokenOut}
+                      <Button onClick={startSwap} disabled={!canSubmit || !!failure}>
+                        {failure ? "Try again" : `Swap ${tokenIn} → ${tokenOut}`}
                       </Button>
                     )}
                   </div>
 
                   <p className="text-[11px] text-text-secondary/25 text-center pt-1">
-                    Routed via Circle App Kit, onchain DEX fallback
+                    Routed via Synthra DEX
                   </p>
                 </div>
               )}

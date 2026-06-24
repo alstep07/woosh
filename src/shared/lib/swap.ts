@@ -10,8 +10,8 @@
  */
 import { AppKit } from "@circle-fin/app-kit";
 import { createCircleWalletsAdapter } from "@circle-fin/adapter-circle-wallets";
-import { dcwTransfer } from "@/shared/lib/dcw";
-import { synthraQuote, synthraSwap } from "@/shared/lib/synthra";
+import { synthraQuote } from "@/shared/lib/synthra";
+import { synrouteQuote, synrouteSwap } from "@/shared/lib/synroute";
 import { USDC_ERC20_ADDRESS, USDC_SWAP_DECIMALS, tokenBySymbol } from "@/shared/lib/tokens";
 
 export type SwapToken = "EURC" | "cirBTC";
@@ -101,6 +101,9 @@ export async function quotePair(
     const ak = await appKitEstimate(tokenOut, amountInHuman, fromAddress);
     if (ak) return { ok: true, estimatedOutput: ak };
   }
+  // Try SynRoute API first (handles multi-hop routes); fall back to Synthra slot0 spot price.
+  const sr = await synrouteQuote(refFor(tokenIn), refFor(tokenOut), amountInHuman);
+  if (sr.ok) return { ok: true, estimatedOutput: sr.estimatedOutput };
   const syn = await synthraQuote(refFor(tokenIn), refFor(tokenOut), amountInHuman);
   return syn.ok ? { ok: true, estimatedOutput: syn.estimatedOutput } : { ok: false, error: "no route available" };
 }
@@ -127,33 +130,15 @@ export async function executePair(
   tokenOut: SwapSym,
   amountInHuman: string,
   executor: `0x${string}`,
-  recipient: `0x${string}`
+  recipient: `0x${string}`,
+  slippagePct?: number
 ): Promise<SwapOutcome> {
-  if (tokenIn === "USDC" && tokenOut !== "USDC") {
-    let appKitOut: string | undefined;
-    try {
-      const result = await getKit().swap(swapParams(tokenOut, amountInHuman, executor));
-      appKitOut = (result as { amountOut?: string }).amountOut;
-    } catch {
-      appKitOut = undefined;
-    }
-    if (appKitOut) {
-      // App Kit amountOut is already a human-readable decimal string (e.g. "0.999") — NOT base
-      // units. Never call BigInt/formatUnits on it. Clamp to the token's decimals: Circle's
-      // transfer API rejects amounts with more decimal places than the token supports.
-      const t = refFor(tokenOut);
-      const safeOut = clampDecimals(appKitOut, t.decimals);
-      await dcwTransfer(recipient, safeOut, t.address);
-      return { amountOut: safeOut, rail: "appkit" };
-    }
-  }
-
-  const quote = await synthraQuote(refFor(tokenIn), refFor(tokenOut), amountInHuman);
-  // Pass executor so synthraSwap can read the post-approve balance (gas on Arc is USDC,
-  // so the approve tx reduces the ERC-20 balance before the swap runs).
-  const res = await synthraSwap(refFor(tokenIn), refFor(tokenOut), amountInHuman, recipient, executor);
+  // Arc testnet: App Kit's Stablecoin Service returns no routes. Use SynRoute API which
+  // handles multi-hop paths (e.g. USDC>WUSDC>EURC>cirBTC via Universal Router). SynRoute
+  // delivers the output straight to `recipient` — no extra forward hop.
+  const res = await synrouteSwap(refFor(tokenIn), refFor(tokenOut), amountInHuman, recipient, executor, slippagePct);
   if (!res.ok) throw new Error(`swap failed (${res.state})`);
-  return { amountOut: quote.estimatedOutput, rail: "synthra" };
+  return { amountOut: res.amountOut, rail: "synthra" };
 }
 
 // ── USDC -> token wrappers (the DCA cron path) ───────────────────────────────────────────────
