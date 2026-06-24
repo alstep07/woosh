@@ -1,11 +1,31 @@
 import { NextRequest, NextResponse } from "next/server";
-import { formatUnits } from "viem";
+import { formatUnits, encodeFunctionData } from "viem";
 import { arcPublicClient } from "@/shared/lib/arc";
 import { STRATEGY_REGISTRY_ABI } from "@/entities/strategy/model/abi";
-import { dcwExecuteContract, dcwTransfer, waitForTx, getExecutorAddress } from "@/shared/lib/dcw";
+import { dcwExecuteContract, dcwExecuteRaw, waitForTx, getExecutorAddress } from "@/shared/lib/dcw";
 import { executeSwap, canSwap, type SwapToken } from "@/shared/lib/swap";
 import { tokenByAddress } from "@/shared/lib/tokens";
 import { env } from "@/shared/config/env";
+
+const USDC_ADDRESS = "0x3600000000000000000000000000000000000000";
+const ERC20_TRANSFER_ABI = [{
+  name: "transfer",
+  type: "function",
+  stateMutability: "nonpayable",
+  inputs: [{ name: "to", type: "address" }, { name: "amount", type: "uint256" }],
+  outputs: [{ type: "bool" }],
+}] as const;
+
+async function refundUSDC(to: `0x${string}`, amountPerPeriod: bigint): Promise<void> {
+  const data = encodeFunctionData({
+    abi: ERC20_TRANSFER_ABI,
+    functionName: "transfer",
+    args: [to, amountPerPeriod],
+  });
+  const r = await dcwExecuteRaw(USDC_ADDRESS, data);
+  const id = (r as { id?: string } | undefined)?.id;
+  if (id) await waitForTx(id, 30_000);
+}
 
 const FAILED_STATES = new Set(["FAILED", "CANCELLED", "DENIED"]);
 
@@ -84,10 +104,10 @@ async function runExecutor(): Promise<Record<string, unknown>> {
       if (s.balance < s.amountPerPeriod) continue;
 
       if (s.kind === 1) {
-        // Swap / DCA via LI.FI: quote the route FIRST; only if it's buildable do we release
-        // one period of USDC to the executor, swap it, and forward the output to the owner.
-        // releaseForSwap advances the schedule atomically. If the swap itself then fails, we
-        // refund the released USDC back to the owner so nothing is stuck in the executor.
+        // Swap / DCA: quote the route FIRST (App Kit, else Synthra); only if it can route do we
+        // release one period of USDC to the executor and swap it. executeSwap delivers tokenOut
+        // straight to the owner (Synthra sends direct; App Kit forwards). releaseForSwap advances
+        // the schedule atomically; if the swap fails, refund the released USDC to the owner.
         const token = tokenByAddress(s.tokenOut);
         const symbol = token?.symbol;
         if (!token?.address || (symbol !== "EURC" && symbol !== "cirBTC")) {
@@ -95,7 +115,6 @@ async function runExecutor(): Promise<Record<string, unknown>> {
           errors.push({ id: ids[i], error: `unsupported tokenOut ${s.tokenOut}` });
           continue;
         }
-        // App Kit takes a human amount and handles USDC decimals internally.
         const amountInHuman = formatUnits(s.amountPerPeriod, 18);
         const route = await canSwap(symbol as SwapToken, amountInHuman, getExecutorAddress());
         if (!route.ok) {
@@ -105,7 +124,6 @@ async function runExecutor(): Promise<Record<string, unknown>> {
         }
 
         let released = false;
-        let swapDone = false;
         try {
           const rel = await dcwExecuteContract(registry, "releaseForSwap(bytes32)", [ids[i]]);
           const relId = (rel as { id?: string } | undefined)?.id;
@@ -119,23 +137,17 @@ async function runExecutor(): Promise<Record<string, unknown>> {
           }
           released = true;
 
-          const out = await executeSwap(symbol as SwapToken, amountInHuman, getExecutorAddress());
-          swapDone = true;
-
-          if (out.amountOut) {
-            const human = formatUnits(BigInt(out.amountOut), token.decimals);
-            await dcwTransfer(s.owner, human, s.tokenOut);
-          }
+          await executeSwap(symbol as SwapToken, amountInHuman, getExecutorAddress(), s.owner);
           swapped++;
         } catch (err) {
           failed++;
           errors.push({ id: ids[i], error: err instanceof Error ? err.message : "swap failed" });
-          // Refund only when the swap itself didn't happen. If swapDone, the output token is
-          // already in the executor (only the forward failed) — refunding USDC would double-pay;
-          // leave it for manual/next-run recovery instead.
-          if (released && !swapDone) {
+          // Swap didn't complete — refund the released USDC. (On mainnet a rare App Kit
+          // swap-ok-but-forward-fail would leave the output in the executor; testnet uses the
+          // atomic Synthra path, so a throw here means no swap happened.)
+          if (released) {
             try {
-              await dcwTransfer(s.owner, formatUnits(s.amountPerPeriod, 18), "");
+              await refundUSDC(s.owner, s.amountPerPeriod);
               refunded++;
             } catch {
               /* refund best-effort; funds remain in the executor, recoverable */

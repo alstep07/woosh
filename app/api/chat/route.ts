@@ -134,6 +134,34 @@ const TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
   {
     type: "function",
     function: {
+      name: "swap",
+      description:
+        "Swap (convert/exchange) between USDC and another token, right now as a one-off (NOT a recurring DCA). Use for 'swap 10 USDC to EURC', 'convert 5 USDC into cirBTC', 'sell my cirBTC for USDC', 'change EURC back to USDC'. action 'buy' = spend USDC to get the token; 'sell' = sell the token to get USDC. The amount is always the token you are paying WITH (USDC for buy, the token for sell). You MUST have action, token and amount; if any is missing, ask.",
+      parameters: {
+        type: "object",
+        properties: {
+          action: {
+            type: "string",
+            enum: ["buy", "sell"],
+            description: "'buy' = USDC -> token; 'sell' = token -> USDC",
+          },
+          token: {
+            type: "string",
+            enum: ["EURC", "cirBTC"],
+            description: "the non-USDC token being bought or sold",
+          },
+          amount: {
+            type: "string",
+            description: "amount of the token you pay WITH (USDC for buy, the token for sell), e.g. '10'",
+          },
+        },
+        required: ["action", "token", "amount"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "get_strategies",
       description: "Get the user's automated strategies (recurring payments and DCA auto-buys) with what each does, status, balance left, and next run. Use for 'what strategies do I have?', 'is my DCA running?', 'how much is left in my auto-buy?'.",
       parameters: { type: "object", properties: {}, required: [] },
@@ -331,6 +359,8 @@ Strategies (automation): users can set up recurring USDC payments (pay someone a
 
 Strategy questions: when the user asks about their strategies (is my DCA running, how much is left, what automations do I have), call get_strategies and answer concisely from the data.
 
+Swaps (one-off): users can swap (convert) between USDC and EURC or cirBTC right now, in either direction, separate from a recurring DCA. To do one you need the action (buy = USDC to token, sell = token to USDC), which token (EURC or cirBTC), and the amount (always the token they pay WITH: USDC when buying, the token when selling). As soon as you have all three, you MUST call the swap tool in that same turn, do not just say you will; calling it shows the confirmation card. It takes one PIN and the result lands in their wallet. If someone asks to do this repeatedly on a schedule, that is a DCA strategy (create_strategy), not a one-off swap.
+
 Strategy setup: to create one you need the kind (recurring payment or auto-buy), amount per run, how often (daily/weekly/monthly), the recipient (for payments) or which token to buy (for auto-buy), and the total to deposit (funding). If the user gives a number of runs but not a total, compute funding = amount per run x runs. If you cannot determine the total, ask for it. As soon as you have everything, you MUST call create_strategy in that same turn, do not just say you will. To pause or cancel a specific strategy, guide the user to the Strategies page at /dashboard/strategies.`,
     },
     ...messages,
@@ -451,6 +481,25 @@ Strategy setup: to create one you need the kind (recurring payment or auto-buy),
               periodsTotal,
               funding,
             },
+          });
+        }
+
+        if (call.function.name === "swap") {
+          const action = String(args.action ?? "").toLowerCase();
+          const tokenSymbol = String(args.token ?? "");
+          const amount = String(args.amount ?? "");
+          const sym = tokenSymbol.toLowerCase() === "eurc" ? "EURC" : tokenSymbol.toLowerCase() === "cirbtc" ? "cirBTC" : null;
+          const fail = (content: string) => toolResults.push({ role: "tool", tool_call_id: call.id, content });
+
+          if (action !== "buy" && action !== "sell") { fail("action missing, ask whether to buy the token with USDC or sell it for USDC."); continue; }
+          if (!sym || (sym === "cirBTC" && !CIRBTC.address)) { fail(`Token "${tokenSymbol}" is not available. Only EURC${CIRBTC.address ? " and cirBTC" : ""} can be swapped.`); continue; }
+          if (!/^\d+(\.\d+)?$/.test(amount) || parseFloat(amount) <= 0) { fail("amount missing or invalid, ask how much to swap."); continue; }
+
+          const tokenIn = action === "buy" ? "USDC" : sym;
+          const tokenOut = action === "buy" ? sym : "USDC";
+          return NextResponse.json({
+            text: msg.content ?? "",
+            pendingAction: { type: "swap", tokenIn, tokenOut, amount },
           });
         }
 

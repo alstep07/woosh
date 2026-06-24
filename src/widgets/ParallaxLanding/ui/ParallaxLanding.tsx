@@ -89,14 +89,14 @@ export default function ParallaxLanding() {
       bar?.classList.toggle("solid", y > vh * 0.6);
       if (reduceMotion) { ticking = false; return; }
       if (neb) neb.style.transform = `translate(${y * -0.03}px, ${y * 0.10}px)`;
-      const mobile = window.innerWidth < 768;
       for (const el of stages) {
         const r = el.getBoundingClientRect();
         const center = r.top + r.height / 2;
         const off = (center - vh / 2) / vh;
-        const sx = mobile ? 0 : parseFloat(el.dataset.speedX || "0");
-        const sy = parseFloat(el.dataset.speed || "0");
-        el.style.transform = `translate(${off * sx}px, ${off * sy}px)`;
+        // Vertical-only depth, no horizontal shear (nothing drifts in from the side); halved
+        // so scenes settle crisply at their snap position instead of sliding around.
+        const sy = parseFloat(el.dataset.speed || "0") * 0.5;
+        el.style.transform = `translateY(${off * sy}px)`;
       }
       ticking = false;
     }
@@ -222,22 +222,32 @@ export default function ParallaxLanding() {
           <div className="head" data-speed="22" data-speed-x="13">
             <p className="eyebrow rise">04 / Strategies</p>
             <h2 className="rise d1">Set a rule. <span className="grad">It runs itself.</span></h2>
-            <p className="sub rise d2">Recurring payments or DCA auto-buys. Runs on schedule, no PIN required, fully automated.</p>
+            <p className="sub rise d2">Recurring payments that never miss, or DCA that quietly stacks an asset week after week. On schedule, no PIN, fully automated.</p>
           </div>
           <div className="stage strat-stack rise d2" data-speed="-40" data-speed-x="-18">
-            <div className="flow">
-              <div className="fnode"><span className="k">Every month</span><span className="v">Recurring</span></div>
-              <div className="fwire" />
-              <div className="fnode"><span className="k">Send</span><span className="v blue">$200 USDC</span></div>
-              <div className="fwire" />
-              <div className="fnode"><span className="k">To</span><span className="v green">@landlord</span></div>
+            {/* Recurring — the same payment, every period, paid on time */}
+            <div className="scard">
+              <div className="scard-head">
+                <span className="scard-ic blue">↻</span>
+                <span className="t">Rent · Recurring</span>
+                <span className="s">$200 / mo</span>
+              </div>
+              <div className="srow"><span className="d">Apr 1</span><span className="m">Sent <b>$200</b> to @landlord</span><span className="tick">✓</span></div>
+              <div className="srow"><span className="d">May 1</span><span className="m">Sent <b>$200</b> to @landlord</span><span className="tick">✓</span></div>
+              <div className="srow"><span className="d">Jun 1</span><span className="m">Sent <b>$200</b> to @landlord</span><span className="tick">✓</span></div>
+              <div className="srow pending"><span className="d">Jul 1</span><span className="m">Scheduled</span><span className="wait">○</span></div>
             </div>
-            <div className="flow">
-              <div className="fnode"><span className="k">Every week</span><span className="v">DCA Buy</span></div>
-              <div className="fwire" />
-              <div className="fnode"><span className="k">Swap</span><span className="v blue">$50 USDC</span></div>
-              <div className="fwire" />
-              <div className="fnode"><span className="k">Into</span><span className="v green">cirBTC</span></div>
+            {/* DCA — fixed $50 weekly, buying more or less cirBTC as price moves (averaging) */}
+            <div className="scard">
+              <div className="scard-head">
+                <span className="scard-ic amber">₿</span>
+                <span className="t">DCA · cirBTC</span>
+                <span className="s">$50 / wk</span>
+              </div>
+              <div className="srow"><span className="d">Wk 1</span><span className="m"><b>$50</b> <span className="plus">→ +0.00012</span> cirBTC</span><span className="tick">✓</span></div>
+              <div className="srow"><span className="d">Wk 2</span><span className="m"><b>$50</b> <span className="plus">→ +0.00015</span> cirBTC</span><span className="tick">✓</span></div>
+              <div className="srow"><span className="d">Wk 3</span><span className="m"><b>$50</b> <span className="plus">→ +0.00011</span> cirBTC</span><span className="tick">✓</span></div>
+              <div className="scard-total"><span className="lbl">Accumulated</span><span className="val grad">0.00038 cirBTC</span></div>
             </div>
           </div>
         </section>

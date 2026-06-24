@@ -18,6 +18,45 @@ body {
   .text-balance {
     text-wrap: balance;
   }
+  /* Brand gradient text — matches the parallax landing's invoice total. */
+  .text-grad {
+    background: linear-gradient(90deg, #2563eb 0%, #0ea5e9 50%, #22d3ee 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
+  }
+}
+
+/* Strategy flow connector — a thin static wire with a centred node, linking the
+   cadence -> amount -> target chain on the strategies page. */
+.flow-wire {
+  position: relative;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.09);
+  border-radius: 9999px;
+}
+.flow-wire::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 5px;
+  height: 5px;
+  border-radius: 9999px;
+  background: rgba(14, 165, 233, 0.55);
+}
+
+/* Prevent iOS Safari from auto-zooming when a form control gains focus: any
+   control whose font-size is < 16px triggers the zoom. Force >= 16px on small
+   screens (overrides Tailwind text-sm on inputs); desktop keeps its sizing. */
+@media (max-width: 767px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
 }
 
 /* Remove the default spinner arrows from all number inputs */
@@ -80,6 +119,23 @@ input[type="number"]::-webkit-inner-spin-button {
 @keyframes scaleIn {
   from { transform: scale(0); opacity: 0; }
   to   { transform: scale(1); opacity: 1; }
+}
+
+@keyframes textShimmer {
+  0%   { background-position: 200% center; }
+  100% { background-position: -200% center; }
+}
+.shimmer-text {
+  background: linear-gradient(90deg,
+    rgba(148, 163, 184, 0.25) 0%,
+    rgba(248, 250, 252, 0.75) 40%,
+    rgba(148, 163, 184, 0.25) 100%
+  );
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: textShimmer 2s linear infinite;
 }
 
 /* Faint nebula wash behind the starfield (also the loading/no-JS state) */
@@ -260,11 +316,13 @@ input[type="number"]::-webkit-inner-spin-button {
 }
 .plx .grad { background: var(--plx-grad); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
 
-.plx .rise { opacity: 0; transform: translateY(26px); transition: opacity 0.7s var(--plx-ease), transform 0.7s var(--plx-ease); }
-.plx .scene.in .rise { opacity: 1; transform: none; }
-.plx .scene.in .rise.d1 { transition-delay: 0.08s; }
-.plx .scene.in .rise.d2 { transition-delay: 0.16s; }
-.plx .scene.in .rise.d3 { transition-delay: 0.24s; }
+/* Entrances are a clean, in-place fade — no slide from the bottom/side. The stagger
+   (d1/d2/d3) keeps it alive without anything drifting into position. */
+.plx .rise { opacity: 0; transition: opacity 0.55s var(--plx-ease); }
+.plx .scene.in .rise { opacity: 1; }
+.plx .scene.in .rise.d1 { transition-delay: 0.06s; }
+.plx .scene.in .rise.d2 { transition-delay: 0.12s; }
+.plx .scene.in .rise.d3 { transition-delay: 0.18s; }
 
 .plx .stage {
   margin-top: clamp(64px, 10vh, 96px);
@@ -375,7 +433,7 @@ input[type="number"]::-webkit-inner-spin-button {
 .plx .bubble.agent b { color: var(--plx-mint); font-weight: 600; }
 .plx .tick { color: var(--plx-green); }
 
-.plx .strat-stack { display: flex; flex-direction: column; gap: 18px; align-items: center; width: min(640px, 94vw); }
+.plx .strat-stack { display: flex; flex-direction: row; flex-wrap: wrap; gap: 18px; align-items: stretch; justify-content: center; width: min(760px, 94vw); }
 
 .plx .flow { display: flex; align-items: center; gap: 0; flex-wrap: wrap; justify-content: center; width: min(640px, 94vw); }
 .plx .fnode {
@@ -398,6 +456,84 @@ input[type="number"]::-webkit-inner-spin-button {
 @keyframes plxRunWire { 0% { left: 0; opacity: 0; } 15% { opacity: 1; } 85% { opacity: 1; } 100% { left: 100%; opacity: 0; } }
 @keyframes plxRunWireV { 0% { top: 0; opacity: 0; } 15% { opacity: 1; } 85% { opacity: 1; } 100% { top: 100%; opacity: 0; } }
 .plx .fsplit { display: flex; flex-direction: column; gap: 8px; }
+
+/* Strategies scene — two "ledger" cards showing the rule executing over time:
+   recurring sends the same amount each period; DCA accumulates cirBTC week by week
+   (note the differing cirBTC per fixed $50 — that's the averaging). */
+.plx .scard {
+  width: min(360px, 92vw);
+  background: var(--plx-glass-fill);
+  backdrop-filter: var(--plx-glass-blur);
+  border: 1px solid var(--plx-glass-border);
+  border-radius: 14px;
+  padding: 16px 18px;
+  box-shadow: var(--plx-shadow-glass);
+}
+.plx .scard-head { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
+.plx .scard-ic {
+  width: 30px; height: 30px; border-radius: 9999px;
+  display: grid; place-items: center; font-size: 15px; font-weight: 700; flex: none;
+}
+.plx .scard-ic.blue { background: rgba(14, 165, 233, 0.13); color: var(--plx-blue); }
+.plx .scard-ic.amber { background: rgba(251, 191, 36, 0.13); color: #fbbf24; }
+.plx .scard-head .t { font-size: 14px; font-weight: 600; }
+.plx .scard-head .s { margin-left: auto; font-family: var(--font-mono); font-size: 11px; color: var(--plx-ts); }
+
+.plx .srow {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 0; border-top: 1px solid var(--plx-border);
+  font-size: 13px; opacity: 0; transform: translateY(6px);
+}
+.plx .srow .d { flex: none; width: 46px; font-family: var(--font-mono); font-size: 11px; color: var(--plx-ts); }
+.plx .srow .m { flex: 1; color: var(--plx-tp); }
+.plx .srow .m b { font-weight: 600; }
+.plx .srow .m .plus { color: #fbbf24; font-family: var(--font-mono); }
+.plx .srow .tick { flex: none; color: var(--plx-green); }
+.plx .srow .wait { flex: none; color: var(--plx-ts); }
+.plx .scene.in .srow { animation: plxRowIn 0.5s var(--plx-ease) forwards; }
+.plx .scene.in .srow:nth-child(2) { animation-delay: 0.2s; }
+.plx .scene.in .srow:nth-child(3) { animation-delay: 0.45s; }
+.plx .scene.in .srow:nth-child(4) { animation-delay: 0.7s; }
+.plx .scene.in .srow:nth-child(5) { animation-delay: 0.95s; }
+.plx .srow.pending .m { color: var(--plx-ts); }
+.plx .scene.in .srow.pending { animation-name: plxRowInDim; }
+@keyframes plxRowIn { to { opacity: 1; transform: none; } }
+@keyframes plxRowInDim { to { opacity: 0.5; transform: none; } }
+
+.plx .scard-total {
+  display: flex; align-items: baseline; justify-content: space-between;
+  margin-top: 10px; padding-top: 12px; border-top: 1px solid var(--plx-border);
+  opacity: 0; transform: translateY(6px);
+}
+.plx .scard-total .lbl { font-size: 12px; color: var(--plx-ts); }
+.plx .scard-total .val { font-size: 18px; font-weight: 700; }
+.plx .scene.in .scard-total { animation: plxRowIn 0.6s var(--plx-ease) 1.2s forwards; }
+
+@media (prefers-reduced-motion: reduce) {
+  .plx .srow, .plx .scard-total { opacity: 1 !important; transform: none !important; animation: none !important; }
+  .plx .srow.pending { opacity: 0.5 !important; }
+}
+
+/* Mobile: this scene's two stacked cards overflow 100vh — compact it so it fits.
+   Scoped to #plx-s-strategy so no other scene is affected. */
+@media (max-width: 640px) {
+  #plx-s-strategy { padding-top: 92px; padding-bottom: 40px; }
+  #plx-s-strategy h2 { font-size: clamp(1.7rem, 7vw, 2.2rem); }
+  #plx-s-strategy .sub { margin-top: 12px; font-size: 14px; }
+  #plx-s-strategy .stage { margin-top: clamp(20px, 4vh, 40px); }
+
+  #plx-s-strategy .scard { padding: 12px 14px; }
+  #plx-s-strategy .scard-ic { width: 26px; height: 26px; font-size: 13px; }
+  #plx-s-strategy .scard-head .t { font-size: 13px; }
+  #plx-s-strategy .srow { padding: 6px 0; font-size: 12px; gap: 8px; }
+  #plx-s-strategy .srow .d { width: 40px; font-size: 10px; }
+  #plx-s-strategy .scard-total { margin-top: 8px; padding-top: 10px; }
+  #plx-s-strategy .scard-total .val { font-size: 16px; }
+
+  /* Trim one historical row from each card to save vertical space. */
+  #plx-s-strategy .scard:nth-child(1) .srow:nth-child(2),
+  #plx-s-strategy .scard:nth-child(2) .srow:nth-child(2) { display: none; }
+}
 
 .plx .invoice {
   width: min(380px, 92vw); position: relative;
@@ -431,11 +567,11 @@ input[type="number"]::-webkit-inner-spin-button {
 
 
 @media (max-width: 640px) {
-  /* Strategies: two vertical flows side by side so they fit on screen */
+  /* Strategies: stack the two ledger cards vertically on small screens */
   .plx .strat-stack {
-    flex-direction: row;
-    align-items: flex-start;
-    gap: 10px;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
     width: 100%;
   }
   .plx .flow {

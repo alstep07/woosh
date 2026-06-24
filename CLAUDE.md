@@ -22,7 +22,7 @@ integration (UCW, CCTP, StableFX, USYC). "No second token ever" is the killer fe
 | V2a | ✅ | Woosh Agent chat (Claude via OpenRouter, 4 tools) |
 | V2b | ✅ | Direct payment execution from chat (PIN inline) |
 | V2.2 | ✅ | Payment requests / invoices, onchain via `WooshInvoiceRegistry` (`/i/[id]` links, "My invoices" list, chat tools) |
-| V3.0 | ✅ | Automated strategies, onchain via `WooshStrategyRegistry`: recurring USDC payments + DCA auto-buys (EURC/cirBTC). DCW executor (no PIN), Vercel Cron, swaps via Circle Swap Kit. `/dashboard/strategies`, chat tools. |
+| V3.0 | ✅ | Automated strategies, onchain via `WooshStrategyRegistry`: recurring USDC payments + DCA auto-buys (EURC/cirBTC). DCW executor (no PIN), Vercel Cron, swaps via Synthra SynRoute API. `/dashboard/strategies`, chat tools. Manual swap at `/dashboard/swap`. |
 | V3.1+ | 🔄 | See [Implementation Plan](docs/IMPLEMENTATION_PLAN.md) |
 
 ---
@@ -56,9 +56,23 @@ Circle Wallets adapter, no raw private key. See [Architecture](docs/ARCHITECTURE
 
 **Strategies**, recurring payments are fully trustless (the contract forwards funds; the
 executor only pays gas to trigger). DCA swaps are semi-custodial for one period at a time:
-`releaseForSwap` hands the executor one period of USDC, it swaps via Circle Swap Kit and
-forwards the output to the owner. Cron is scheduler-agnostic (`/api/cron/execute-strategies`,
-`CRON_SECRET`); free Vercel Cron tick = daily granularity (finer needs an external pinger).
+`releaseForSwap` hands the executor one period of USDC, it swaps via Synthra SynRoute API
+and delivers the output straight to the owner. Cron is scheduler-agnostic
+(`/api/cron/execute-strategies`, `CRON_SECRET`); free Vercel Cron tick = daily granularity
+(finer needs an external pinger).
+
+**Swap rail (Synthra SynRoute)**, all swaps on Arc testnet go through `trading-api.synthra.org`.
+Circle App Kit / Stablecoin Service has no routes on testnet. Implementation in
+`src/shared/lib/synroute.ts`: POST `/v1/quote` to check route, POST `/v1/swap` to get
+calldata, execute approve + swap via `dcwExecuteRaw`. `slippageBps` in the API is a
+PERCENTAGE (not true bps) — `5` = 5%. `waitForTx` uses `SUCCESS = Set(["COMPLETE","CONFIRMED"])`
+only. `SYNTHRA_API_KEY` is server-only. `fmtOut()` formats all API amounts (no scientific
+notation, values < 0.000001 show as `"<0.000001"`).
+
+**Manual swap two-step**, UCW flow: step 1 sends tokenIn to the executor via PIN; execute
+route polls executor balance up to 5×2s before starting swap (avoids "funds not received"
+race on sub-second Arc finality). Inner try/catch guarantees refund on any failure after
+funds confirmed. `useChallengeFlow.cancel()` escapes a frozen PIN window via `cancelledRef`.
 
 **Session storage**, all `woosh_*` keys managed via `src/shared/lib/session.ts`.
 All calls wrapped in try/catch (Safari private mode). Never write raw sessionStorage
@@ -106,8 +120,10 @@ NEXT_PUBLIC_CIRBTC_ADDRESS=             # cirBTC token (DCA target); EURC has a 
 CIRCLE_ENTITY_SECRET=                # DCW entity secret (generate + register in Console)
 EXECUTOR_WALLET_ID=                  # DCW executor wallet id (from /api/admin/provision-executor)
 EXECUTOR_ADDRESS=                    # executor address; set via WooshStrategyRegistry.setExecutor
-CIRCLE_KIT_KEY=                      # Circle Swap Kit key for DCA swaps (KIT_KEY:..., never NEXT_PUBLIC)
 CRON_SECRET=                         # shared secret the cron + admin routes check
+
+# Synthra SynRoute API (server only — all swaps on Arc testnet)
+SYNTHRA_API_KEY=                     # from Synthra, required for /v1/quote and /v1/swap
 
 # Woosh Agent
 OPENROUTER_API_KEY=

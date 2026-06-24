@@ -39,6 +39,9 @@ export function useChallengeFlow(opts: {
   const onSuccessRef = useRef(opts.onSuccess);
   onSuccessRef.current = opts.onSuccess;
 
+  // Allows the UI to cancel a hanging PIN flow. Any late SDK callback is ignored.
+  const cancelledRef = useRef(false);
+
   const onAuthSuccessRef = useRef<(userToken: string, encryptionKey: string) => void>(() => {});
   const stableOnSuccess = useCallback((userToken: string, encryptionKey: string) => {
     onAuthSuccessRef.current(userToken, encryptionKey);
@@ -91,6 +94,7 @@ export function useChallengeFlow(opts: {
 
       sdk.setAuthentication({ userToken, encryptionKey });
       sdk.execute(data.challengeId, (err) => {
+        if (cancelledRef.current) { cancelledRef.current = false; return; }
         if (err) {
           setError("Transaction failed. Please try again.");
           setPhase("idle");
@@ -107,6 +111,7 @@ export function useChallengeFlow(opts: {
 
   // Kick off the flow: try cached tokens first, else fall back to email OTP.
   function start() {
+    cancelledRef.current = false;
     setError(null);
     const tokens = getPendingTokens() ?? getCachedTokens();
     if (tokens) {
@@ -123,5 +128,12 @@ export function useChallengeFlow(opts: {
     auth.resetToEmail();
   }
 
-  return { phase, error, setError, auth, start, backToIdle };
+  // Let the user escape a frozen PIN window. Any late SDK callback is ignored.
+  function cancel() {
+    cancelledRef.current = true;
+    setPhase("idle");
+    setError(null);
+  }
+
+  return { phase, error, setError, auth, start, backToIdle, cancel };
 }

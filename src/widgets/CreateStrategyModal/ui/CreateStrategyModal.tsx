@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import { Button } from "@/shared/ui/Button";
-import { Spinner } from "@/shared/ui/Spinner";
+import { Modal } from "@/shared/ui/Modal";
 import { EmailStep } from "@/features/auth/ui/EmailStep";
 import { useChallengeFlow } from "@/features/auth/model/useChallengeFlow";
 import { computeStrategyId, newStrategySalt } from "@/entities/strategy/lib/computeStrategyId";
@@ -119,24 +119,7 @@ export default function CreateStrategyModal({ session, onClose, onCreated }: Pro
       : "Runs until the deposit runs out";
 
   return (
-    <div
-      className="fixed inset-0 z-[70] flex items-center justify-center px-4 bg-black/60 backdrop-blur-sm"
-      onClick={() => { if (flow.phase !== "running") onClose(); }}
-    >
-      <div
-        className="w-full max-w-md glass-card rounded-card p-6 relative max-h-[90vh] overflow-y-auto no-scrollbar"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {flow.phase !== "running" && (
-          <button
-            onClick={onClose}
-            aria-label="Close"
-            className="absolute top-4 right-4 text-text-secondary/40 hover:text-text-primary text-sm transition-colors"
-          >
-            ✕
-          </button>
-        )}
-
+    <Modal onClose={onClose} dismissible={flow.phase !== "running"} size="md">
         {createdId ? (
           <div className="text-center">
             <div className="w-12 h-12 rounded-full bg-green-400/10 flex items-center justify-center mx-auto mb-3 text-2xl">
@@ -155,10 +138,7 @@ export default function CreateStrategyModal({ session, onClose, onCreated }: Pro
           </div>
         ) : flow.phase === "running" ? (
           <div className="text-center py-4">
-            <div className="flex justify-center mb-3"><Spinner size="lg" /></div>
-            <p className="text-text-secondary text-sm">
-              Setting up your strategy… a PIN window will appear to confirm.
-            </p>
+            <span className="shimmer-text text-sm font-medium">Setting up your strategy… a PIN window will appear to confirm.</span>
           </div>
         ) : flow.phase === "auth" ? (
           <div className="space-y-3">
@@ -181,16 +161,13 @@ export default function CreateStrategyModal({ session, onClose, onCreated }: Pro
             )}
             {flow.auth.step === "email" && flow.auth.loading && (
               <div className="text-center py-2">
-                <div className="flex justify-center mb-2"><Spinner size="lg" /></div>
-                <p className="text-text-secondary text-sm">Sending your code…</p>
+                <span className="shimmer-text text-sm font-medium">Sending your code…</span>
               </div>
             )}
             {flow.auth.step === "verify" && (
-              <div className="text-center py-2">
-                <div className="flex justify-center mb-2"><Spinner size="lg" /></div>
-                <p className="text-text-secondary text-sm">
-                  Enter the code from <span className="text-text-primary">{flow.auth.email}</span> in the window that opened.
-                </p>
+              <div className="text-center py-2 space-y-1">
+                <span className="shimmer-text text-sm font-medium">Enter the code in the window that opened.</span>
+                <p className="text-xs text-text-secondary/50">Code sent to {flow.auth.email}</p>
                 {flow.auth.error && <p className="text-sm text-red-400 mt-2">{flow.auth.error}</p>}
               </div>
             )}
@@ -366,7 +343,6 @@ export default function CreateStrategyModal({ session, onClose, onCreated }: Pro
             </p>
           </div>
         )}
-      </div>
-    </div>
+    </Modal>
   );
 }

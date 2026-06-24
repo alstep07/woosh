@@ -15,37 +15,33 @@ function TxIcon({ tx }: { tx: TxRecord }) {
   const type =
     tx.note === "Invoice" ? "invoice"
     : tx.note === "Strategy payment" ? "recurring"
-    : tx.note === "DCA" ? "dca"
+    : tx.note === "Swap" ? "swap"
+    : tx.note === "Swap refund" ? "refund"
+    : tx.note === "DCA" ? "swap"  // legacy DCA = swap
     : tx.note === "Strategy" ? "strategy"
-    : tx.token ? "token"
     : tx.direction === "received" ? "received"
     : "sent";
 
   const cls: Record<string, string> = {
-    received: "bg-green-400/10 text-green-400",
-    sent: "bg-white/[0.06] text-text-secondary",
-    invoice: "bg-blue-primary/10 text-blue-primary",
+    received:  "bg-green-400/10 text-green-400",
+    sent:      "bg-white/[0.06] text-text-secondary",
+    invoice:   "bg-blue-primary/10 text-blue-primary",
     recurring: "bg-blue-secondary/10 text-blue-secondary",
-    dca: "bg-amber-400/10 text-amber-400",
-    strategy: "bg-blue-primary/10 text-blue-primary",
-    token: "bg-amber-400/10 text-amber-400",
+    swap:      "bg-violet-400/10 text-violet-400",
+    refund:    "bg-amber-400/10 text-amber-400",
+    strategy:  "bg-blue-primary/10 text-blue-primary",
   };
 
   const paths: Record<string, React.ReactNode> = {
-    // arrow down-left into tray
-    received: <path strokeLinecap="round" strokeLinejoin="round" d="M19 5L8 16m0 0h7m-7 0V9" />,
-    // arrow up-right
-    sent: <path strokeLinecap="round" strokeLinejoin="round" d="M5 19L16 8m0 0H9m7 0v7" />,
-    // document
-    invoice: <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h4m4 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />,
-    // circular arrows (recurring)
+    received:  <path strokeLinecap="round" strokeLinejoin="round" d="M19 5L8 16m0 0h7m-7 0V9" />,
+    sent:      <path strokeLinecap="round" strokeLinejoin="round" d="M5 19L16 8m0 0H9m7 0v7" />,
+    invoice:   <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h4m4 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />,
     recurring: <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h5M20 20v-5h-5M20 9A8 8 0 006 5.3M4 15a8 8 0 0014 3.7" />,
-    // swap arrows (DCA)
-    dca: <path strokeLinecap="round" strokeLinejoin="round" d="M7 16V4m0 0L3 8m4-4l4 4M17 8v12m0 0l4-4m-4 4l-4-4" />,
-    // automation / bolt (strategy deposit)
-    strategy: <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />,
-    // coin (token)
-    token: <><circle cx="12" cy="12" r="8" /><path strokeLinecap="round" d="M12 8v8M9.5 10.5h3a1.5 1.5 0 010 3h-3" /></>,
+    // two opposite arrows = swap
+    swap:      <path strokeLinecap="round" strokeLinejoin="round" d="M7 16V4m0 0L3 8m4-4l4 4M17 8v12m0 0l4-4m-4 4l-4-4" />,
+    // arrow down with circle = refund
+    refund:    <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />,
+    strategy:  <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />,
   };
 
   return (
@@ -164,7 +160,15 @@ export default function TransactionList({
               <div className="flex items-center gap-2 min-w-0">
                 <TxIcon tx={tx} />
                 <p className="text-xs text-text-secondary/50 min-w-0 truncate">
-                  {tx.note ? (
+                  {tx.note === "Swap" ? (
+                    <span className="text-text-secondary/80">
+                      Swap · {tx.token ?? "USDC"}
+                    </span>
+                  ) : tx.note === "Swap refund" ? (
+                    <span className="text-text-secondary/80">Swap refund · USDC</span>
+                  ) : tx.note === "DCA" ? (
+                    <span className="text-text-secondary/80">DCA · {tx.token ?? "token"}</span>
+                  ) : tx.note ? (
                     <>
                       {tx.direction === "received" ? "Received" : "Sent"}{" "}
                       <span className="text-text-secondary/80">
@@ -188,7 +192,12 @@ export default function TransactionList({
                   {formatDistanceToNow(tx.timestamp)}
                 </p>
               </div>
-              <span className={`text-xs shrink-0 ml-4 ${tx.direction === "received" ? "text-green-400" : "text-text-secondary"}`}>
+              <span className={`text-xs shrink-0 ml-4 ${
+                tx.note === "Swap refund" ? "text-amber-400"
+                : tx.note === "Swap" && tx.direction === "received" ? "text-violet-400"
+                : tx.direction === "received" ? "text-green-400"
+                : "text-text-secondary"
+              }`}>
                 {tx.direction === "received" ? "+" : "-"}
                 {tx.token ? `${tx.amount} ${tx.token}` : `$${tx.amount}`}
               </span>

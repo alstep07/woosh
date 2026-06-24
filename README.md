@@ -41,8 +41,10 @@ Fixed-amount payment requests stored onchain in `WooshInvoiceRegistry`.
 ### V3.0: Strategies (recurring + DCA)
 Automated onchain strategies, no PIN after setup.
 
-- `WooshStrategyRegistry` on Arc: custodies the budget, stores the schedule. Recurring payments are fully trustless. DCA strategies release one period to the DCW executor, which swaps via Circle Swap Kit and forwards the output to the owner
+- `WooshStrategyRegistry` on Arc: custodies the budget, stores the schedule. Recurring payments are fully trustless. DCA strategies release one period to the DCW executor, which swaps via Synthra SynRoute API and delivers the output straight to the owner
 - **DCW executor:** Developer-Controlled wallet (`entitySecret`, no PIN) triggers due strategies
+- **Swap rail:** Synthra SynRoute API (`trading-api.synthra.org`) — multi-hop routing on Arc testnet. Circle App Kit / Stablecoin Service has no routes on testnet
+- **Manual swap:** `/dashboard/swap` — configurable slippage (0.1/1/5/15%), two-step UCW flow (send to executor → executor swaps), refund guarantee on failure
 - "Strategies" at `/dashboard/strategies`. Agent tools: `create_strategy`, `get_strategies`
 - Runs via Vercel Cron (`/api/cron/execute-strategies`), idempotent, daily granularity on free tier
 
@@ -116,8 +118,10 @@ NEXT_PUBLIC_CIRBTC_ADDRESS=
 CIRCLE_ENTITY_SECRET=
 EXECUTOR_WALLET_ID=
 EXECUTOR_ADDRESS=
-CIRCLE_KIT_KEY=
 CRON_SECRET=
+
+# Synthra SynRoute API (server only, required for all swaps)
+SYNTHRA_API_KEY=
 
 # Woosh Agent
 OPENROUTER_API_KEY=

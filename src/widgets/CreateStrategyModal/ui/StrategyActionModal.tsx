@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Button } from "@/shared/ui/Button";
-import { Spinner } from "@/shared/ui/Spinner";
+import { Modal } from "@/shared/ui/Modal";
 import { EmailStep } from "@/features/auth/ui/EmailStep";
 import { useChallengeFlow } from "@/features/auth/model/useChallengeFlow";
 import type { Session } from "@/entities/user/model/types";
@@ -70,21 +70,7 @@ export default function StrategyActionModal({ session, strategy, action, onClose
   const error = formError ?? flow.error;
 
   return (
-    <div
-      className="fixed inset-0 z-[70] flex items-center justify-center px-4 bg-black/60 backdrop-blur-sm"
-      onClick={() => { if (flow.phase !== "running") onClose(); }}
-    >
-      <div className="w-full max-w-sm glass-card rounded-card p-6 relative" onClick={(e) => e.stopPropagation()}>
-        {flow.phase !== "running" && (
-          <button
-            onClick={onClose}
-            aria-label="Close"
-            className="absolute top-4 right-4 text-text-secondary/40 hover:text-text-primary text-sm transition-colors"
-          >
-            ✕
-          </button>
-        )}
-
+    <Modal onClose={onClose} dismissible={flow.phase !== "running"} size="sm">
         {done ? (
           <div className="text-center">
             <div className="w-12 h-12 rounded-full bg-green-400/10 flex items-center justify-center mx-auto mb-3 text-2xl">✓</div>
@@ -95,8 +81,7 @@ export default function StrategyActionModal({ session, strategy, action, onClose
           </div>
         ) : flow.phase === "running" ? (
           <div className="text-center py-4">
-            <div className="flex justify-center mb-3"><Spinner size="lg" /></div>
-            <p className="text-text-secondary text-sm">Confirming… a PIN window will appear.</p>
+            <span className="shimmer-text text-sm font-medium">Confirming… a PIN window will appear.</span>
           </div>
         ) : flow.phase === "auth" ? (
           <div className="space-y-3">
@@ -115,12 +100,14 @@ export default function StrategyActionModal({ session, strategy, action, onClose
               />
             )}
             {flow.auth.step === "email" && flow.auth.loading && (
-              <div className="text-center py-2"><div className="flex justify-center mb-2"><Spinner size="lg" /></div><p className="text-text-secondary text-sm">Sending your code…</p></div>
+              <div className="text-center py-2">
+                <span className="shimmer-text text-sm font-medium">Sending your code…</span>
+              </div>
             )}
             {flow.auth.step === "verify" && (
-              <div className="text-center py-2">
-                <div className="flex justify-center mb-2"><Spinner size="lg" /></div>
-                <p className="text-text-secondary text-sm">Enter the code from <span className="text-text-primary">{flow.auth.email}</span> in the window that opened.</p>
+              <div className="text-center py-2 space-y-1">
+                <span className="shimmer-text text-sm font-medium">Enter the code in the window that opened.</span>
+                <p className="text-xs text-text-secondary/50">Code sent to {flow.auth.email}</p>
                 {flow.auth.error && <p className="text-sm text-red-400 mt-2">{flow.auth.error}</p>}
               </div>
             )}
@@ -155,7 +142,6 @@ export default function StrategyActionModal({ session, strategy, action, onClose
             <Button onClick={start}>{copy.cta}</Button>
           </div>
         )}
-      </div>
-    </div>
+    </Modal>
   );
 }

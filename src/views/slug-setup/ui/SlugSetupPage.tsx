@@ -7,7 +7,6 @@ import BrandHeader from "@/widgets/BrandHeader/ui/BrandHeader";
 import Footer from "@/widgets/Footer/ui/Footer";
 import { Button } from "@/shared/ui/Button";
 import { Input } from "@/shared/ui/Input";
-import { Spinner } from "@/shared/ui/Spinner";
 import { EmailStep } from "@/features/auth/ui/EmailStep";
 import { useAuth } from "@/features/auth/model/useAuth";
 import { useSlugAvailability } from "@/entities/slug/hooks/useSlugAvailability";
@@ -174,7 +173,7 @@ export default function SlugSetupPage() {
   if (phase === "loading") {
     return (
       <main className="min-h-screen bg-navy flex items-center justify-center">
-        <Spinner size="lg" />
+        <span className="shimmer-text text-sm font-medium">Loading…</span>
       </main>
     );
   }
@@ -247,9 +246,7 @@ export default function SlugSetupPage() {
                     </label>
                     <span className="text-xs h-4 flex items-center">
                       {availability === "checking" && (
-                        <span className="flex items-center gap-1 text-text-secondary">
-                          <Spinner size="sm" /> Checking…
-                        </span>
+                        <span className="shimmer-text text-xs font-medium">Checking…</span>
                       )}
                       {availability === "available" && (
                         <span className="text-green-400">✓ Available</span>
@@ -334,10 +331,7 @@ export default function SlugSetupPage() {
 
               {auth.step === "email" && auth.loading && (
                 <div className="text-center">
-                  <div className="flex justify-center mb-4">
-                    <Spinner size="lg" />
-                  </div>
-                  <h2 className="text-xl font-bold text-text-primary mb-2">
+                  <h2 className="shimmer-text text-xl font-bold mb-2">
                     Sending your code…
                   </h2>
                   <p className="text-text-secondary text-sm">
@@ -349,10 +343,7 @@ export default function SlugSetupPage() {
 
               {auth.step === "verify" && (
                 <div className="text-center">
-                  <div className="flex justify-center mb-4">
-                    <Spinner size="lg" />
-                  </div>
-                  <h2 className="text-xl font-bold text-text-primary mb-2">
+                  <h2 className="shimmer-text text-xl font-bold mb-2">
                     Verifying your identity…
                   </h2>
                   <p className="text-text-secondary text-sm mb-6">
@@ -390,10 +381,7 @@ export default function SlugSetupPage() {
           {/* ── Registering onchain ────────────────────────────────────────── */}
           {phase === "registering" && (
             <div className="text-center">
-              <div className="flex justify-center mb-4">
-                <Spinner size="lg" />
-              </div>
-              <h1 className="text-2xl font-bold text-text-primary mb-2">
+              <h1 className="shimmer-text text-2xl font-bold mb-2">
                 Registering your link…
               </h1>
               <p className="text-text-secondary text-sm">

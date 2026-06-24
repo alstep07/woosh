@@ -32,3 +32,10 @@ registerToolExamples("get_strategies", [
   "what strategies do I have?",
   "is my DCA still running?",
 ]);
+
+registerToolExamples("swap", [
+  "swap 5 usdc for cirBTC",
+  "buy EURC with 10 usdc",
+  "sell my EURC back to usdc",
+  "exchange 2 usdc for bitcoin",
+]);
