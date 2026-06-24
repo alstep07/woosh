@@ -22,7 +22,6 @@ const CHAIN_ID = 5042002;
 // 5 = 5% tolerance — wide enough for testnet fills without being recklessly loose.
 const SLIPPAGE_BPS = 5;
 const SUCCESS = new Set(["COMPLETE", "CONFIRMED"]);
-const FAILED  = new Set(["FAILED", "CANCELLED", "DENIED"]);
 
 export type TokenRef = { address: `0x${string}`; decimals: number };
 

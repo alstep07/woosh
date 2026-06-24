@@ -168,7 +168,6 @@ export default function CreateStrategyModal({ session, onClose, onCreated }: Pro
               <div className="text-center py-2 space-y-1">
                 <span className="shimmer-text text-sm font-medium">Enter the code in the window that opened.</span>
                 <p className="text-xs text-text-secondary/50">Code sent to {flow.auth.email}</p>
-                </p>
                 {flow.auth.error && <p className="text-sm text-red-400 mt-2">{flow.auth.error}</p>}
               </div>
             )}

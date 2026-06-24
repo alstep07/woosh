@@ -8,7 +8,6 @@ import { tokenByAddress } from "@/shared/lib/tokens";
 import { env } from "@/shared/config/env";
 
 const USDC_ADDRESS = "0x3600000000000000000000000000000000000000";
-const USDC_DECIMALS = 18;
 const ERC20_TRANSFER_ABI = [{
   name: "transfer",
   type: "function",
