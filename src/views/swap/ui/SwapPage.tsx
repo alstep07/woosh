@@ -6,7 +6,6 @@ import { useQueryClient } from "@tanstack/react-query";
 import AppHeader from "@/widgets/AppHeader/ui/AppHeader";
 import Footer from "@/widgets/Footer/ui/Footer";
 import { Button } from "@/shared/ui/Button";
-import { Spinner } from "@/shared/ui/Spinner";
 import { Modal } from "@/shared/ui/Modal";
 import { useChallengeFlow } from "@/features/auth/model/useChallengeFlow";
 import { useTokenBalances } from "@/entities/wallet/hooks/useTokenBalances";
@@ -207,7 +206,7 @@ export default function SwapPage() {
   if (!session) {
     return (
       <main className="min-h-screen bg-navy flex items-center justify-center">
-        <Spinner size="lg" />
+        <span className="shimmer-text text-sm font-medium">Loading…</span>
       </main>
     );
   }

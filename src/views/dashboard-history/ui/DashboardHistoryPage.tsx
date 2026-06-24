@@ -6,7 +6,6 @@ import { useTransactionHistory } from "@/entities/payment/hooks/useTransactionHi
 import AppHeader from "@/widgets/AppHeader/ui/AppHeader";
 import Footer from "@/widgets/Footer/ui/Footer";
 import TransactionList from "@/widgets/TransactionList/ui/TransactionList";
-import { Spinner } from "@/shared/ui/Spinner";
 import { getSession as loadSession } from "@/shared/lib/session";
 import type { Session } from "@/entities/user/model/types";
 
@@ -34,7 +33,7 @@ export default function DashboardHistoryPage() {
   if (!session) {
     return (
       <main className="min-h-screen bg-navy flex items-center justify-center">
-        <Spinner size="lg" />
+        <span className="shimmer-text text-sm font-medium">Loading…</span>
       </main>
     );
   }

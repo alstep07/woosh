@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { Button } from "@/shared/ui/Button";
 import { Modal } from "@/shared/ui/Modal";
-import { Spinner } from "@/shared/ui/Spinner";
 import { EmailStep } from "@/features/auth/ui/EmailStep";
 import { useChallengeFlow } from "@/features/auth/model/useChallengeFlow";
 import type { Session } from "@/entities/user/model/types";
@@ -82,8 +81,7 @@ export default function StrategyActionModal({ session, strategy, action, onClose
           </div>
         ) : flow.phase === "running" ? (
           <div className="text-center py-4">
-            <div className="flex justify-center mb-3"><Spinner size="lg" /></div>
-            <p className="text-text-secondary text-sm">Confirming… a PIN window will appear.</p>
+            <span className="shimmer-text text-sm font-medium">Confirming… a PIN window will appear.</span>
           </div>
         ) : flow.phase === "auth" ? (
           <div className="space-y-3">
@@ -102,12 +100,14 @@ export default function StrategyActionModal({ session, strategy, action, onClose
               />
             )}
             {flow.auth.step === "email" && flow.auth.loading && (
-              <div className="text-center py-2"><div className="flex justify-center mb-2"><Spinner size="lg" /></div><p className="text-text-secondary text-sm">Sending your code…</p></div>
+              <div className="text-center py-2">
+                <span className="shimmer-text text-sm font-medium">Sending your code…</span>
+              </div>
             )}
             {flow.auth.step === "verify" && (
-              <div className="text-center py-2">
-                <div className="flex justify-center mb-2"><Spinner size="lg" /></div>
-                <p className="text-text-secondary text-sm">Enter the code from <span className="text-text-primary">{flow.auth.email}</span> in the window that opened.</p>
+              <div className="text-center py-2 space-y-1">
+                <span className="shimmer-text text-sm font-medium">Enter the code in the window that opened.</span>
+                <p className="text-xs text-text-secondary/50">Code sent to {flow.auth.email}</p>
                 {flow.auth.error && <p className="text-sm text-red-400 mt-2">{flow.auth.error}</p>}
               </div>
             )}

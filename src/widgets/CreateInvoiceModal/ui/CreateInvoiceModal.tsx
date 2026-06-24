@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { Button } from "@/shared/ui/Button";
 import { Modal } from "@/shared/ui/Modal";
-import { Spinner } from "@/shared/ui/Spinner";
 import { EmailStep } from "@/features/auth/ui/EmailStep";
 import { useAuth } from "@/features/auth/model/useAuth";
 import { env } from "@/shared/config/env";
@@ -191,10 +190,7 @@ export default function CreateInvoiceModal({ session, onClose, onCreated }: Prop
           </div>
         ) : phase === "creating" ? (
           <div className="text-center py-4">
-            <div className="flex justify-center mb-3"><Spinner size="lg" /></div>
-            <p className="text-text-secondary text-sm">
-              Creating your invoice… a PIN window will appear to confirm.
-            </p>
+            <span className="shimmer-text text-sm font-medium">Creating your invoice… a PIN window will appear to confirm.</span>
           </div>
         ) : phase === "auth" ? (
           <div className="space-y-3">
@@ -217,16 +213,13 @@ export default function CreateInvoiceModal({ session, onClose, onCreated }: Prop
             )}
             {auth.step === "email" && auth.loading && (
               <div className="text-center py-2">
-                <div className="flex justify-center mb-2"><Spinner size="lg" /></div>
-                <p className="text-text-secondary text-sm">Sending your code…</p>
+                <span className="shimmer-text text-sm font-medium">Sending your code…</span>
               </div>
             )}
             {auth.step === "verify" && (
-              <div className="text-center py-2">
-                <div className="flex justify-center mb-2"><Spinner size="lg" /></div>
-                <p className="text-text-secondary text-sm">
-                  Enter the code from <span className="text-text-primary">{auth.email}</span> in the window that opened.
-                </p>
+              <div className="text-center py-2 space-y-1">
+                <span className="shimmer-text text-sm font-medium">Enter the code in the window that opened.</span>
+                <p className="text-xs text-text-secondary/50">Code sent to {auth.email}</p>
                 {auth.error && <p className="text-sm text-red-400 mt-2">{auth.error}</p>}
               </div>
             )}

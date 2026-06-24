@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import AppHeader from "@/widgets/AppHeader/ui/AppHeader";
 import Footer from "@/widgets/Footer/ui/Footer";
-import { Spinner } from "@/shared/ui/Spinner";
 import CreateInvoiceModal from "@/widgets/CreateInvoiceModal/ui/CreateInvoiceModal";
 import { getSession as loadSession } from "@/shared/lib/session";
 import { useMyInvoices } from "@/entities/invoice/hooks/useMyInvoices";
@@ -120,7 +119,7 @@ export default function RequestsPage() {
   if (!session) {
     return (
       <main className="min-h-screen bg-navy flex items-center justify-center">
-        <Spinner size="lg" />
+        <span className="shimmer-text text-sm font-medium">Loading…</span>
       </main>
     );
   }

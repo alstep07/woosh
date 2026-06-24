@@ -12,7 +12,6 @@ import WalletCard from "@/widgets/WalletCard/ui/WalletCard";
 import ChatPanel from "@/widgets/ChatPanel/ui/ChatPanel";
 import TransactionList from "@/widgets/TransactionList/ui/TransactionList";
 import Footer from "@/widgets/Footer/ui/Footer";
-import { Spinner } from "@/shared/ui/Spinner";
 import { env } from "@/shared/config/env";
 import { getSession as loadSession } from "@/shared/lib/session";
 import type { Session } from "@/entities/user/model/types";
@@ -80,7 +79,7 @@ export default function DashboardPage() {
   if (!session) {
     return (
       <main className="h-screen bg-navy flex items-center justify-center">
-        <Spinner size="lg" />
+        <span className="shimmer-text text-sm font-medium">Loading…</span>
       </main>
     );
   }

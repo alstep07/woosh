@@ -6,7 +6,6 @@ import Link from "next/link";
 import BrandHeader from "@/widgets/BrandHeader/ui/BrandHeader";
 import Footer from "@/widgets/Footer/ui/Footer";
 import { EmailStep } from "@/features/auth/ui/EmailStep";
-import { Spinner } from "@/shared/ui/Spinner";
 import { useAuth } from "@/features/auth/model/useAuth";
 import { env } from "@/shared/config/env";
 import { lookupAddressSlug } from "@/entities/slug/lib/lookupAddressSlug";
@@ -143,7 +142,7 @@ export default function SignupPage() {
       <main className="min-h-screen bg-navy flex flex-col">
         <BrandHeader />
         <div className="flex-1 flex items-center justify-center">
-          <Spinner size="lg" />
+          <span className="shimmer-text text-sm font-medium">Loading…</span>
         </div>
         <Footer />
       </main>
@@ -228,10 +227,7 @@ export default function SignupPage() {
 
           {step === "sending" && (
             <div className="text-center">
-              <div className="flex justify-center mb-4">
-                <Spinner size="lg" />
-              </div>
-              <h1 className="text-2xl font-bold text-text-primary mb-2">
+              <h1 className="shimmer-text text-2xl font-bold mb-2">
                 Sending your code…
               </h1>
               <p className="text-text-secondary text-sm">
@@ -243,10 +239,7 @@ export default function SignupPage() {
 
           {step === "verifying" && (
             <div className="text-center">
-              <div className="flex justify-center mb-4">
-                <Spinner size="lg" />
-              </div>
-              <h1 className="text-2xl font-bold text-text-primary mb-2">
+              <h1 className="shimmer-text text-2xl font-bold mb-2">
                 Verifying your identity…
               </h1>
               <p className="text-text-secondary text-sm mb-8">
@@ -274,10 +267,7 @@ export default function SignupPage() {
 
           {step === "creating" && (
             <div className="text-center">
-              <div className="flex justify-center mb-4">
-                <Spinner size="lg" />
-              </div>
-              <h1 className="text-2xl font-bold text-text-primary mb-2">
+              <h1 className="shimmer-text text-2xl font-bold mb-2">
                 Preparing your wallet…
               </h1>
               <p className="text-text-secondary text-sm">
