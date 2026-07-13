@@ -43,18 +43,15 @@ async function readErc20(token: SupportedToken, account: `0x${string}`): Promise
 
 /**
  * USD prices for the USDC-equivalent total. USDC is 1:1; cirBTC tracks BTC and EURC tracks
- * EUR, both fetched from CoinGecko (the same source the reference Arc swap dapp uses for its
- * testnet rates, since testnet token prices are not real). Fails open: no price -> null usd.
+ * EUR. Fetched via our own /api/prices proxy (server-side CoinGecko with a cache and
+ * last-known-good fallback): calling CoinGecko from the browser hit per-IP rate limits
+ * and adblockers, which silently dropped the $ equivalents. Fails open: no price -> null usd.
  */
 async function fetchPrices(): Promise<{ btc?: number; eur?: number }> {
   try {
-    const res = await fetch(
-      "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,euro-coin&vs_currencies=usd",
-      { cache: "no-store" }
-    );
+    const res = await fetch("/api/prices", { cache: "no-store" });
     if (!res.ok) return {};
-    const data = (await res.json()) as { bitcoin?: { usd?: number }; "euro-coin"?: { usd?: number } };
-    return { btc: data.bitcoin?.usd, eur: data["euro-coin"]?.usd };
+    return (await res.json()) as { btc?: number; eur?: number };
   } catch {
     return {};
   }
