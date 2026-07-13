@@ -3,7 +3,7 @@ import { formatUnits } from "viem";
 import { getInvoice } from "@/entities/invoice/lib/readInvoice";
 
 const EXPLORER_BASE =
-  process.env.NEXT_PUBLIC_ARC_EXPLORER_URL ?? "https://explorer.testnet.arc.network";
+  process.env.NEXT_PUBLIC_ARC_EXPLORER_URL ?? "https://testnet.arcscan.app";
 const REGISTRY         = (process.env.NEXT_PUBLIC_INVOICE_REGISTRY_ADDRESS ?? "").toLowerCase();
 const STRATEGY_REGISTRY = (process.env.NEXT_PUBLIC_STRATEGY_REGISTRY_ADDRESS ?? "").toLowerCase();
 const EXECUTOR          = (process.env.EXECUTOR_ADDRESS ?? "").toLowerCase();

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import AppHeader from "@/widgets/AppHeader/ui/AppHeader";
@@ -93,7 +93,7 @@ export default function SwapPage() {
         body: JSON.stringify({ userToken: tokens.userToken, tokenIn, tokenOut, amount: amount.trim(), slippage }),
         signal: ac.signal,
       });
-      const data = (await res.json()) as { ok?: boolean; amountOut?: string; tokenOut?: string; error?: string; refunded?: boolean };
+      const data = (await res.json()) as { ok?: boolean; amountOut?: string; tokenOut?: string; exact?: boolean; error?: string; refunded?: boolean };
       if (!res.ok || !data.ok) {
         if (data.refunded) {
           setFailure({ tokenIn, refunded: true });
@@ -104,7 +104,8 @@ export default function SwapPage() {
       }
       setAmount("");
       setQuote({ loading: false });
-      setResult({ amountOut: data.amountOut ?? "—", tokenOut: data.tokenOut ?? tokenOut });
+      const outLabel = data.amountOut ? (data.exact ? data.amountOut : `≈${data.amountOut}`) : "-";
+      setResult({ amountOut: outLabel, tokenOut: data.tokenOut ?? tokenOut });
       setTimeout(() => {
         void queryClient.invalidateQueries({ queryKey: ["token-balances", session?.walletAddress] });
         void refetchBalances();
@@ -141,32 +142,16 @@ export default function SwapPage() {
       } catch {
         if (seq === quoteSeq.current) setQuote({ loading: false, error: "Quote unavailable" });
       }
-    }, 500);
+    }, 350);
     return () => clearTimeout(t);
   }, [amount, tokenIn, tokenOut]);
 
-  // Keep auth.email in sync with session email so sendOtp() sees a non-empty value.
+  // Keep auth.email in sync with session email so the flow's OTP auto-send sees a
+  // non-empty value. The auto-send itself lives in useChallengeFlow.
   useEffect(() => {
     if (session?.email) flow.auth.setEmail(session.email);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.email]);
-
-  // Auto-send OTP once auth.email is confirmed set (avoids sendOtp silently bailing on "").
-  const sendOtpRef = useRef(flow.auth.sendOtp);
-  sendOtpRef.current = flow.auth.sendOtp;
-  useEffect(() => {
-    if (
-      flow.phase === "auth" &&
-      flow.auth.step === "email" &&
-      flow.auth.email &&
-      flow.auth.deviceId &&
-      !flow.auth.loading &&
-      !flow.auth.deviceIdLoading
-    ) {
-      void sendOtpRef.current({ preventDefault: () => {} } as FormEvent);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [flow.phase, flow.auth.step, flow.auth.email, flow.auth.deviceId, flow.auth.loading, flow.auth.deviceIdLoading]);
 
   function setPercent(pct: number) {
     if (spendable <= 0) return;
@@ -181,6 +166,7 @@ export default function SwapPage() {
     setAmount("");
     setQuote({ loading: false });
     setFormError(null);
+    setFailure(null);
   }
 
   function selectToken(sym: string) {
@@ -188,6 +174,7 @@ export default function SwapPage() {
     setAmount("");
     setQuote({ loading: false });
     setFormError(null);
+    setFailure(null);
   }
 
   const amountNum = parseFloat(amount);
@@ -200,6 +187,7 @@ export default function SwapPage() {
     if (!validAmount) { setFormError("Enter a valid amount"); return; }
     if (exceeds) { setFormError(`Amount exceeds your ${tokenIn} balance`); return; }
     setFormError(null);
+    setFailure(null);
     flow.start();
   }
 
@@ -296,7 +284,7 @@ export default function SwapPage() {
                       type="number"
                       inputMode="decimal"
                       value={amount}
-                      onChange={(e) => { setAmount(e.target.value); setFormError(null); }}
+                      onChange={(e) => { setAmount(e.target.value); setFormError(null); setFailure(null); }}
                       placeholder="0"
                       autoFocus
                       className="w-full bg-transparent text-4xl font-light text-text-primary outline-none placeholder:text-text-secondary/15 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
@@ -364,9 +352,12 @@ export default function SwapPage() {
                     )}
                   </div>
 
-                  {/* Slippage selector */}
-                  <div className="flex items-center gap-2 pt-1">
-                    <span className="text-[11px] text-text-secondary/40 shrink-0">Slippage</span>
+                  {/* Slippage selector — highlighted after a refunded failure, since the
+                      error banner points the user here to raise tolerance and retry */}
+                  <div className={`flex items-center gap-2 pt-1 transition-all ${
+                    failure?.refunded ? "rounded-lg ring-1 ring-amber-400/25 bg-amber-400/[0.03] px-2 py-1.5 -mx-2" : ""
+                  }`}>
+                    <span className={`text-[11px] shrink-0 ${failure?.refunded ? "text-amber-400/70" : "text-text-secondary/40"}`}>Slippage</span>
                     <div className="flex gap-1.5 flex-1">
                       {SLIPPAGE_OPTIONS.map((pct) => (
                         <button
@@ -391,44 +382,30 @@ export default function SwapPage() {
                   </div>{/* end dimmed form controls */}
 
                   <div className="pt-2 space-y-2">
-                    {/* Inline failure banner */}
+                    {/* Inline failure banner. No controls here: slippage lives in the
+                        form above, retry is the main action button below. */}
                     {failure && !busy && (
-                      <div className="rounded-card border border-red-400/20 bg-red-400/[0.04] px-4 py-3 space-y-3">
+                      <div className="rounded-card border border-red-400/20 bg-red-400/[0.04] px-4 py-3">
                         <div className="flex items-start gap-2.5">
                           <span className="text-red-400 text-sm leading-5 mt-px">✕</span>
-                          <div>
+                          <div className="flex-1 min-w-0">
                             <p className="text-sm font-semibold text-text-primary leading-5">Swap failed</p>
                             <p className="text-xs text-text-secondary/60 mt-0.5">
                               {failure.refunded
-                                ? `Your ${failure.tokenIn} was refunded. Try increasing slippage.`
-                                : `The swap timed out. Check your balance — your ${failure.tokenIn} may have been refunded or the swap may still complete.`}
+                                ? `Your ${failure.tokenIn} was refunded, nothing was lost. Try a higher slippage tolerance above, then swap again.`
+                                : `The swap timed out. Check your balance, your ${failure.tokenIn} may have been refunded or the swap may still complete.`}
                             </p>
                           </div>
+                          <button
+                            onClick={() => setFailure(null)}
+                            aria-label="Dismiss"
+                            className="shrink-0 -mt-0.5 -mr-1 p-1 text-text-secondary/30 hover:text-text-secondary/70 transition-colors"
+                          >
+                            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                              <path d="M2.5 2.5l7 7M9.5 2.5l-7 7" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+                            </svg>
+                          </button>
                         </div>
-                        <div>
-                          <p className="text-[10px] text-text-secondary/40 mb-1.5">Slippage tolerance</p>
-                          <div className="flex gap-1.5">
-                            {SLIPPAGE_OPTIONS.map((pct) => (
-                              <button
-                                key={pct}
-                                onClick={() => setSlippage(pct)}
-                                className={`flex-1 py-1 rounded text-[11px] font-semibold transition-colors ${
-                                  slippage === pct
-                                    ? "bg-blue-primary/15 text-blue-primary border border-blue-primary/30"
-                                    : "bg-white/[0.04] text-text-secondary/40 border border-transparent hover:text-text-secondary/70"
-                                }`}
-                              >
-                                {pct}%
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                        <button
-                          onClick={() => setFailure(null)}
-                          className="w-full text-[11px] text-text-secondary/30 hover:text-text-secondary/60 transition-colors text-center"
-                        >
-                          Dismiss
-                        </button>
                       </div>
                     )}
 
@@ -469,7 +446,7 @@ export default function SwapPage() {
                         </div>
                       </div>
                     ) : (
-                      <Button onClick={startSwap} disabled={!canSubmit || !!failure}>
+                      <Button onClick={startSwap} disabled={!canSubmit}>
                         {failure ? "Try again" : `Swap ${tokenIn} → ${tokenOut}`}
                       </Button>
                     )}

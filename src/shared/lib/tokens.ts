@@ -1,10 +1,11 @@
 /**
  * Supported tokens for swaps and DCA on Arc. USDC is the native value token (18 decimals,
- * no contract address). EURC and cirBTC are ERC-20 targets reached via different swap
- * rails: EURC over Circle StableFX (USDC<->EURC only), cirBTC over Circle App Kit.
+ * no contract address). EURC and cirBTC are ERC-20 swap targets; on Arc testnet all
+ * swaps route through the Synthra SynRoute API (see src/shared/lib/synroute.ts).
+ * The SwapRail type is kept for when Circle rails get testnet routes.
  *
- * Addresses are sourced from docs/ARCHITECTURE.md; cirBTC is read from env because its
- * testnet address must be confirmed from Arc docs before going live.
+ * Addresses are listed in README.md (Smart contracts table); cirBTC is read from env
+ * because its testnet address must be confirmed from Arc docs before going live.
  */
 import { env } from "@/shared/config/env";
 

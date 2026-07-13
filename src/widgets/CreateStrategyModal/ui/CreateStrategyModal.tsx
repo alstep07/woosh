@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { Button } from "@/shared/ui/Button";
 import { Modal } from "@/shared/ui/Modal";
 import { EmailStep } from "@/features/auth/ui/EmailStep";
+import { AutoOtpStatus } from "@/features/auth/ui/AutoOtpStatus";
 import { useChallengeFlow } from "@/features/auth/model/useChallengeFlow";
 import { computeStrategyId, newStrategySalt } from "@/entities/strategy/lib/computeStrategyId";
 import { INTERVAL_PRESETS } from "@/entities/strategy/lib/format";
@@ -147,17 +148,27 @@ export default function CreateStrategyModal({ session, onClose, onCreated }: Pro
               We need to verify you to fund the strategy onchain.
             </p>
             {flow.auth.step === "email" && !flow.auth.loading && (
-              <EmailStep
-                email={flow.auth.email}
-                onEmailChange={flow.auth.setEmail}
-                onSubmit={flow.auth.sendOtp}
-                loading={false}
-                deviceIdLoading={flow.auth.deviceIdLoading}
-                deviceIdError={flow.auth.deviceIdError}
-                onRetry={flow.auth.retryDeviceId}
-                error={flow.auth.error}
-                deviceId={flow.auth.deviceId}
-              />
+              session.email ? (
+                <AutoOtpStatus
+                  email={session.email}
+                  error={flow.auth.error}
+                  deviceIdError={flow.auth.deviceIdError}
+                  onRetryDeviceId={flow.auth.retryDeviceId}
+                  onResend={flow.auth.sendOtp}
+                />
+              ) : (
+                <EmailStep
+                  email={flow.auth.email}
+                  onEmailChange={flow.auth.setEmail}
+                  onSubmit={flow.auth.sendOtp}
+                  loading={false}
+                  deviceIdLoading={flow.auth.deviceIdLoading}
+                  deviceIdError={flow.auth.deviceIdError}
+                  onRetry={flow.auth.retryDeviceId}
+                  error={flow.auth.error}
+                  deviceId={flow.auth.deviceId}
+                />
+              )
             )}
             {flow.auth.step === "email" && flow.auth.loading && (
               <div className="text-center py-2">

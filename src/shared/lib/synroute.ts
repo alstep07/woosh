@@ -12,8 +12,9 @@
  *
  * Reference: synthra-swap/synroute-frontend-template.
  */
-import { parseUnits } from "viem";
-import { dcwExecuteRaw, waitForTx } from "@/shared/lib/dcw";
+import { erc20Abi, formatUnits, parseUnits } from "viem";
+import { arcPublicClient } from "@/shared/lib/arc";
+import { dcwExecuteRaw, getTxHash, waitForTx } from "@/shared/lib/dcw";
 
 const API_BASE = process.env.SYNTHRA_API_BASE ?? "https://trading-api.synthra.org";
 const CHAIN_ID = 5042002;
@@ -96,6 +97,54 @@ export async function synrouteQuote(
   }
 }
 
+/**
+ * Balance of `who` in `token` units. Works for native USDC too: the ERC-20 precompile
+ * reports the same balance in 6 decimals, matching refFor()'s TokenRef. null on RPC failure.
+ */
+async function balanceOf(token: TokenRef, who: `0x${string}`): Promise<bigint | null> {
+  try {
+    return await arcPublicClient.readContract({
+      address: token.address,
+      abi: erc20Abi,
+      functionName: "balanceOf",
+      args: [who],
+    });
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Exact output delivered to `recipient` by the swap tx: tokenOut balance delta across the
+ * tx's block, read from the RPC. Immune both to unrelated transfers landing in the same
+ * time window (they sit in other blocks) and to duplicated Transfer events that make
+ * log/explorer-based accounting over-count (wrapped-native unwraps on the Synthra route
+ * emit the credit twice, which showed users 2x the real output). Returns base units of
+ * tokenOut, or null if the tx is not indexed by the RPC yet.
+ */
+async function outputAtBlock(
+  txHash: `0x${string}`,
+  tokenOut: TokenRef,
+  recipient: `0x${string}`
+): Promise<bigint | null> {
+  try {
+    const receipt = await arcPublicClient.getTransactionReceipt({ hash: txHash });
+    if (!receipt || receipt.status !== "success") return null;
+    const bal = (blockNumber: bigint) =>
+      arcPublicClient.readContract({
+        address: tokenOut.address,
+        abi: erc20Abi,
+        functionName: "balanceOf",
+        args: [recipient],
+        blockNumber,
+      });
+    const [pre, post] = await Promise.all([bal(receipt.blockNumber - 1n), bal(receipt.blockNumber)]);
+    return post > pre ? post - pre : null;
+  } catch {
+    return null;
+  }
+}
+
 type ApproveTx = { to: `0x${string}`; data: `0x${string}` };
 type SwapTx = { to: `0x${string}`; data: `0x${string}`; value?: string };
 
@@ -110,7 +159,7 @@ export async function synrouteSwap(
   recipient: `0x${string}`,
   sender: `0x${string}`,
   slippagePct: number = SLIPPAGE_BPS
-): Promise<{ ok: boolean; state: string; amountOut?: string }> {
+): Promise<{ ok: boolean; state: string; amountOut?: string; exact?: boolean }> {
   let built: Record<string, unknown>;
   try {
     built = await api("/v1/swap", {
@@ -143,6 +192,10 @@ export async function synrouteSwap(
   }
 
   // 2) Execute the routed swap. value is 0 for token-in swaps (pulled via transferFrom).
+  // Snapshot the recipient's tokenOut balance first so we can report the ACTUAL output:
+  // built.amountOutDecimals is only the build-time quote and drifts from the fill by up
+  // to the slippage tolerance, which made the chat/UI number disagree with tx history.
+  const preBalance = await balanceOf(tokenOut, recipient);
   const value = tx.value && tx.value !== "0" ? tx.value : undefined;
   const r2 = await dcwExecuteRaw(tx.to, tx.data, value);
   const id2 = (r2 as { id?: string } | undefined)?.id;
@@ -151,5 +204,36 @@ export async function synrouteSwap(
   // Only COMPLETE/CONFIRMED = swap actually landed. Timeout = treat as failure → refund.
   if (!SUCCESS.has(st2)) return { ok: false, state: `swap_${st2}` };
 
-  return { ok: true, state: st2, amountOut: built.amountOutDecimals ? fmtOut(Number(built.amountOutDecimals)) : undefined };
+  // Actual received, most exact source first:
+  //   1) recipient balance delta across the swap tx's block (exact, pollution-proof),
+  //   2) live recipient balance delta (fallback if the tx hash / receipt is unavailable),
+  //   3) the build-time quote (drifts from the fill by up to the slippage tolerance).
+  let actualOut: string | undefined;
+  const txHash = await getTxHash(id2);
+  if (txHash) {
+    for (let i = 0; i < 3 && !actualOut; i++) {
+      if (i > 0) await new Promise((r) => setTimeout(r, 1_500));
+      const delta = await outputAtBlock(txHash as `0x${string}`, tokenOut, recipient);
+      if (delta !== null && delta > 0n) actualOut = fmtOut(Number(formatUnits(delta, tokenOut.decimals)));
+    }
+  }
+  if (!actualOut && preBalance !== null) {
+    for (let i = 0; i < 3; i++) {
+      const post = await balanceOf(tokenOut, recipient);
+      if (post !== null && post > preBalance) {
+        actualOut = fmtOut(Number(formatUnits(post - preBalance, tokenOut.decimals)));
+        break;
+      }
+      await new Promise((r) => setTimeout(r, 1_500));
+    }
+  }
+
+  // exact=false means the number is the build-time quote, not a measured amount; the UI
+  // marks it as approximate so it is never presented as the real fill.
+  return {
+    ok: true,
+    state: st2,
+    amountOut: actualOut ?? (built.amountOutDecimals ? fmtOut(Number(built.amountOutDecimals)) : undefined),
+    exact: !!actualOut,
+  };
 }

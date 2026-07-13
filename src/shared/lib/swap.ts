@@ -82,8 +82,10 @@ async function appKitEstimate(tokenOut: SwapToken, amountInHuman: string, fromAd
 }
 
 export type SwapOutcome = {
-  /** Human output amount delivered to the recipient (actual for App Kit, estimate for Synthra). */
+  /** Human output amount delivered to the recipient. */
   amountOut?: string;
+  /** true = measured onchain (block-level balance delta); false = build-time quote. */
+  exact?: boolean;
   rail: "appkit" | "synthra";
 };
 
@@ -97,13 +99,16 @@ export async function quotePair(
   amountInHuman: string,
   fromAddress: `0x${string}`
 ): Promise<{ ok: boolean; estimatedOutput?: string; error?: string }> {
+  // SynRoute FIRST: it is the rail that actually executes on Arc testnet and answers in
+  // ~1-2s. App Kit has no testnet routes and hangs for 40+ seconds before failing, so it
+  // is only a fallback for the forward path (kept for mainnet, where it has routes).
+  const sr = await synrouteQuote(refFor(tokenIn), refFor(tokenOut), amountInHuman);
+  if (sr.ok) return { ok: true, estimatedOutput: sr.estimatedOutput };
   if (tokenIn === "USDC" && tokenOut !== "USDC") {
     const ak = await appKitEstimate(tokenOut, amountInHuman, fromAddress);
     if (ak) return { ok: true, estimatedOutput: ak };
   }
-  // Try SynRoute API first (handles multi-hop routes); fall back to Synthra slot0 spot price.
-  const sr = await synrouteQuote(refFor(tokenIn), refFor(tokenOut), amountInHuman);
-  if (sr.ok) return { ok: true, estimatedOutput: sr.estimatedOutput };
+  // Last resort: Synthra slot0 spot price.
   const syn = await synthraQuote(refFor(tokenIn), refFor(tokenOut), amountInHuman);
   return syn.ok ? { ok: true, estimatedOutput: syn.estimatedOutput } : { ok: false, error: "no route available" };
 }
@@ -138,7 +143,7 @@ export async function executePair(
   // delivers the output straight to `recipient` — no extra forward hop.
   const res = await synrouteSwap(refFor(tokenIn), refFor(tokenOut), amountInHuman, recipient, executor, slippagePct);
   if (!res.ok) throw new Error(`swap failed (${res.state})`);
-  return { amountOut: res.amountOut, rail: "synthra" };
+  return { amountOut: res.amountOut, exact: res.exact, rail: "synthra" };
 }
 
 // ── USDC -> token wrappers (the DCA cron path) ───────────────────────────────────────────────

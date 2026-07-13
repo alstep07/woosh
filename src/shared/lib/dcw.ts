@@ -130,20 +130,39 @@ export async function dcwTransfer(
   return res.data;
 }
 
+/** Onchain tx hash of a DCW transaction, or null if not yet available / on API failure. */
+export async function getTxHash(id: string): Promise<string | null> {
+  try {
+    const res = await getClient().getTransaction({ id });
+    return res.data?.transaction?.txHash ?? null;
+  } catch {
+    return null;
+  }
+}
+
 const TERMINAL_STATES = new Set(["COMPLETE", "CONFIRMED", "FAILED", "CANCELLED", "DENIED"]);
 
 /**
  * Poll a DCW transaction until it reaches a terminal state or the timeout elapses.
  * Returns the final state string ("COMPLETE"/"CONFIRMED" = success).
+ *
+ * Transient network errors on a poll (DNS blips like "getaddrinfo ENOTFOUND
+ * api.circle.com") are swallowed and polling continues: a thrown poll here would be
+ * treated by callers as a FAILED swap and trigger a refund even when the transaction
+ * actually landed onchain.
  */
 export async function waitForTx(id: string, timeoutMs = 60_000): Promise<string> {
   const client = getClient();
   const deadline = Date.now() + timeoutMs;
   let state = "INITIATED";
   while (Date.now() < deadline) {
-    const res = await client.getTransaction({ id });
-    state = res.data?.transaction?.state ?? state;
-    if (TERMINAL_STATES.has(state)) return state;
+    try {
+      const res = await client.getTransaction({ id });
+      state = res.data?.transaction?.state ?? state;
+      if (TERMINAL_STATES.has(state)) return state;
+    } catch (err) {
+      console.error("[dcw] waitForTx poll failed, retrying:", err instanceof Error ? err.message : err);
+    }
     await new Promise((r) => setTimeout(r, 3_000));
   }
   return state;

@@ -40,8 +40,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Invalid amount" }, { status: 400 });
     }
 
-    // Don't ask the user to part with funds unless the swap actually routes right now.
-    const route = await canSwapPair(tokenIn as SwapSym, tokenOut as SwapSym, String(amount), getExecutorAddress());
+    // Route check and wallet lookup are independent, run them in parallel to cut the
+    // wait before the PIN window appears.
+    const [route, wallets] = await Promise.all([
+      // Don't ask the user to part with funds unless the swap actually routes right now.
+      canSwapPair(tokenIn as SwapSym, tokenOut as SwapSym, String(amount), getExecutorAddress()),
+      getUserWallets(userToken),
+    ]);
     if (!route.ok) {
       return NextResponse.json(
         { error: "No swap route available right now. Please try again shortly." },
@@ -49,7 +54,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const wallets = await getUserWallets(userToken);
     const wallet = wallets[0];
     if (!wallet) {
       return NextResponse.json({ error: "No Woosh wallet found. Sign up first." }, { status: 404 });

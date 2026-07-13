@@ -23,7 +23,7 @@ integration (UCW, CCTP, StableFX, USYC). "No second token ever" is the killer fe
 | V2b | ✅ | Direct payment execution from chat (PIN inline) |
 | V2.2 | ✅ | Payment requests / invoices, onchain via `WooshInvoiceRegistry` (`/i/[id]` links, "My invoices" list, chat tools) |
 | V3.0 | ✅ | Automated strategies, onchain via `WooshStrategyRegistry`: recurring USDC payments + DCA auto-buys (EURC/cirBTC). DCW executor (no PIN), Vercel Cron, swaps via Synthra SynRoute API. `/dashboard/strategies`, chat tools. Manual swap at `/dashboard/swap`. |
-| V3.1+ | 🔄 | See [Implementation Plan](docs/IMPLEMENTATION_PLAN.md) |
+| V3.1+ | 🔄 | Next candidates: MCP server (repackage chat tools), multi-token dashboard balances, bridge/off-ramp |
 
 ---
 
@@ -37,7 +37,7 @@ Contracts:  Solidity on Arc, Foundry
 Network:    Arc Testnet (chain 5042002) → Mainnet summer 2026
 DB:         None, onchain + Blockscout is the source of truth. A backend DB is
             deliberately deferred until a feature needs state with no onchain/derivable
-            home (see ARCHITECTURE → "No off-chain storage by default").
+            home ("no off-chain storage by default").
 ```
 
 ---
@@ -52,7 +52,7 @@ Never invent a new signing path. See `src/shared/lib/circle.ts`.
 no PIN) for autonomous operations. UCW cannot do recurring/scheduled actions. DCW is
 implemented as the single shared **strategy executor** wallet (`src/shared/lib/dcw.ts`):
 it triggers `WooshStrategyRegistry` executions on schedule and signs DCA swaps via the
-Circle Wallets adapter, no raw private key. See [Architecture](docs/ARCHITECTURE.md#wallet-architecture).
+Circle Wallets adapter, no raw private key.
 
 **Strategies**, recurring payments are fully trustless (the contract forwards funds; the
 executor only pays gas to trigger). DCA swaps are semi-custodial for one period at a time:
@@ -65,9 +65,18 @@ and delivers the output straight to the owner. Cron is scheduler-agnostic
 Circle App Kit / Stablecoin Service has no routes on testnet. Implementation in
 `src/shared/lib/synroute.ts`: POST `/v1/quote` to check route, POST `/v1/swap` to get
 calldata, execute approve + swap via `dcwExecuteRaw`. `slippageBps` in the API is a
-PERCENTAGE (not true bps) — `5` = 5%. `waitForTx` uses `SUCCESS = Set(["COMPLETE","CONFIRMED"])`
-only. `SYNTHRA_API_KEY` is server-only. `fmtOut()` formats all API amounts (no scientific
-notation, values < 0.000001 show as `"<0.000001"`).
+PERCENTAGE (not true bps), `5` = 5%. `waitForTx` uses `SUCCESS = Set(["COMPLETE","CONFIRMED"])`
+only, and swallows transient poll errors (a thrown poll would mis-trigger a refund).
+`SYNTHRA_API_KEY` is server-only. `fmtOut()` formats all API amounts (no scientific
+notation, values < 0.000001 show as `"<0.000001"`). Reported `amountOut` is the ACTUAL
+output: recipient balance delta across the swap tx's block via RPC. Do NOT sum Transfer
+events or explorer token-transfers for this: wrapped-native unwraps on the Synthra route
+emit the credit twice (2x over-count), and a live balance delta can catch unrelated
+concurrent transfers (e.g. late refunds). Falls back to live delta, then the quote.
+
+**USDC decimals trap**, native USDC on Arc is 18 decimals, but the ERC-20 precompile at
+`0x3600...0000` reports the SAME balance in 6 decimals. Any ERC-20 transfer of a native
+amount must divide by 1e12 first (see refunds in `/api/wallet/swap/execute` and the cron).
 
 **Manual swap two-step**, UCW flow: step 1 sends tokenIn to the executor via PIN; execute
 route polls executor balance up to 5×2s before starting swap (avoids "funds not received"
@@ -84,6 +93,14 @@ Arc native USDC = 18 decimals. EURC = 6 decimals. cirBTC = 8 decimals.
 **Agent integration is mandatory**, every new feature ships with a chat tool or at
 minimum an updated system prompt so the agent can answer "can I do X?" and guide the
 user. The chat agent is a first-class interface, not an afterthought.
+
+**Agent robustness**, in `/api/chat`: act on `tool_calls` whenever present (do NOT gate on
+`finish_reason`, some OpenRouter providers send "stop" with tool_calls). Token aliases are
+handled in the system prompt AND in `normalizeTokenSymbol()` (bitcoin/BTC → cirBTC,
+euro/EUR → EURC). ChatPanel appends bracketed outcome notes to action messages
+([Action completed successfully] / [The user cancelled this action] / [FAILED]) so the
+model never re-acts on stale requests; history is capped (30 client, 24 server) and
+error messages are excluded from context.
 
 **Copy style**, user-facing text AND agent output: never use long dashes (em or en
 dashes); use commas or periods. Write "onchain" as one word, never hyphenated. Keep
@@ -116,32 +133,25 @@ NEXT_PUBLIC_INVOICE_REGISTRY_ADDRESS=   # WooshInvoiceRegistry on Arc (payment r
 NEXT_PUBLIC_STRATEGY_REGISTRY_ADDRESS=  # WooshStrategyRegistry on Arc (strategies)
 NEXT_PUBLIC_CIRBTC_ADDRESS=             # cirBTC token (DCA target); EURC has a built-in default
 
-# Strategies executor (V3.0, server only — autonomous, no PIN)
+# Strategies executor (V3.0, server only, autonomous, no PIN)
 CIRCLE_ENTITY_SECRET=                # DCW entity secret (generate + register in Console)
 EXECUTOR_WALLET_ID=                  # DCW executor wallet id (from /api/admin/provision-executor)
 EXECUTOR_ADDRESS=                    # executor address; set via WooshStrategyRegistry.setExecutor
 CRON_SECRET=                         # shared secret the cron + admin routes check
 
-# Synthra SynRoute API (server only — all swaps on Arc testnet)
+# Synthra SynRoute API (server only, all swaps on Arc testnet)
 SYNTHRA_API_KEY=                     # from Synthra, required for /v1/quote and /v1/swap
 
 # Woosh Agent
 OPENROUTER_API_KEY=
-ANTHROPIC_MODEL=                     # default: anthropic/claude-3-5-sonnet
+ANTHROPIC_MODEL=                     # default: anthropic/claude-sonnet-5
 ```
 
 ---
 
 ## Docs
 
-Read only when the task directly requires it, don't load all docs upfront.
-
-| File | When to open | What's inside |
-|------|-------------|--------------|
-| [docs/WORKFLOW.md](docs/WORKFLOW.md) | Before starting any feature or fix, branching rules, naming, merge process | Branch-per-feature workflow, agent responsibilities, merge criteria |
-| [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md) | When deciding what to build next or understanding phase priorities | What to build next, ordered by value/effort, architecture constraints |
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | When adding routes, new wallet logic, contracts, or touching the FSD layer structure | Wallet arch, contracts, TypeScript types, routes, API principles, FSD structure |
-| [docs/USER_FLOWS.md](docs/USER_FLOWS.md) | When implementing or debugging a user-facing flow (signup, pay, slug claim, chat) | Step-by-step flows for every user type |
-| [docs/DESIGN.md](docs/DESIGN.md) | When writing UI, colors, spacing, component style | Visual style tokens, UX principles |
-| [docs/RESOURCES.md](docs/RESOURCES.md) | When you need a specific Circle SDK method, Arc contract address, or external API reference | External docs, Circle SDK methods, Arc contracts |
-| [docs/CONTENT_GUIDELINES.md](docs/CONTENT_GUIDELINES.md) | When writing or updating any public-facing content: a social post, thread, announcement, or marketing/app copy about Woosh, Arc, or USDC. Read it before drafting, and when applying general content/tone rules | Arc voice and tone, naming, what to emphasize and avoid, amplification guardrails |
+The `docs/` folder was removed from the repo (gitignored, kept as internal notes only).
+In-repo documentation is this file plus [README.md](README.md) (features, stack, contract
+addresses, setup) and [.env.local.example](.env.local.example) (annotated env reference).
+Workflow: branch per feature, merge to main only after explicit approval.

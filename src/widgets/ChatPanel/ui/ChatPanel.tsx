@@ -380,8 +380,11 @@ export default function ChatPanel({ name, walletAddress, userEmail, onPaymentSuc
             updateMsgStatus(msgId, "send_error", exData.error ?? "Swap failed. Please try again.");
             return;
           }
+          // exact=false means the server could not measure the fill and returned the
+          // quote; mark it approximate instead of presenting it as the real amount.
+          const out = exData.amountOut ? (exData.exact ? exData.amountOut : `≈${exData.amountOut}`) : undefined;
           setMessages((prev) =>
-            prev.map((m) => (m.id === msgId ? { ...m, actionStatus: "swap_done", swapOut: exData.amountOut ?? undefined } : m))
+            prev.map((m) => (m.id === msgId ? { ...m, actionStatus: "swap_done", swapOut: out } : m))
           );
         } catch {
           updateMsgStatus(msgId, "send_error", "Swap failed. Please try again.");
@@ -524,10 +527,26 @@ export default function ChatPanel({ name, walletAddress, userEmail, onPaymentSuc
     const controller = new AbortController();
     abortRef.current = controller;
     try {
-      const history = [...messages.filter((m) => m.id !== "welcome" && m.text.trim() && !m.cancelled), userMsg].map((m) => ({
-        role: m.role as "user" | "assistant",
-        content: m.text,
-      }));
+      // Send only the recent, meaningful part of the conversation. Each message with
+      // an action carries a bracketed status note so the model knows what actually
+      // happened (executed, cancelled, failed) and never re-acts on stale requests.
+      const history = [
+        ...messages.filter((m) => m.id !== "welcome" && m.text.trim() && !m.cancelled && !m.isError),
+        userMsg,
+      ]
+        .slice(-30)
+        .map((m) => {
+          let content = m.text;
+          if (m.pendingAction) {
+            const s = m.actionStatus;
+            if (s === "cancelled") content += "\n[The user cancelled this action, it was NOT executed.]";
+            else if (s === "paid" || s === "created" || s === "strategy_done" || s === "swap_done")
+              content += "\n[Action completed successfully.]";
+            else if (s === "send_error") content += "\n[This action FAILED to execute.]";
+            else content += "\n[Action proposed, still awaiting the user's confirmation.]";
+          }
+          return { role: m.role as "user" | "assistant", content };
+        });
 
       const res = await fetch("/api/chat", {
         method: "POST",

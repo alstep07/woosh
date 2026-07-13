@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { Button } from "@/shared/ui/Button";
 import { Modal } from "@/shared/ui/Modal";
 import { EmailStep } from "@/features/auth/ui/EmailStep";
+import { AutoOtpStatus } from "@/features/auth/ui/AutoOtpStatus";
 import { useAuth } from "@/features/auth/model/useAuth";
 import { env } from "@/shared/config/env";
 import {
@@ -69,6 +70,32 @@ export default function CreateInvoiceModal({ session, onClose, onCreated }: Prop
     if (session.email) auth.setEmail(session.email);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Auto-send the OTP to the session email when the auth phase starts: the email
+  // identifies the wallet owner, so there is nothing for the user to type (a different
+  // email would auth a different Circle user). Sent once per auth-phase entry.
+  const sendOtpRef = useRef(auth.sendOtp);
+  sendOtpRef.current = auth.sendOtp;
+  const autoSentRef = useRef(false);
+  useEffect(() => {
+    if (phase !== "auth") autoSentRef.current = false;
+  }, [phase]);
+  useEffect(() => {
+    if (
+      !autoSentRef.current &&
+      phase === "auth" &&
+      !!session.email &&
+      auth.step === "email" &&
+      auth.email &&
+      auth.deviceId &&
+      !auth.loading &&
+      !auth.deviceIdLoading
+    ) {
+      autoSentRef.current = true;
+      void sendOtpRef.current({ preventDefault: () => {} } as React.FormEvent);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, auth.step, auth.email, auth.deviceId, auth.loading, auth.deviceIdLoading, session.email]);
 
   function startCreate() {
     const a = amount.trim();
@@ -199,17 +226,27 @@ export default function CreateInvoiceModal({ session, onClose, onCreated }: Prop
               We need to verify you to register the invoice onchain.
             </p>
             {auth.step === "email" && !auth.loading && (
-              <EmailStep
-                email={auth.email}
-                onEmailChange={auth.setEmail}
-                onSubmit={auth.sendOtp}
-                loading={false}
-                deviceIdLoading={auth.deviceIdLoading}
-                deviceIdError={auth.deviceIdError}
-                onRetry={auth.retryDeviceId}
-                error={auth.error}
-                deviceId={auth.deviceId}
-              />
+              session.email ? (
+                <AutoOtpStatus
+                  email={session.email}
+                  error={auth.error}
+                  deviceIdError={auth.deviceIdError}
+                  onRetryDeviceId={auth.retryDeviceId}
+                  onResend={auth.sendOtp}
+                />
+              ) : (
+                <EmailStep
+                  email={auth.email}
+                  onEmailChange={auth.setEmail}
+                  onSubmit={auth.sendOtp}
+                  loading={false}
+                  deviceIdLoading={auth.deviceIdLoading}
+                  deviceIdError={auth.deviceIdError}
+                  onRetry={auth.retryDeviceId}
+                  error={auth.error}
+                  deviceId={auth.deviceId}
+                />
+              )
             )}
             {auth.step === "email" && auth.loading && (
               <div className="text-center py-2">
