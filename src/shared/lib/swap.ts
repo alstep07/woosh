@@ -97,13 +97,16 @@ export async function quotePair(
   amountInHuman: string,
   fromAddress: `0x${string}`
 ): Promise<{ ok: boolean; estimatedOutput?: string; error?: string }> {
+  // SynRoute FIRST: it is the rail that actually executes on Arc testnet and answers in
+  // ~1-2s. App Kit has no testnet routes and hangs for 40+ seconds before failing, so it
+  // is only a fallback for the forward path (kept for mainnet, where it has routes).
+  const sr = await synrouteQuote(refFor(tokenIn), refFor(tokenOut), amountInHuman);
+  if (sr.ok) return { ok: true, estimatedOutput: sr.estimatedOutput };
   if (tokenIn === "USDC" && tokenOut !== "USDC") {
     const ak = await appKitEstimate(tokenOut, amountInHuman, fromAddress);
     if (ak) return { ok: true, estimatedOutput: ak };
   }
-  // Try SynRoute API first (handles multi-hop routes); fall back to Synthra slot0 spot price.
-  const sr = await synrouteQuote(refFor(tokenIn), refFor(tokenOut), amountInHuman);
-  if (sr.ok) return { ok: true, estimatedOutput: sr.estimatedOutput };
+  // Last resort: Synthra slot0 spot price.
   const syn = await synthraQuote(refFor(tokenIn), refFor(tokenOut), amountInHuman);
   return syn.ok ? { ok: true, estimatedOutput: syn.estimatedOutput } : { ok: false, error: "no route available" };
 }

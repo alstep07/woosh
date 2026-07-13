@@ -141,7 +141,7 @@ export default function SwapPage() {
       } catch {
         if (seq === quoteSeq.current) setQuote({ loading: false, error: "Quote unavailable" });
       }
-    }, 500);
+    }, 350);
     return () => clearTimeout(t);
   }, [amount, tokenIn, tokenOut]);
 
