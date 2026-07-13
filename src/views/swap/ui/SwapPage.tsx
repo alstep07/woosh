@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import AppHeader from "@/widgets/AppHeader/ui/AppHeader";
@@ -145,28 +145,12 @@ export default function SwapPage() {
     return () => clearTimeout(t);
   }, [amount, tokenIn, tokenOut]);
 
-  // Keep auth.email in sync with session email so sendOtp() sees a non-empty value.
+  // Keep auth.email in sync with session email so the flow's OTP auto-send sees a
+  // non-empty value. The auto-send itself lives in useChallengeFlow.
   useEffect(() => {
     if (session?.email) flow.auth.setEmail(session.email);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.email]);
-
-  // Auto-send OTP once auth.email is confirmed set (avoids sendOtp silently bailing on "").
-  const sendOtpRef = useRef(flow.auth.sendOtp);
-  sendOtpRef.current = flow.auth.sendOtp;
-  useEffect(() => {
-    if (
-      flow.phase === "auth" &&
-      flow.auth.step === "email" &&
-      flow.auth.email &&
-      flow.auth.deviceId &&
-      !flow.auth.loading &&
-      !flow.auth.deviceIdLoading
-    ) {
-      void sendOtpRef.current({ preventDefault: () => {} } as FormEvent);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [flow.phase, flow.auth.step, flow.auth.email, flow.auth.deviceId, flow.auth.loading, flow.auth.deviceIdLoading]);
 
   function setPercent(pct: number) {
     if (spendable <= 0) return;

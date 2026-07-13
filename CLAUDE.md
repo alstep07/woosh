@@ -69,9 +69,10 @@ PERCENTAGE (not true bps), `5` = 5%. `waitForTx` uses `SUCCESS = Set(["COMPLETE"
 only, and swallows transient poll errors (a thrown poll would mis-trigger a refund).
 `SYNTHRA_API_KEY` is server-only. `fmtOut()` formats all API amounts (no scientific
 notation, values < 0.000001 show as `"<0.000001"`). Reported `amountOut` is the ACTUAL
-output, read from the swap tx's own transfers on Blockscout (immune to concurrent
-transfers like late refunds); falls back to recipient balance delta, then to the
-build-time quote (which drifts from the fill by up to the slippage tolerance).
+output: recipient balance delta across the swap tx's block via RPC. Do NOT sum Transfer
+events or explorer token-transfers for this: wrapped-native unwraps on the Synthra route
+emit the credit twice (2x over-count), and a live balance delta can catch unrelated
+concurrent transfers (e.g. late refunds). Falls back to live delta, then the quote.
 
 **USDC decimals trap**, native USDC on Arc is 18 decimals, but the ERC-20 precompile at
 `0x3600...0000` reports the SAME balance in 6 decimals. Any ERC-20 transfer of a native

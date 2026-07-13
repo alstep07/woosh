@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { useAuth } from "@/features/auth/model/useAuth";
 import { env } from "@/shared/config/env";
 import {
@@ -61,6 +61,34 @@ export function useChallengeFlow(opts: {
     if (opts.prefillEmail) auth.setEmail(opts.prefillEmail);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Auto-send the OTP when the auth phase starts with a known session email. The email
+  // identifies the wallet owner, so there is nothing for the user to type: asking for it
+  // again is confusing, and a different email would auth a different Circle user whose
+  // wallet cannot sign this challenge. Sent once per auth-phase entry (the ref guard
+  // prevents a resend loop if sendOtp fails; the UI offers a manual retry instead).
+  const sendOtpRef = useRef(auth.sendOtp);
+  sendOtpRef.current = auth.sendOtp;
+  const autoSentRef = useRef(false);
+  useEffect(() => {
+    if (phase !== "auth") autoSentRef.current = false;
+  }, [phase]);
+  useEffect(() => {
+    if (
+      !autoSentRef.current &&
+      phase === "auth" &&
+      !!opts.prefillEmail &&
+      auth.step === "email" &&
+      auth.email &&
+      auth.deviceId &&
+      !auth.loading &&
+      !auth.deviceIdLoading
+    ) {
+      autoSentRef.current = true;
+      void sendOtpRef.current({ preventDefault: () => {} } as FormEvent);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, auth.step, auth.email, auth.deviceId, auth.loading, auth.deviceIdLoading, opts.prefillEmail]);
 
   // Function declaration (hoisted) so onAuthSuccessRef above can reference it at render.
   async function execute(userToken: string, encryptionKey: string) {
