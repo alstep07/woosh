@@ -93,7 +93,7 @@ export default function SwapPage() {
         body: JSON.stringify({ userToken: tokens.userToken, tokenIn, tokenOut, amount: amount.trim(), slippage }),
         signal: ac.signal,
       });
-      const data = (await res.json()) as { ok?: boolean; amountOut?: string; tokenOut?: string; error?: string; refunded?: boolean };
+      const data = (await res.json()) as { ok?: boolean; amountOut?: string; tokenOut?: string; exact?: boolean; error?: string; refunded?: boolean };
       if (!res.ok || !data.ok) {
         if (data.refunded) {
           setFailure({ tokenIn, refunded: true });
@@ -104,7 +104,8 @@ export default function SwapPage() {
       }
       setAmount("");
       setQuote({ loading: false });
-      setResult({ amountOut: data.amountOut ?? "—", tokenOut: data.tokenOut ?? tokenOut });
+      const outLabel = data.amountOut ? (data.exact ? data.amountOut : `≈${data.amountOut}`) : "-";
+      setResult({ amountOut: outLabel, tokenOut: data.tokenOut ?? tokenOut });
       setTimeout(() => {
         void queryClient.invalidateQueries({ queryKey: ["token-balances", session?.walletAddress] });
         void refetchBalances();

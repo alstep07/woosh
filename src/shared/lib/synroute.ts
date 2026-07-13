@@ -159,7 +159,7 @@ export async function synrouteSwap(
   recipient: `0x${string}`,
   sender: `0x${string}`,
   slippagePct: number = SLIPPAGE_BPS
-): Promise<{ ok: boolean; state: string; amountOut?: string }> {
+): Promise<{ ok: boolean; state: string; amountOut?: string; exact?: boolean }> {
   let built: Record<string, unknown>;
   try {
     built = await api("/v1/swap", {
@@ -228,9 +228,12 @@ export async function synrouteSwap(
     }
   }
 
+  // exact=false means the number is the build-time quote, not a measured amount; the UI
+  // marks it as approximate so it is never presented as the real fill.
   return {
     ok: true,
     state: st2,
     amountOut: actualOut ?? (built.amountOutDecimals ? fmtOut(Number(built.amountOutDecimals)) : undefined),
+    exact: !!actualOut,
   };
 }

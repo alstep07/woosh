@@ -380,8 +380,11 @@ export default function ChatPanel({ name, walletAddress, userEmail, onPaymentSuc
             updateMsgStatus(msgId, "send_error", exData.error ?? "Swap failed. Please try again.");
             return;
           }
+          // exact=false means the server could not measure the fill and returned the
+          // quote; mark it approximate instead of presenting it as the real amount.
+          const out = exData.amountOut ? (exData.exact ? exData.amountOut : `≈${exData.amountOut}`) : undefined;
           setMessages((prev) =>
-            prev.map((m) => (m.id === msgId ? { ...m, actionStatus: "swap_done", swapOut: exData.amountOut ?? undefined } : m))
+            prev.map((m) => (m.id === msgId ? { ...m, actionStatus: "swap_done", swapOut: out } : m))
           );
         } catch {
           updateMsgStatus(msgId, "send_error", "Swap failed. Please try again.");

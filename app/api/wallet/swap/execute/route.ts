@@ -123,7 +123,7 @@ export async function POST(req: NextRequest) {
   // ── Inner try: swap. Refund is ALWAYS attempted on any failure from here. ──
   try {
     const out = await executePair(inSym, outSym, amountStr, executor, ownerAddr, slippagePct);
-    return NextResponse.json({ ok: true, amountOut: out.amountOut ?? null, tokenOut: outSym });
+    return NextResponse.json({ ok: true, amountOut: out.amountOut ?? null, tokenOut: outSym, exact: out.exact ?? false });
   } catch (err) {
     console.error("[swap/execute] swap", err);
     await refund(inSym, ownerAddr, executor);

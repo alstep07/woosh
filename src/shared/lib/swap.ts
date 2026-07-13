@@ -82,8 +82,10 @@ async function appKitEstimate(tokenOut: SwapToken, amountInHuman: string, fromAd
 }
 
 export type SwapOutcome = {
-  /** Human output amount delivered to the recipient (actual for App Kit, estimate for Synthra). */
+  /** Human output amount delivered to the recipient. */
   amountOut?: string;
+  /** true = measured onchain (block-level balance delta); false = build-time quote. */
+  exact?: boolean;
   rail: "appkit" | "synthra";
 };
 
@@ -141,7 +143,7 @@ export async function executePair(
   // delivers the output straight to `recipient` — no extra forward hop.
   const res = await synrouteSwap(refFor(tokenIn), refFor(tokenOut), amountInHuman, recipient, executor, slippagePct);
   if (!res.ok) throw new Error(`swap failed (${res.state})`);
-  return { amountOut: res.amountOut, rail: "synthra" };
+  return { amountOut: res.amountOut, exact: res.exact, rail: "synthra" };
 }
 
 // ── USDC -> token wrappers (the DCA cron path) ───────────────────────────────────────────────
