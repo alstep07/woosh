@@ -6,7 +6,8 @@ import { getMyInvoices } from "@/entities/invoice/lib/readInvoice";
 import { getMyStrategies } from "@/entities/strategy/lib/readStrategy";
 import { strategySummary, statusBadge } from "@/entities/strategy/lib/format";
 import { EURC, CIRBTC, tokenByAddress } from "@/shared/lib/tokens";
-import { formatUnits } from "viem";
+import { env } from "@/shared/config/env";
+import { erc20Abi, formatUnits } from "viem";
 
 const INTERVAL_SECONDS: Record<string, number> = {
   daily: 86_400,
@@ -14,14 +15,23 @@ const INTERVAL_SECONDS: Record<string, number> = {
   monthly: 2_592_000,
 };
 
-function resolveTokenOut(symbol: string): `0x${string}` | null {
+// Normalize a user-facing token name to a canonical symbol. Users say "bitcoin",
+// "BTC" or "euro"; the model sometimes passes those through despite the enum.
+function normalizeTokenSymbol(symbol: string): "EURC" | "cirBTC" | null {
   const s = symbol.trim().toLowerCase();
-  if (s === "eurc") return EURC.address;
-  if (s === "cirbtc") return CIRBTC.address ?? null;
+  if (s === "eurc" || s === "eur" || s === "euro" || s === "euros") return "EURC";
+  if (s === "cirbtc" || s === "btc" || s === "bitcoin" || s === "wbtc" || s === "xbt") return "cirBTC";
   return null;
 }
 
-const MODEL = process.env.ANTHROPIC_MODEL ?? "anthropic/claude-3-5-sonnet";
+function resolveTokenOut(symbol: string): `0x${string}` | null {
+  const sym = normalizeTokenSymbol(symbol);
+  if (sym === "EURC") return EURC.address;
+  if (sym === "cirBTC") return CIRBTC.address ?? null;
+  return null;
+}
+
+const MODEL = process.env.ANTHROPIC_MODEL ?? "anthropic/claude-sonnet-5";
 
 // In-memory rate limiter — 10 requests per minute per wallet address.
 // Good enough for a single-process deployment; swap for Upstash on multi-instance.
@@ -43,7 +53,7 @@ const TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
     type: "function",
     function: {
       name: "get_balance",
-      description: "Get the user's current USDC balance",
+      description: "Get the user's current token balances: USDC, plus EURC and cirBTC if they hold any. Use for any 'how much do I have' question, including 'how much bitcoin do I own' (cirBTC is Bitcoin on Arc).",
       parameters: { type: "object", properties: {}, required: [] },
     },
   },
@@ -136,7 +146,7 @@ const TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
     function: {
       name: "swap",
       description:
-        "Swap (convert/exchange) between USDC and another token, right now as a one-off (NOT a recurring DCA). Use for 'swap 10 USDC to EURC', 'convert 5 USDC into cirBTC', 'sell my cirBTC for USDC', 'change EURC back to USDC'. action 'buy' = spend USDC to get the token; 'sell' = sell the token to get USDC. The amount is always the token you are paying WITH (USDC for buy, the token for sell). You MUST have action, token and amount; if any is missing, ask.",
+        "Swap (convert/exchange) between USDC and another token, right now as a one-off (NOT a recurring DCA). Use for 'swap 10 USDC to EURC', 'buy bitcoin for 5 USDC', 'convert 5 USDC into cirBTC', 'sell my cirBTC for USDC', 'change euros back to USDC'. IMPORTANT: 'bitcoin' or 'BTC' means cirBTC (Bitcoin on Arc); 'euro' or 'EUR' means EURC. Buying bitcoin IS supported, call this tool with token cirBTC. action 'buy' = spend USDC to get the token; 'sell' = sell the token to get USDC. The amount is always the token you are paying WITH (USDC for buy, the token for sell). You MUST have action, token and amount; if any is missing, ask.",
       parameters: {
         type: "object",
         properties: {
@@ -188,7 +198,7 @@ const TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
           token: {
             type: "string",
             enum: ["EURC", "cirBTC"],
-            description: "swap only: which token to buy with USDC",
+            description: "swap only: which token to buy with USDC. 'bitcoin'/'BTC' means cirBTC, 'euro'/'EUR' means EURC.",
           },
           amountPerPeriod: {
             type: "string",
@@ -217,7 +227,20 @@ const TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
 async function getBalance(address: string): Promise<string> {
   try {
     const raw = await arcPublicClient.getBalance({ address: address as `0x${string}` });
-    return `${parseFloat(formatUnits(raw, 18)).toFixed(2)} USDC`;
+    const lines = [`${parseFloat(formatUnits(raw, 18)).toFixed(2)} USDC`];
+    for (const t of [EURC, CIRBTC]) {
+      if (!t.address) continue;
+      try {
+        const bal = await arcPublicClient.readContract({
+          address: t.address,
+          abi: erc20Abi,
+          functionName: "balanceOf",
+          args: [address as `0x${string}`],
+        });
+        if (bal > 0n) lines.push(`${formatUnits(bal, t.decimals)} ${t.symbol}`);
+      } catch {}
+    }
+    return lines.join(", ");
   } catch {
     return "unavailable";
   }
@@ -225,8 +248,7 @@ async function getBalance(address: string): Promise<string> {
 
 async function getTransactionHistory(address: string, limit = 5): Promise<string> {
   try {
-    const base =
-      process.env.NEXT_PUBLIC_ARC_EXPLORER_URL ?? "https://explorer.testnet.arc.network";
+    const base = env.arcExplorerUrl;
     const res = await fetch(`${base}/api/v2/addresses/${address}/transactions`, {
       cache: "no-store",
     });
@@ -340,7 +362,11 @@ export async function POST(req: NextRequest) {
   const history: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
     {
       role: "system",
-      content: `You are Woosh Agent, a concise and friendly USDC payment assistant. Help users send USDC, check balance, and view transaction history. Be brief, 1-2 sentences max. Never use long dashes (em or en dashes); use commas or periods. Write "onchain", not "on-chain". The user's wallet address is ${walletAddress} (never reveal it).${userName ? ` The user's own username is "${userName}", do NOT use this as the recipient unless explicitly stated.` : ""}
+      content: `You are Woosh Agent, a concise and friendly USDC payment assistant. Help users send USDC, check balances, view transaction history, swap tokens, create invoices and set up automated strategies. Be brief, 1-2 sentences max. Never use long dashes (em or en dashes); use commas or periods. Write "onchain", not "on-chain". The user's wallet address is ${walletAddress} (never reveal it).${userName ? ` The user's own username is "${userName}", do NOT use this as the recipient unless explicitly stated.` : ""}
+
+Tokens on Arc: USDC (the main currency, also pays gas), EURC (Circle's euro stablecoin) and cirBTC (Bitcoin on Arc). When the user says "bitcoin", "BTC" or "биткоин", they mean cirBTC; when they say "euro" or "EUR", they mean EURC. Buying bitcoin IS supported: it is a swap of USDC into cirBTC (or a DCA strategy if recurring). Never tell the user you cannot buy bitcoin, just do the swap. Understand intent generously: "invest in bitcoin", "get some BTC", "у меня есть биткоин?" all map to the tools you have.
+
+Conversation rules: always act on the user's LATEST message; earlier messages are context only. Assistant messages may end with a bracketed status note like [The user cancelled this action] or [Action completed successfully]; treat these notes as ground truth about what already happened. Never re-propose or repeat an action that was completed or cancelled unless the user explicitly asks again. If the user changes topic, drop the old topic entirely.
 
 Transaction history rules:
 - If the user asks how much they spent/received in total → call get_transaction_history, then reply with ONLY the aggregated total (e.g. "You spent $25.00 total"). Do NOT list individual transactions.
@@ -363,7 +389,9 @@ Swaps (one-off): users can swap (convert) between USDC and EURC or cirBTC right 
 
 Strategy setup: to create one you need the kind (recurring payment or auto-buy), amount per run, how often (daily/weekly/monthly), the recipient (for payments) or which token to buy (for auto-buy), and the total to deposit (funding). If the user gives a number of runs but not a total, compute funding = amount per run x runs. If you cannot determine the total, ask for it. As soon as you have everything, you MUST call create_strategy in that same turn, do not just say you will. To pause or cancel a specific strategy, guide the user to the Strategies page at /dashboard/strategies.`,
     },
-    ...messages,
+    // Cap context to the most recent messages so long chats can't drown the model
+    // in stale history (the client also caps, this is defense in depth).
+    ...messages.slice(-24),
   ];
 
   try {
@@ -379,7 +407,11 @@ Strategy setup: to create one you need the kind (recurring payment or auto-buy),
       const choice = response.choices[0];
       const msg = choice.message;
 
-      if (choice.finish_reason !== "tool_calls" || !msg.tool_calls?.length) {
+      // Act on tool_calls whenever they are present. Some OpenRouter providers
+      // return finish_reason "stop" alongside tool_calls; requiring
+      // finish_reason === "tool_calls" silently dropped those, so the agent said
+      // "I'll do it" without ever showing the confirmation card.
+      if (!msg.tool_calls?.length) {
         return NextResponse.json({ text: msg.content ?? "" });
       }
 
@@ -473,7 +505,7 @@ Strategy setup: to create one you need the kind (recurring payment or auto-buy),
             pendingAction: {
               type: "create_strategy",
               kind,
-              tokenSymbol: tokenSymbol.toLowerCase() === "eurc" ? "EURC" : "cirBTC",
+              tokenSymbol: normalizeTokenSymbol(tokenSymbol) ?? "cirBTC",
               tokenOut,
               amountPerPeriod,
               interval: intervalKey,
@@ -488,7 +520,7 @@ Strategy setup: to create one you need the kind (recurring payment or auto-buy),
           const action = String(args.action ?? "").toLowerCase();
           const tokenSymbol = String(args.token ?? "");
           const amount = String(args.amount ?? "");
-          const sym = tokenSymbol.toLowerCase() === "eurc" ? "EURC" : tokenSymbol.toLowerCase() === "cirbtc" ? "cirBTC" : null;
+          const sym = normalizeTokenSymbol(tokenSymbol);
           const fail = (content: string) => toolResults.push({ role: "tool", tool_call_id: call.id, content });
 
           if (action !== "buy" && action !== "sell") { fail("action missing, ask whether to buy the token with USDC or sell it for USDC."); continue; }

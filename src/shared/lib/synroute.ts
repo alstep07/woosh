@@ -12,10 +12,12 @@
  *
  * Reference: synthra-swap/synroute-frontend-template.
  */
-import { parseUnits } from "viem";
-import { dcwExecuteRaw, waitForTx } from "@/shared/lib/dcw";
+import { erc20Abi, formatUnits, parseUnits } from "viem";
+import { arcPublicClient } from "@/shared/lib/arc";
+import { dcwExecuteRaw, getTxHash, waitForTx } from "@/shared/lib/dcw";
 
 const API_BASE = process.env.SYNTHRA_API_BASE ?? "https://trading-api.synthra.org";
+const EXPLORER_BASE = process.env.NEXT_PUBLIC_ARC_EXPLORER_URL ?? "https://testnet.arcscan.app";
 const CHAIN_ID = 5042002;
 // Synthra API treats this as a percentage (not true basis points despite the name).
 // Testnet: thin liquidity causes >0.5% price impact so 0.5 returns no_route.
@@ -96,6 +98,79 @@ export async function synrouteQuote(
   }
 }
 
+/**
+ * Balance of `who` in `token` units. Works for native USDC too: the ERC-20 precompile
+ * reports the same balance in 6 decimals, matching refFor()'s TokenRef. null on RPC failure.
+ */
+async function balanceOf(token: TokenRef, who: `0x${string}`): Promise<bigint | null> {
+  try {
+    return await arcPublicClient.readContract({
+      address: token.address,
+      abi: erc20Abi,
+      functionName: "balanceOf",
+      args: [who],
+    });
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Exact output delivered to `recipient` BY THIS SWAP TX, read from the tx's transfers on
+ * Blockscout. Unlike a balance delta, this cannot be polluted by unrelated transfers that
+ * land in the same window (e.g. a refund of an earlier failed swap confirming late).
+ * Returns base units of tokenOut, or null if the explorer has not indexed the tx yet.
+ */
+async function outputFromReceipt(
+  txHash: string,
+  tokenOut: TokenRef,
+  recipient: `0x${string}`
+): Promise<bigint | null> {
+  const rec = recipient.toLowerCase();
+  const tok = tokenOut.address.toLowerCase();
+  const asAddr = (a: { hash?: string } | string | null | undefined) =>
+    (typeof a === "string" ? a : a?.hash)?.toLowerCase();
+  try {
+    // ERC-20 transfer legs of tokenOut to the recipient.
+    const res = await fetch(`${EXPLORER_BASE}/api/v2/transactions/${txHash}/token-transfers`, { cache: "no-store" });
+    if (res.ok) {
+      const data = (await res.json()) as {
+        items?: Array<{ to?: { hash?: string } | string | null; token?: { address?: string }; total?: { value?: string } }>;
+      };
+      let sum = 0n;
+      let found = false;
+      for (const t of data.items ?? []) {
+        if (asAddr(t.to) !== rec) continue;
+        if ((t.token?.address ?? "").toLowerCase() !== tok) continue;
+        if (!t.total?.value) continue;
+        sum += BigInt(t.total.value);
+        found = true;
+      }
+      if (found) return sum;
+    }
+    // Native-USDC output can arrive as internal native transfers (18-dec, no ERC-20 event).
+    const res2 = await fetch(`${EXPLORER_BASE}/api/v2/transactions/${txHash}/internal-transactions`, { cache: "no-store" });
+    if (res2.ok) {
+      const data2 = (await res2.json()) as {
+        items?: Array<{ to?: { hash?: string } | string | null; value?: string }>;
+      };
+      let sum = 0n;
+      let found = false;
+      for (const t of data2.items ?? []) {
+        if (asAddr(t.to) !== rec) continue;
+        if (!t.value || BigInt(t.value) === 0n) continue;
+        sum += BigInt(t.value);
+        found = true;
+      }
+      // scale native 18-dec down to tokenOut units
+      if (found) return sum / 10n ** BigInt(18 - tokenOut.decimals);
+    }
+  } catch {
+    /* explorer unavailable; caller falls back */
+  }
+  return null;
+}
+
 type ApproveTx = { to: `0x${string}`; data: `0x${string}` };
 type SwapTx = { to: `0x${string}`; data: `0x${string}`; value?: string };
 
@@ -143,6 +218,10 @@ export async function synrouteSwap(
   }
 
   // 2) Execute the routed swap. value is 0 for token-in swaps (pulled via transferFrom).
+  // Snapshot the recipient's tokenOut balance first so we can report the ACTUAL output:
+  // built.amountOutDecimals is only the build-time quote and drifts from the fill by up
+  // to the slippage tolerance, which made the chat/UI number disagree with tx history.
+  const preBalance = await balanceOf(tokenOut, recipient);
   const value = tx.value && tx.value !== "0" ? tx.value : undefined;
   const r2 = await dcwExecuteRaw(tx.to, tx.data, value);
   const id2 = (r2 as { id?: string } | undefined)?.id;
@@ -151,5 +230,33 @@ export async function synrouteSwap(
   // Only COMPLETE/CONFIRMED = swap actually landed. Timeout = treat as failure → refund.
   if (!SUCCESS.has(st2)) return { ok: false, state: `swap_${st2}` };
 
-  return { ok: true, state: st2, amountOut: built.amountOutDecimals ? fmtOut(Number(built.amountOutDecimals)) : undefined };
+  // Actual received, most exact source first:
+  //   1) this tx's transfers to the recipient (immune to concurrent unrelated transfers),
+  //   2) recipient balance delta (RPC-only fallback if the explorer lags),
+  //   3) the build-time quote (drifts from the fill by up to the slippage tolerance).
+  let actualOut: string | undefined;
+  const txHash = await getTxHash(id2);
+  if (txHash) {
+    for (let i = 0; i < 3 && !actualOut; i++) {
+      if (i > 0) await new Promise((r) => setTimeout(r, 1_500));
+      const sum = await outputFromReceipt(txHash, tokenOut, recipient);
+      if (sum !== null && sum > 0n) actualOut = fmtOut(Number(formatUnits(sum, tokenOut.decimals)));
+    }
+  }
+  if (!actualOut && preBalance !== null) {
+    for (let i = 0; i < 3; i++) {
+      const post = await balanceOf(tokenOut, recipient);
+      if (post !== null && post > preBalance) {
+        actualOut = fmtOut(Number(formatUnits(post - preBalance, tokenOut.decimals)));
+        break;
+      }
+      await new Promise((r) => setTimeout(r, 1_500));
+    }
+  }
+
+  return {
+    ok: true,
+    state: st2,
+    amountOut: actualOut ?? (built.amountOutDecimals ? fmtOut(Number(built.amountOutDecimals)) : undefined),
+  };
 }

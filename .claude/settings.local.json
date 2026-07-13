@@ -56,7 +56,8 @@
       "WebFetch(domain:community.arc.network)",
       "WebFetch(domain:api.github.com)",
       "WebFetch(domain:raw.githubusercontent.com)",
-      "Bash(npx next *)"
+      "Bash(npx next *)",
+      "WebFetch(domain:docs.synthra.org)"
     ]
   }
 }

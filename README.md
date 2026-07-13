@@ -2,7 +2,7 @@
 
 > Send a link. Get paid in seconds.
 
-USDC payment platform for humans and AI agents. Built on [Arc](https://arc.network), the only chain where USDC is the native gas token — no ETH, no second token, ever.
+USDC payment platform for humans and AI agents. Built on [Arc](https://arc.network), the only chain where USDC is the native gas token, no ETH, no second token, ever.
 
 ---
 
@@ -10,7 +10,7 @@ USDC payment platform for humans and AI agents. Built on [Arc](https://arc.netwo
 
 - **Wallet:** sign up with email → Circle embedded wallet + human-readable payment link (`woosh.app/pay/yourname`)
 - **Transfers:** send and receive USDC by name or link, instant, fees paid in USDC
-- **Woosh Agent:** natural-language chat — *"send $25 to @sara"*, *"request $80 from @mike"* → confirmation → paid
+- **Woosh Agent:** natural-language chat, *"send $25 to @sara"*, *"request $80 from @mike"*, *"buy bitcoin for 10 USDC"* → confirmation → done
 - **Invoices:** create an invoice, share the link, get paid in USDC. Stored onchain, nothing in the URL can be tampered with
 - **Strategies:** recurring USDC payments and DCA auto-buys (cirBTC, EURC). Set once, runs on schedule, no PIN each time
 
@@ -43,8 +43,8 @@ Automated onchain strategies, no PIN after setup.
 
 - `WooshStrategyRegistry` on Arc: custodies the budget, stores the schedule. Recurring payments are fully trustless. DCA strategies release one period to the DCW executor, which swaps via Synthra SynRoute API and delivers the output straight to the owner
 - **DCW executor:** Developer-Controlled wallet (`entitySecret`, no PIN) triggers due strategies
-- **Swap rail:** Synthra SynRoute API (`trading-api.synthra.org`) — multi-hop routing on Arc testnet. Circle App Kit / Stablecoin Service has no routes on testnet
-- **Manual swap:** `/dashboard/swap` — configurable slippage (0.1/1/5/15%), two-step UCW flow (send to executor → executor swaps), refund guarantee on failure
+- **Swap rail:** Synthra SynRoute API (`trading-api.synthra.org`), multi-hop routing on Arc testnet. Circle App Kit / Stablecoin Service has no routes on testnet
+- **Manual swap:** `/dashboard/swap`, configurable slippage (0.1/1/5/15%), two-step UCW flow (send to executor → executor swaps), refund guarantee on failure
 - "Strategies" at `/dashboard/strategies`. Agent tools: `create_strategy`, `get_strategies`
 - Runs via Vercel Cron (`/api/cron/execute-strategies`), idempotent, daily granularity on free tier
 
@@ -125,7 +125,7 @@ SYNTHRA_API_KEY=
 
 # Woosh Agent
 OPENROUTER_API_KEY=
-ANTHROPIC_MODEL=anthropic/claude-3-5-sonnet
+ANTHROPIC_MODEL=anthropic/claude-sonnet-5
 ```
 
 ### Circle setup
@@ -158,5 +158,5 @@ forge create contracts/src/WooshStrategyRegistry.sol:WooshStrategyRegistry \
 - **UCW, not custodial:** user holds keys encrypted by PIN; Woosh never sees the secret
 - **Native USDC on Arc:** 18 decimals; all `parseUnits` / `formatUnits` calls use `18`
 - **challenge/execute pattern:** every onchain action goes: server creates challenge → client `sdk.execute(challengeId)` → PIN iframe → done
-- **Agentic loop:** `/api/chat` runs a manual tool-use loop (max 4 iters); `send_payment` and `create_payment_request` always return a `pendingAction`, never auto-execute
+- **Agentic loop:** `/api/chat` runs a manual tool-use loop (max 4 iters) over 9 tools; action tools (`send_payment`, `create_payment_request`, `swap`, `create_strategy`) always return a `pendingAction` confirmation card, never auto-execute. The agent understands aliases ("bitcoin" = cirBTC, "euro" = EURC) and sees action outcomes (completed/cancelled) in its context
 - **Every feature ships with a chat tool** so the agent can guide the user or execute on their behalf

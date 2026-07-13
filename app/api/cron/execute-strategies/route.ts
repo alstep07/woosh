@@ -16,15 +16,22 @@ const ERC20_TRANSFER_ABI = [{
   outputs: [{ type: "bool" }],
 }] as const;
 
-async function refundUSDC(to: `0x${string}`, amountPerPeriod: bigint): Promise<void> {
+// The USDC precompile's ERC-20 interface uses 6 decimals over the same balance the
+// 18-decimal native side sees, so the released native amount must be scaled down by
+// 1e12 before an ERC-20 transfer (same conversion as /api/wallet/swap/execute).
+async function refundUSDC(to: `0x${string}`, amountPerPeriod: bigint): Promise<boolean> {
+  const erc20Amount = amountPerPeriod / 1_000_000_000_000n;
+  if (erc20Amount === 0n) return false;
   const data = encodeFunctionData({
     abi: ERC20_TRANSFER_ABI,
     functionName: "transfer",
-    args: [to, amountPerPeriod],
+    args: [to, erc20Amount],
   });
   const r = await dcwExecuteRaw(USDC_ADDRESS, data);
   const id = (r as { id?: string } | undefined)?.id;
-  if (id) await waitForTx(id, 30_000);
+  if (!id) return false;
+  const state = await waitForTx(id, 30_000);
+  return state === "COMPLETE" || state === "CONFIRMED";
 }
 
 const FAILED_STATES = new Set(["FAILED", "CANCELLED", "DENIED"]);
@@ -147,10 +154,15 @@ async function runExecutor(): Promise<Record<string, unknown>> {
           // atomic Synthra path, so a throw here means no swap happened.)
           if (released) {
             try {
-              await refundUSDC(s.owner, s.amountPerPeriod);
-              refunded++;
-            } catch {
-              /* refund best-effort; funds remain in the executor, recoverable */
+              if (await refundUSDC(s.owner, s.amountPerPeriod)) {
+                refunded++;
+              } else {
+                console.error(`[cron] refund tx did not confirm for strategy ${ids[i]}, funds remain in the executor`);
+                errors.push({ id: ids[i], error: "refund not confirmed, funds in executor" });
+              }
+            } catch (refundErr) {
+              console.error(`[cron] refund failed for strategy ${ids[i]}`, refundErr);
+              errors.push({ id: ids[i], error: "refund failed, funds in executor" });
             }
           }
         }
