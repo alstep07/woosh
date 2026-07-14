@@ -5,6 +5,8 @@ import { STRATEGY_REGISTRY_ABI } from "@/entities/strategy/model/abi";
 import { dcwExecuteContract, dcwExecuteRaw, waitForTx, getExecutorAddress } from "@/shared/lib/dcw";
 import { executeSwap, canSwap, type SwapToken } from "@/shared/lib/swap";
 import { tokenByAddress } from "@/shared/lib/tokens";
+import { splitDepositPeriod, splitProportional, sweepPullAmount, swapLegs } from "@/entities/strategy/lib/allocation";
+import type { PortfolioLeg } from "@/entities/strategy/model/types";
 import { env } from "@/shared/config/env";
 
 const USDC_ADDRESS = "0x3600000000000000000000000000000000000000";
@@ -63,6 +65,130 @@ type RawStrategy = {
   createdAt: bigint;
 };
 
+const ZERO_ADDR = "0x0000000000000000000000000000000000000000";
+
+type PortfolioRunResult = {
+  swapped?: number;
+  refunded?: number;
+  skippedNoRoute?: boolean;
+  failed?: boolean;
+  error?: string;
+};
+
+/**
+ * Execute one due Portfolio strategy. Deposit mode: releaseForPortfolio moves the USDC
+ * leg straight to the owner on-chain and hands the executor only the swap share. Sweep
+ * mode: sweepForPortfolio pulls the swap share of the owner's excess (threshold + cap
+ * enforced by the contract). Either way the executor then swaps each leg and delivers
+ * output to the owner; a failed leg refunds EXACTLY that leg's USDC — never a balance
+ * scan — so concurrent strategies can't cross-contaminate.
+ */
+async function runPortfolio(
+  registry: `0x${string}`,
+  id: `0x${string}`,
+  s: RawStrategy
+): Promise<PortfolioRunResult> {
+  let legs: PortfolioLeg[];
+  let mode: number;
+  let threshold: bigint;
+  try {
+    const [tokens, bps, m, thr] = (await arcPublicClient.readContract({
+      address: registry,
+      abi: STRATEGY_REGISTRY_ABI,
+      functionName: "getPortfolio",
+      args: [id],
+    })) as [readonly `0x${string}`[], readonly number[], number, bigint];
+    legs = tokens.map((t, i) => ({
+      token: t.toLowerCase() === ZERO_ADDR ? null : t,
+      bps: Number(bps[i]),
+    }));
+    mode = Number(m);
+    threshold = thr;
+  } catch {
+    return { failed: true, error: "portfolio config read failed" };
+  }
+
+  const targets = swapLegs(legs);
+  for (const l of targets) {
+    const t = tokenByAddress(l.token!);
+    if (!t?.address || (t.symbol !== "EURC" && t.symbol !== "cirBTC")) {
+      return { failed: true, error: `unsupported leg token ${l.token}` };
+    }
+  }
+
+  // Per-leg USDC amounts (18-dec native units, exact bigint math).
+  let legAmounts: { leg: PortfolioLeg; amount: bigint }[];
+  if (mode === 0) {
+    if (s.balance < s.amountPerPeriod) return {}; // underfunded — same silent skip as other kinds
+    legAmounts = splitDepositPeriod(s.amountPerPeriod, legs).legAmounts;
+  } else {
+    const ownerBal = await arcPublicClient.getBalance({ address: s.owner });
+    const { amount6, amount18 } = sweepPullAmount(ownerBal - threshold, s.amountPerPeriod, legs);
+    if (amount6 < 10_000n) return {}; // under 0.01 USDC above threshold — nothing to do
+    const amounts = splitProportional(amount18, targets.map((l) => l.bps));
+    legAmounts = targets.map((leg, i) => ({ leg, amount: amounts[i] }));
+  }
+  legAmounts = legAmounts.filter((la) => la.amount > 0n);
+  if (legAmounts.length === 0) return {};
+
+  // Quote every leg FIRST — all-or-skip, nothing moves unless each leg can route.
+  for (const { leg, amount } of legAmounts) {
+    const sym = tokenByAddress(leg.token!)!.symbol as SwapToken;
+    const route = await canSwap(sym, formatUnits(amount, 18), getExecutorAddress());
+    if (!route.ok) return { skippedNoRoute: true, error: `no route for ${sym}: ${route.error}` };
+  }
+
+  // Move the funds (release from budget, or pull from the owner's wallet).
+  const pulled6 = legAmounts.reduce((a, la) => a + la.amount, 0n) / 1_000_000_000_000n;
+  try {
+    const tx =
+      mode === 0
+        ? await dcwExecuteContract(registry, "releaseForPortfolio(bytes32)", [id])
+        : await dcwExecuteContract(registry, "sweepForPortfolio(bytes32,uint256)", [id, pulled6.toString()]);
+    const txId = (tx as { id?: string } | undefined)?.id;
+    if (txId) {
+      const state = await waitForTx(txId, TX_WAIT_MS);
+      if (FAILED_STATES.has(state)) {
+        return { failed: true, error: `${mode === 0 ? "release" : "sweep"} ${state}` };
+      }
+    }
+  } catch (err) {
+    return {
+      failed: true,
+      error: err instanceof Error ? err.message : "portfolio release failed",
+    };
+  }
+
+  // Swap each leg; output goes straight to the owner. Refund failed legs exactly.
+  let swapped = 0;
+  let refunded = 0;
+  const legErrors: string[] = [];
+  for (const { leg, amount } of legAmounts) {
+    const sym = tokenByAddress(leg.token!)!.symbol as SwapToken;
+    try {
+      await executeSwap(sym, formatUnits(amount, 18), getExecutorAddress(), s.owner);
+      swapped++;
+    } catch (err) {
+      legErrors.push(`${sym} leg: ${err instanceof Error ? err.message : "swap failed"}`);
+      try {
+        if (await refundUSDC(s.owner, amount)) {
+          refunded++;
+        } else {
+          legErrors.push(`${sym} leg refund not confirmed, funds in executor`);
+        }
+      } catch {
+        legErrors.push(`${sym} leg refund failed, funds in executor`);
+      }
+    }
+  }
+
+  return {
+    swapped,
+    refunded,
+    ...(legErrors.length ? { failed: true, error: legErrors.join("; ") } : {}),
+  };
+}
+
 async function runExecutor(): Promise<Record<string, unknown>> {
   const registry = env.strategyRegistryAddress;
   if (!registry) return { error: "Strategy registry not configured" };
@@ -105,10 +231,25 @@ async function runExecutor(): Promise<Record<string, unknown>> {
       if (Date.now() - startedAt >= TIME_BUDGET_MS) { timedOut = true; break; }
       const s = strategies[i];
 
-      // Due = active, scheduled time reached, and at least one period funded.
+      // Due = active and scheduled time reached. The balance requirement only applies
+      // to custodied kinds — sweep portfolios hold no balance by design (kind 2 checks
+      // its own funding inside the handler once the mode is known).
       if (s.status !== 0) continue;
       if (s.nextRunAt > now) continue;
-      if (s.balance < s.amountPerPeriod) continue;
+      if (s.kind !== 2 && s.balance < s.amountPerPeriod) continue;
+
+      if (s.kind === 2) {
+        // Portfolio: allocate one period across weighted legs. Deposit mode releases from
+        // the custodied budget (USDC leg goes straight to the owner on-chain); sweep mode
+        // pulls the owner's wallet excess above the threshold (USDC leg just stays put).
+        const out = await runPortfolio(registry, ids[i], s);
+        if (out.swapped) swapped += out.swapped;
+        if (out.refunded) refunded += out.refunded;
+        if (out.skippedNoRoute) skippedNoRoute++;
+        if (out.failed) failed++;
+        if (out.error) errors.push({ id: ids[i], error: out.error });
+        continue;
+      }
 
       if (s.kind === 1) {
         // Swap / DCA: quote the route FIRST (App Kit, else Synthra); only if it can route do we

@@ -5,6 +5,7 @@ import { STRATEGY_REGISTRY_ABI } from "@/entities/strategy/model/abi";
 import {
   STRATEGY_STATUS_BY_ENUM,
   type OnchainStrategy,
+  type PortfolioConfig,
 } from "@/entities/strategy/model/types";
 
 const ZERO = "0x0000000000000000000000000000000000000000";
@@ -24,11 +25,11 @@ type RawStrategy = {
   createdAt: bigint;
 };
 
-function decode(id: `0x${string}`, raw: RawStrategy): OnchainStrategy {
+function decode(id: `0x${string}`, raw: RawStrategy, portfolio: PortfolioConfig | null): OnchainStrategy {
   return {
     id,
     owner: raw.owner,
-    kind: raw.kind === 1 ? "swap" : "payment",
+    kind: raw.kind === 2 ? "portfolio" : raw.kind === 1 ? "swap" : "payment",
     recipient: raw.recipient.toLowerCase() === ZERO ? null : raw.recipient,
     tokenOut: raw.tokenOut.toLowerCase() === ZERO ? null : raw.tokenOut,
     amountPerPeriod: formatUnits(raw.amountPerPeriod, 18),
@@ -39,7 +40,32 @@ function decode(id: `0x${string}`, raw: RawStrategy): OnchainStrategy {
     balance: formatUnits(raw.balance, 18),
     status: STRATEGY_STATUS_BY_ENUM[raw.status] ?? "active",
     createdAt: Number(raw.createdAt),
+    portfolio,
   };
+}
+
+/** Portfolio extras for a portfolio-kind strategy. null on RPC failure or other kinds. */
+export async function getPortfolioConfig(id: `0x${string}`): Promise<PortfolioConfig | null> {
+  if (!env.strategyRegistryAddress) return null;
+  try {
+    const [tokens, bps, mode, sweepThreshold] = (await arcPublicClient.readContract({
+      address: env.strategyRegistryAddress,
+      abi: STRATEGY_REGISTRY_ABI,
+      functionName: "getPortfolio",
+      args: [id],
+    })) as [readonly `0x${string}`[], readonly number[], number, bigint];
+    if (tokens.length === 0) return null;
+    return {
+      legs: tokens.map((t, i) => ({
+        token: t.toLowerCase() === ZERO ? null : t,
+        bps: Number(bps[i]),
+      })),
+      mode: mode === 1 ? "sweep" : "deposit",
+      sweepThreshold: formatUnits(sweepThreshold, 18),
+    };
+  } catch {
+    return null;
+  }
 }
 
 /** Read one strategy from the contract. null if not found / not configured / RPC error. */
@@ -53,7 +79,8 @@ export async function getStrategy(id: `0x${string}`): Promise<OnchainStrategy | 
       args: [id],
     })) as RawStrategy;
     if (raw.owner.toLowerCase() === ZERO) return null;
-    return decode(id, raw);
+    const portfolio = raw.kind === 2 ? await getPortfolioConfig(id) : null;
+    return decode(id, raw, portfolio);
   } catch {
     return null;
   }

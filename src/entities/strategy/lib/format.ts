@@ -59,10 +59,33 @@ export function isOverdue(s: OnchainStrategy): boolean {
   return now - s.nextRunAt > Math.max(s.intervalSeconds, 7_200);
 }
 
+/** "50% USDC / 30% cirBTC / 20% EURC" from portfolio legs + a symbol resolver. */
+export function allocationLabel(
+  s: OnchainStrategy,
+  symbolFor: (token: `0x${string}` | null) => string
+): string {
+  if (!s.portfolio) return "";
+  return s.portfolio.legs
+    .map((l) => `${l.bps / 100}% ${symbolFor(l.token)}`)
+    .join(" / ");
+}
+
 /** One-line summary of what a strategy does, for list rows and agent replies. */
-export function strategySummary(s: OnchainStrategy, tokenOutSymbol?: string): string {
+export function strategySummary(
+  s: OnchainStrategy,
+  tokenOutSymbol?: string,
+  symbolFor?: (token: `0x${string}` | null) => string
+): string {
   if (s.kind === "payment") {
     return `Pay ${s.amountPerPeriod} USDC ${intervalLabel(s.intervalSeconds)}`;
+  }
+  if (s.kind === "portfolio") {
+    const alloc = symbolFor ? allocationLabel(s, symbolFor) : "portfolio";
+    const source =
+      s.portfolio?.mode === "sweep"
+        ? `from balance above ${s.portfolio.sweepThreshold} USDC`
+        : `with ${s.amountPerPeriod} USDC`;
+    return `Rebalance to ${alloc} ${source} ${intervalLabel(s.intervalSeconds)}`;
   }
   return `Buy ${tokenOutSymbol ?? "token"} with ${s.amountPerPeriod} USDC ${intervalLabel(s.intervalSeconds)}`;
 }
