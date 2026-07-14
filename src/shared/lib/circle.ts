@@ -255,6 +255,81 @@ export async function createStrategyCreateChallenge(
   return { challengeId: res.data!.challengeId! };
 }
 
+/**
+ * Challenge to create a Portfolio strategy via WooshStrategyRegistry.createPortfolio.
+ * Deposit mode: `funding` is the custodied budget (payable). Sweep mode: no value;
+ * `amountPerPeriod` is the per-period pull CAP and `sweepThreshold` the floor the
+ * owner's balance is never pulled below.
+ */
+export async function createPortfolioCreateChallenge(
+  userToken: string,
+  walletId: string,
+  registryAddress: `0x${string}`,
+  salt: string,
+  tokens: string[],
+  bps: number[],
+  mode: 0 | 1,
+  amountPerPeriod: string,
+  sweepThreshold: string,
+  intervalSeconds: number,
+  periodsTotal: number,
+  funding: string | null
+) {
+  if (!/^\d+(\.\d+)?$/.test(amountPerPeriod) || parseFloat(amountPerPeriod) <= 0) {
+    throw new Error(`Invalid amountPerPeriod: ${amountPerPeriod}`);
+  }
+  if (mode === 0 && (!funding || parseFloat(funding) < parseFloat(amountPerPeriod))) {
+    throw new Error("Funding must be >= amountPerPeriod");
+  }
+  const client = getClient();
+  const res = await client.createUserTransactionContractExecutionChallenge({
+    userToken,
+    walletId,
+    contractAddress: registryAddress,
+    abiFunctionSignature:
+      "createPortfolio(uint256,address[],uint16[],uint8,uint256,uint256,uint64,uint32)",
+    abiParameters: [
+      salt,
+      tokens.map((t) => t || ZERO_ADDRESS),
+      bps.map(String),
+      String(mode),
+      parseUnits(amountPerPeriod, 18).toString(),
+      parseUnits(sweepThreshold || "0", 18).toString(),
+      String(intervalSeconds),
+      String(periodsTotal),
+    ],
+    ...(mode === 0 && funding ? { amount: funding } : {}),
+    fee: { type: "level", config: { feeLevel: "MEDIUM" } },
+    idempotencyKey: crypto.randomUUID(),
+  });
+  return { challengeId: res.data!.challengeId! };
+}
+
+/**
+ * Challenge for the ONE-TIME allowance a Sweep portfolio needs: approve(registry, max)
+ * on the USDC ERC-20 precompile so the registry can pull the owner's excess. Revocable
+ * any time by approving 0. The registry bounds every pull on-chain (threshold + cap).
+ */
+export async function createSweepApproveChallenge(
+  userToken: string,
+  walletId: string,
+  registryAddress: `0x${string}`
+) {
+  const MAX_UINT256 =
+    "115792089237316195423570985008687907853269984665640564039457584007913129639935";
+  const client = getClient();
+  const res = await client.createUserTransactionContractExecutionChallenge({
+    userToken,
+    walletId,
+    contractAddress: "0x3600000000000000000000000000000000000000",
+    abiFunctionSignature: "approve(address,uint256)",
+    abiParameters: [registryAddress, MAX_UINT256],
+    fee: { type: "level", config: { feeLevel: "MEDIUM" } },
+    idempotencyKey: crypto.randomUUID(),
+  });
+  return { challengeId: res.data!.challengeId! };
+}
+
 /** Challenge to top up a strategy via WooshStrategyRegistry.fund(id). */
 export async function createStrategyFundChallenge(
   userToken: string,
