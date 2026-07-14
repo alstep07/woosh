@@ -41,3 +41,7 @@ next-env.d.ts
 # internal docs (kept locally, not in repo)
 /docs
 /design_handoff_parallax_landing
+
+# Foundry build artifacts
+contracts/out/
+contracts/cache/
