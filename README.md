@@ -12,7 +12,7 @@ USDC payment platform for humans and AI agents. Built on [Arc](https://arc.netwo
 - **Transfers:** send and receive USDC by name or link, instant, fees paid in USDC
 - **Woosh Agent:** natural-language chat, *"send $25 to @sara"*, *"request $80 from @mike"*, *"buy bitcoin for 10 USDC"* → confirmation → done
 - **Invoices:** create an invoice, share the link, get paid in USDC. Stored onchain, nothing in the URL can be tampered with
-- **Strategies:** recurring USDC payments and DCA auto-buys (cirBTC, EURC). Set once, runs on schedule, no PIN each time
+- **Strategies:** recurring USDC payments, DCA auto-buys (cirBTC, EURC) and portfolio allocations (keep a target percent mix, from a deposit or by sweeping the wallet balance above a threshold). Set once, runs on schedule, no PIN each time
 
 ---
 
@@ -47,6 +47,15 @@ Automated onchain strategies, no PIN after setup.
 - **Manual swap:** `/dashboard/swap`, configurable slippage (0.1/1/5/15%), two-step UCW flow (send to executor → executor swaps), refund guarantee on failure
 - "Strategies" at `/dashboard/strategies`. Agent tools: `create_strategy`, `get_strategies`
 - Runs via Vercel Cron (`/api/cron/execute-strategies`), idempotent, daily granularity on free tier
+
+### V3.1: Portfolio strategies (target allocation)
+Keep a target percent mix across USDC, EURC and cirBTC, rebalanced on schedule.
+
+- New `Kind.Portfolio` in `WooshStrategyRegistry`: weighted legs in basis points (sum 10000), USDC leg = `address(0)`
+- **Deposit mode:** a custodied budget allocates a fixed USDC amount per period; the USDC share goes straight from the contract to the owner, only the swap share touches the executor
+- **Sweep mode:** no deposit; the strategy allocates whatever the wallet holds above an owner-set threshold, pulled via a one-time allowance on the USDC ERC-20 precompile. The threshold and a per-period cap are enforced onchain; only the non-USDC share is ever pulled
+- Cron quotes every leg before moving funds (all-or-skip) and refunds failed legs by exact amount
+- Create from the Portfolio tab in the strategies modal or via chat ("keep 50% usdc, 30% bitcoin, 20% euro")
 
 ---
 

@@ -23,7 +23,8 @@ integration (UCW, CCTP, StableFX, USYC). "No second token ever" is the killer fe
 | V2b | ✅ | Direct payment execution from chat (PIN inline) |
 | V2.2 | ✅ | Payment requests / invoices, onchain via `WooshInvoiceRegistry` (`/i/[id]` links, "My invoices" list, chat tools) |
 | V3.0 | ✅ | Automated strategies, onchain via `WooshStrategyRegistry`: recurring USDC payments + DCA auto-buys (EURC/cirBTC). DCW executor (no PIN), Vercel Cron, swaps via Synthra SynRoute API. `/dashboard/strategies`, chat tools. Manual swap at `/dashboard/swap`. |
-| V3.1+ | 🔄 | Next candidates: MCP server (repackage chat tools), multi-token dashboard balances, bridge/off-ramp |
+| V3.1 | 🔄 | Portfolio strategies (hackathon DeFi track): target percent allocation across USDC/EURC/cirBTC, funded by a custodied deposit per period OR by sweeping the wallet balance above a threshold (one-time allowance on the USDC precompile, threshold + per-period cap enforced onchain). Kind.Portfolio in the registry, cron fan-out with exact-leg refunds, Portfolio tab in CreateStrategyModal, chat tool support. |
+| V3.2+ | 🔄 | Next candidates: MCP server (repackage chat tools), claim links, "you got paid" notifications, bridge/off-ramp |
 
 ---
 
@@ -60,6 +61,19 @@ executor only pays gas to trigger). DCA swaps are semi-custodial for one period 
 and delivers the output straight to the owner. Cron is scheduler-agnostic
 (`/api/cron/execute-strategies`, `CRON_SECRET`); free Vercel Cron tick = daily granularity
 (finer needs an external pinger).
+
+**Portfolio strategies (V3.1)**, `Kind.Portfolio` with weighted legs (bps sum 10000,
+USDC leg = `address(0)`). Deposit mode: `releaseForPortfolio` sends the USDC leg straight
+from the contract to the owner; only the swap share touches the executor. Sweep mode:
+`sweepForPortfolio(id, amount6)` pulls via `transferFrom` on the USDC precompile (needs a
+one-time `approve(registry, max)`, extra PIN at setup — see `/api/wallet/approve-sweep`);
+threshold and per-period cap are enforced ONCHAIN, and only the non-USDC share is ever
+pulled. The precompile fully supports approve/transferFrom on native balance (verified via
+eth_simulateV1 + fork test; it is a proxy contract, and its `transferFrom` blocklist-checks
+the CALLER, so contract callers are by design). Cron quotes every leg before moving funds
+(all-or-skip) and refunds failed legs by EXACT amount, never by balance scan. Sweep
+strategies hold no contract balance: `fund()` rejects them, resume skips the balance check,
+UI hides Fund/balance.
 
 **Swap rail (Synthra SynRoute)**, all swaps on Arc testnet go through `trading-api.synthra.org`.
 Circle App Kit / Stablecoin Service has no routes on testnet. Implementation in

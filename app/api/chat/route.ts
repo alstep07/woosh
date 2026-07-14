@@ -182,14 +182,14 @@ const TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
     function: {
       name: "create_strategy",
       description:
-        "Set up an automated strategy: a recurring USDC payment, or a DCA auto-buy of another token with USDC. It runs onchain on schedule with NO PIN each time after a one-time setup the user confirms. You MUST have all required fields before calling; if any is missing, ask first, do not guess. For 'funding' (total to deposit): if the user gives a number of runs, you may compute funding = amountPerPeriod x runs; otherwise ask how much to deposit.",
+        "Set up an automated strategy: a recurring USDC payment, a DCA auto-buy of another token with USDC, or a PORTFOLIO (keep a target percent allocation across USDC/EURC/cirBTC, e.g. '50% USDC, 30% bitcoin, 20% euro'). It runs onchain on schedule with NO PIN each time after a one-time setup the user confirms. You MUST have all required fields before calling; if any is missing, ask first, do not guess. For 'funding' (total to deposit): if the user gives a number of runs, you may compute funding = amountPerPeriod x runs; otherwise ask how much to deposit. Portfolios in 'sweep' mode need NO funding (they allocate the wallet balance above sweepThreshold each run).",
       parameters: {
         type: "object",
         properties: {
           kind: {
             type: "string",
-            enum: ["payment", "swap"],
-            description: "'payment' for a recurring payment to someone, 'swap' for a DCA auto-buy of a token",
+            enum: ["payment", "swap", "portfolio"],
+            description: "'payment' = recurring payment to someone, 'swap' = DCA auto-buy of one token, 'portfolio' = keep a percent allocation across tokens",
           },
           recipient: {
             type: "string",
@@ -200,9 +200,27 @@ const TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
             enum: ["EURC", "cirBTC"],
             description: "swap only: which token to buy with USDC. 'bitcoin'/'BTC' means cirBTC, 'euro'/'EUR' means EURC.",
           },
+          allocation: {
+            type: "object",
+            description: "portfolio only: target percent per token, integers summing to 100, e.g. {\"USDC\": 50, \"cirBTC\": 30, \"EURC\": 20}. bitcoin/BTC means cirBTC, euro/EUR means EURC.",
+            properties: {
+              USDC: { type: "integer" },
+              EURC: { type: "integer" },
+              cirBTC: { type: "integer" },
+            },
+          },
+          mode: {
+            type: "string",
+            enum: ["deposit", "sweep"],
+            description: "portfolio only: 'deposit' allocates a fixed amount per run from a deposited budget; 'sweep' allocates whatever the wallet holds above sweepThreshold (no deposit needed)",
+          },
+          sweepThreshold: {
+            type: "string",
+            description: "portfolio sweep only: USDC amount to always keep in the wallet, e.g. '100'",
+          },
           amountPerPeriod: {
             type: "string",
-            description: "USDC spent/sent each run, e.g. '10'",
+            description: "USDC spent/sent each run (for portfolio sweep: the max per run), e.g. '10'",
           },
           interval: {
             type: "string",
@@ -215,10 +233,10 @@ const TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
           },
           funding: {
             type: "string",
-            description: "total USDC to deposit now; must be >= amountPerPeriod",
+            description: "total USDC to deposit now; must be >= amountPerPeriod. NOT needed for portfolio sweep mode.",
           },
         },
-        required: ["kind", "amountPerPeriod", "interval", "funding"],
+        required: ["kind", "amountPerPeriod", "interval"],
       },
     },
   },
@@ -305,10 +323,16 @@ async function getStrategiesSummary(address: string): Promise<string> {
   try {
     const list = (await getMyStrategies(address as `0x${string}`)).slice(0, 40);
     if (list.length === 0) return "No strategies set up yet.";
+    const legSymbol = (token: `0x${string}` | null) =>
+      token === null ? "USDC" : tokenByAddress(token)?.symbol ?? "token";
     return list
       .map((s) => {
         const symbol = s.kind === "swap" ? tokenByAddress(s.tokenOut)?.symbol : undefined;
-        return `${statusBadge(s.status).text.toUpperCase()}: ${strategySummary(s, symbol)}, ${s.balance} USDC left${
+        const isSweep = s.kind === "portfolio" && s.portfolio?.mode === "sweep";
+        const budget = isSweep
+          ? `keeps ${s.portfolio?.sweepThreshold ?? "0"} USDC in the wallet`
+          : `${s.balance} USDC left`;
+        return `${statusBadge(s.status).text.toUpperCase()}: ${strategySummary(s, symbol, legSymbol)}, ${budget}${
           s.periodsTotal > 0 ? ` (${s.periodsDone}/${s.periodsTotal} runs)` : ` (${s.periodsDone} runs done)`
         }`;
       })
@@ -381,7 +405,9 @@ Invoice rules: when the user wants to BE paid or to invoice money, you need the 
 
 When the user asks if someone paid them (e.g. "did alex pay me?"): first call resolve_slug to get their address, then call get_transaction_history, then check if that address appears in received transactions. Confirm clearly: "Yes, alex sent you $X on [date]" or "No, I don't see any payments from alex."
 
-Strategies (automation): users can set up recurring USDC payments (pay someone a fixed amount on a schedule) or DCA auto-buys (buy EURC or cirBTC with USDC on a schedule). How it works, explain plainly if asked: the strategy's budget is deposited into an onchain vault during a one-time setup the user confirms with their PIN; after that it runs automatically onchain on schedule with NO PIN each time. The user can pause or cancel anytime and gets the remaining balance back. Cadence options are daily, weekly, monthly.
+Strategies (automation): users can set up recurring USDC payments (pay someone a fixed amount on a schedule), DCA auto-buys (buy EURC or cirBTC with USDC on a schedule), or PORTFOLIOS (keep a target percent allocation across USDC, EURC and cirBTC). How it works, explain plainly if asked: the strategy's budget is deposited into an onchain vault during a one-time setup the user confirms with their PIN; after that it runs automatically onchain on schedule with NO PIN each time. The user can pause or cancel anytime and gets the remaining balance back. Cadence options are daily, weekly, monthly.
+
+Portfolios: two funding modes. "deposit" allocates a fixed USDC amount per run from a deposited budget (needs funding). "sweep" allocates whatever the wallet holds ABOVE a threshold the user sets, straight from their wallet, no deposit; it needs a one-time extra approval (a second PIN at setup) and a max-per-run cap (amountPerPeriod). Phrases like "keep 30% of my money in bitcoin", "invest everything above 100 USDC", "разложи баланс 50/30/20" mean a portfolio. For sweep, ask for: the allocation percents, the threshold to keep, the max per run, and the cadence. The USDC share of a portfolio just stays as USDC.
 
 Strategy questions: when the user asks about their strategies (is my DCA running, how much is left, what automations do I have), call get_strategies and answer concisely from the data.
 
@@ -449,28 +475,83 @@ Strategy setup: to create one you need the kind (recurring payment or auto-buy),
         }
 
         if (call.function.name === "create_strategy") {
-          const kind = args.kind === "swap" ? "swap" : "payment";
+          const kind =
+            args.kind === "swap" ? "swap" : args.kind === "portfolio" ? "portfolio" : "payment";
           const amountPerPeriod = String(args.amountPerPeriod ?? "");
           const funding = String(args.funding ?? "");
           const intervalKey = String(args.interval ?? "").toLowerCase();
           const intervalSeconds = INTERVAL_SECONDS[intervalKey];
           const periodsTotal = Number.isInteger(args.periods) ? Number(args.periods) : 0;
+          const mode = args.mode === "sweep" ? "sweep" : "deposit";
+          const isSweep = kind === "portfolio" && mode === "sweep";
 
           const fail = (content: string) => {
             toolResults.push({ role: "tool", tool_call_id: call.id, content });
           };
 
           if (!/^\d+(\.\d+)?$/.test(amountPerPeriod) || parseFloat(amountPerPeriod) <= 0) {
-            fail("amountPerPeriod missing or invalid, ask how much per run.");
+            fail(
+              isSweep
+                ? "amountPerPeriod missing, ask for the max USDC to allocate per run (a safety cap)."
+                : "amountPerPeriod missing or invalid, ask how much per run."
+            );
             continue;
           }
           if (!intervalSeconds) {
             fail("interval missing or invalid, ask if it should run daily, weekly or monthly.");
             continue;
           }
-          if (!/^\d+(\.\d+)?$/.test(funding) || parseFloat(funding) < parseFloat(amountPerPeriod)) {
+          if (!isSweep && (!/^\d+(\.\d+)?$/.test(funding) || parseFloat(funding) < parseFloat(amountPerPeriod))) {
             fail("funding missing or less than one run. Ask for the total to deposit, or compute it from runs x amount.");
             continue;
+          }
+
+          if (kind === "portfolio") {
+            const raw = (args.allocation ?? {}) as Record<string, unknown>;
+            const legs: { symbol: string; bps: number }[] = [];
+            let sum = 0;
+            for (const [k, v] of Object.entries(raw)) {
+              const sym = k === "USDC" ? "USDC" : normalizeTokenSymbol(k);
+              const p = Number(v);
+              if (!sym || !Number.isInteger(p) || p < 0) continue;
+              if (p === 0) continue;
+              if (sym === "cirBTC" && !CIRBTC.address) {
+                fail("cirBTC is not available right now, offer USDC/EURC only.");
+                sum = -1;
+                break;
+              }
+              legs.push({ symbol: sym, bps: p * 100 });
+              sum += p;
+            }
+            if (sum === -1) continue;
+            if (sum !== 100) {
+              fail(`Allocation percents sum to ${sum}, they must sum to exactly 100. Ask the user to adjust.`);
+              continue;
+            }
+            if (!legs.some((l) => l.symbol !== "USDC")) {
+              fail("The allocation is 100% USDC, which needs no strategy. Ask what share should go to EURC or cirBTC.");
+              continue;
+            }
+            const sweepThreshold = String(args.sweepThreshold ?? "0");
+            if (isSweep && !/^\d+(\.\d+)?$/.test(sweepThreshold)) {
+              fail("sweepThreshold invalid, ask how much USDC to always keep in the wallet.");
+              continue;
+            }
+            return NextResponse.json({
+              text: msg.content ?? "",
+              pendingAction: {
+                type: "create_strategy",
+                kind,
+                allocation: legs,
+                mode,
+                sweepThreshold: isSweep ? sweepThreshold : "0",
+                amountPerPeriod,
+                interval: intervalKey,
+                intervalSeconds,
+                periodsTotal,
+                funding: isSweep ? undefined : funding,
+              },
+            });
           }
 
           if (kind === "payment") {

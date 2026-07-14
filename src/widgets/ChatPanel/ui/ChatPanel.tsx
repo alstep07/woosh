@@ -26,16 +26,19 @@ type PendingAction =
   | { type: "swap"; tokenIn: string; tokenOut: string; amount: string }
   | {
       type: "create_strategy";
-      kind: "payment" | "swap";
+      kind: "payment" | "swap" | "portfolio";
       recipient?: string;
       resolvedAddress?: string;
       tokenSymbol?: string;
       tokenOut?: string;
+      allocation?: { symbol: string; bps: number }[];
+      mode?: "deposit" | "sweep";
+      sweepThreshold?: string;
       amountPerPeriod: string;
       interval: string;
       intervalSeconds: number;
       periodsTotal: number;
-      funding: string;
+      funding?: string;
     };
 
 type ChatMessage = {
@@ -305,6 +308,29 @@ export default function ChatPanel({ name, walletAddress, userEmail, onPaymentSuc
   ): Promise<"ok" | "auth_error" | "error"> {
     updateMsgStatus(msgId, "sending");
     try {
+      // Sweep portfolios pull from the wallet, which needs a one-time allowance to the
+      // registry: run the approve challenge first (extra PIN), then chain into create.
+      if (pa.kind === "portfolio" && pa.mode === "sweep") {
+        const approveRes = await fetch("/api/wallet/approve-sweep", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userToken }),
+        });
+        const approveData = await approveRes.json();
+        if (!approveRes.ok) {
+          if (approveRes.status === 401 || approveRes.status === 403) return "auth_error";
+          throw new Error(approveData.error ?? "Failed to prepare the approval");
+        }
+        const approved = await new Promise<boolean>((resolve) => {
+          sdk.setAuthentication({ userToken, encryptionKey });
+          sdk.execute(approveData.challengeId, (err) => resolve(!err));
+        });
+        if (!approved) {
+          updateMsgStatus(msgId, "send_error", "The approval was not confirmed. Please try again.");
+          return "error";
+        }
+      }
+
       const res = await fetch("/api/wallet/create-strategy", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -318,6 +344,9 @@ export default function ChatPanel({ name, walletAddress, userEmail, onPaymentSuc
           intervalSeconds: pa.intervalSeconds,
           periodsTotal: pa.periodsTotal,
           funding: pa.funding,
+          ...(pa.kind === "portfolio"
+            ? { allocation: pa.allocation, mode: pa.mode, sweepThreshold: pa.sweepThreshold }
+            : {}),
         }),
       });
       const data = await res.json();
@@ -693,6 +722,14 @@ export default function ChatPanel({ name, walletAddress, userEmail, onPaymentSuc
                               to <span className="text-text-primary font-medium">{msg.pendingAction.recipient}</span>{" "}
                               {msg.pendingAction.interval}?
                             </>
+                          ) : msg.pendingAction.kind === "portfolio" ? (
+                            <>
+                              Set up a portfolio of{" "}
+                              <span className="text-text-primary font-medium">
+                                {(msg.pendingAction.allocation ?? []).map((l) => `${l.bps / 100}% ${l.symbol}`).join(" / ")}
+                              </span>
+                              , rebalanced {msg.pendingAction.interval}?
+                            </>
                           ) : (
                             <>
                               Set up an auto-buy of{" "}
@@ -703,9 +740,11 @@ export default function ChatPanel({ name, walletAddress, userEmail, onPaymentSuc
                           )}
                         </p>
                         <p className="text-xs text-text-secondary/40 mb-2">
-                          Deposit {msg.pendingAction.funding} USDC ·{" "}
-                          {msg.pendingAction.periodsTotal > 0 ? `${msg.pendingAction.periodsTotal} runs` : "until funds run out"} ·
-                          {" "}needs your PIN once
+                          {msg.pendingAction.kind === "portfolio" && msg.pendingAction.mode === "sweep"
+                            ? `Sweeps your balance above ${msg.pendingAction.sweepThreshold} USDC (max ${msg.pendingAction.amountPerPeriod} per run) · needs your PIN twice at setup`
+                            : `Deposit ${msg.pendingAction.funding} USDC · ${
+                                msg.pendingAction.periodsTotal > 0 ? `${msg.pendingAction.periodsTotal} runs` : "until funds run out"
+                              } · needs your PIN once`}
                         </p>
                       </>
                     ) : msg.pendingAction.type === "swap" ? (
