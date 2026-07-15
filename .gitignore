@@ -45,3 +45,6 @@ next-env.d.ts
 # Foundry build artifacts
 contracts/out/
 contracts/cache/
+
+# Local Claude Code config
+.claude/
