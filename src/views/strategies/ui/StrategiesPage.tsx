@@ -8,7 +8,7 @@ import CreateStrategyModal from "@/widgets/CreateStrategyModal/ui/CreateStrategy
 import StrategyActionModal, { type StrategyAction } from "@/widgets/CreateStrategyModal/ui/StrategyActionModal";
 import { getSession as loadSession } from "@/shared/lib/session";
 import { useMyStrategies } from "@/entities/strategy/hooks/useMyStrategies";
-import { statusBadge, formatNextRun, intervalLabel, isOverdue, allocationLabel } from "@/entities/strategy/lib/format";
+import { statusBadge, formatNextRun, intervalLabel, isOverdue } from "@/entities/strategy/lib/format";
 import { tokenByAddress } from "@/shared/lib/tokens";
 import type { OnchainStrategy, StrategyStatus } from "@/entities/strategy/model/types";
 import type { Session } from "@/entities/user/model/types";
@@ -19,14 +19,8 @@ function short(addr?: string | null): string {
 
 function accentColor(s: OnchainStrategy, symbol?: string): string {
   if (s.kind === "payment") return "bg-blue-primary";
-  if (s.kind === "portfolio") return "bg-violet-400";
   if (symbol === "cirBTC") return "bg-amber-400";
   return "bg-cyan-400";
-}
-
-/** Symbol for an allocation leg token (null = the USDC leg). */
-function legSymbol(token: `0x${string}` | null): string {
-  return token === null ? "USDC" : tokenByAddress(token)?.symbol ?? short(token);
 }
 
 const STATUS_DOT_CLS: Record<StrategyStatus, string> = {
@@ -57,13 +51,8 @@ function StrategyRow({
   const capped   = s.periodsTotal > 0;
   const progress = capped ? Math.min(100, Math.round((s.periodsDone / s.periodsTotal) * 100)) : 0;
 
-  const isSweep = s.kind === "portfolio" && s.portfolio?.mode === "sweep";
-  const target =
-    s.kind === "payment" ? short(s.recipient)
-    : s.kind === "portfolio" ? (allocationLabel(s, legSymbol) || "portfolio")
-    : (symbol ?? "token");
-  // Sweep portfolios custody nothing: there is no balance to fund or show.
-  const canFund = (isActive || isPaused || isDepleted) && !isSweep;
+  const target = s.kind === "payment" ? short(s.recipient) : (symbol ?? "token");
+  const canFund = isActive || isPaused || isDepleted;
 
   let runLabel: string | null = null;
   if (isActive && overdue) runLabel = "due now";
@@ -85,12 +74,11 @@ function StrategyRow({
         {/* Core description */}
         <div className="flex-1 min-w-0 flex items-baseline gap-1.5 flex-wrap">
           <span className="font-mono text-sm font-medium text-text-primary tabular-nums">
-            {isSweep ? `≤${s.amountPerPeriod}` : s.amountPerPeriod} USDC
+            {s.amountPerPeriod} USDC
           </span>
           <span className="text-text-secondary/40 text-xs">→</span>
           <span className={`text-sm font-semibold ${
             s.kind === "payment" ? "text-text-secondary/80"
-            : s.kind === "portfolio" ? "text-violet-400"
             : symbol === "cirBTC" ? "text-amber-400"
             : "text-cyan-400"
           }`}>{target}</span>
@@ -127,9 +115,7 @@ function StrategyRow({
       {isRunning && (
         <div className="ml-6 mt-2 flex items-center justify-between">
           <span className="text-[11px] font-mono text-text-secondary/35 tabular-nums">
-            {isSweep
-              ? `keeps ${s.portfolio?.sweepThreshold ?? "0"} USDC in wallet`
-              : `${s.balance} USDC left`}
+            {s.balance} USDC left
           </span>
           <div className="flex items-center gap-0.5">
             {canFund && (
@@ -175,7 +161,9 @@ export default function StrategiesPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [pending, setPending] = useState<{ strategy: OnchainStrategy; action: StrategyAction } | null>(null);
 
-  const { strategies, loading, refetch } = useMyStrategies(session?.walletAddress);
+  const { strategies: allStrategies, loading, refetch } = useMyStrategies(session?.walletAddress);
+  // Savings (target allocation) live on their own page.
+  const strategies = allStrategies.filter((s) => s.kind !== "portfolio");
 
   useEffect(() => {
     const s = loadSession();
@@ -238,7 +226,8 @@ export default function StrategiesPage() {
             <div className="text-3xl mb-4 opacity-20">↻</div>
             <p className="text-text-secondary/60 text-sm">No strategies yet.</p>
             <p className="text-text-secondary/35 text-xs mt-1 mb-6">
-              Set up a recurring payment, a DCA auto-buy, or a portfolio allocation.
+              Set up a recurring payment or a DCA auto-buy. Looking for target
+              allocation? That&apos;s in <a href="/dashboard/savings" className="text-blue-primary/70 hover:text-blue-primary">Savings</a>.
             </p>
             <button
               onClick={() => setCreateOpen(true)}

@@ -13,12 +13,14 @@ const AMOUNT_RE = /^\d+(\.\d{1,6})?$/;
 
 export type StrategyAction = "pause" | "resume" | "cancel" | "fund";
 
-const COPY: Record<StrategyAction, { title: string; body: string; cta: string; glyph: string; cls: string }> = {
-  pause: { title: "Pause strategy", body: "It stops running until you resume it. Funds stay in the vault.", cta: "Pause", glyph: "⏸", cls: "bg-amber-400/10 text-amber-400" },
-  resume: { title: "Resume strategy", body: "It starts running again on its schedule.", cta: "Resume", glyph: "▶", cls: "bg-green-400/10 text-green-400" },
-  cancel: { title: "Cancel strategy", body: "It stops for good and the remaining balance is refunded to you.", cta: "Cancel strategy", glyph: "✕", cls: "bg-red-400/10 text-red-400" },
-  fund: { title: "Add funds", body: "Top up the strategy's budget so it can keep running.", cta: "Add funds", glyph: "+", cls: "bg-blue-primary/10 text-blue-primary" },
-};
+function copyFor(noun: string): Record<StrategyAction, { title: string; body: string; cta: string; glyph: string; cls: string }> {
+  return {
+    pause: { title: `Pause ${noun}`, body: "It stops running until you resume it. Funds stay in the vault.", cta: "Pause", glyph: "⏸", cls: "bg-amber-400/10 text-amber-400" },
+    resume: { title: `Resume ${noun}`, body: "It starts running again on its schedule.", cta: "Resume", glyph: "▶", cls: "bg-green-400/10 text-green-400" },
+    cancel: { title: `Cancel ${noun}`, body: "It stops for good and the remaining balance is refunded to you.", cta: `Cancel ${noun}`, glyph: "✕", cls: "bg-red-400/10 text-red-400" },
+    fund: { title: "Add funds", body: `Top up the ${noun}'s budget so it can keep running.`, cta: "Add funds", glyph: "+", cls: "bg-blue-primary/10 text-blue-primary" },
+  };
+}
 
 const FIELD_CLS =
   "w-full bg-border/40 text-text-primary rounded-input px-3 py-2.5 text-sm border border-border focus:border-blue-primary outline-none transition-colors placeholder:text-text-secondary/40";
@@ -29,14 +31,16 @@ interface Props {
   action: StrategyAction;
   onClose: () => void;
   onDone?: () => void;
+  /** What to call it in the confirmation copy, e.g. "strategy" or "savings". */
+  noun?: string;
 }
 
 /** Confirm + execute for owner actions on a strategy (pause/resume/cancel/fund). */
-export default function StrategyActionModal({ session, strategy, action, onClose, onDone }: Props) {
+export default function StrategyActionModal({ session, strategy, action, onClose, onDone, noun = "strategy" }: Props) {
   const [amount, setAmount] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
-  const copy = COPY[action];
+  const copy = copyFor(noun)[action];
 
   const flow = useChallengeFlow({
     prefillEmail: session.email,

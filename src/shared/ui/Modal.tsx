@@ -6,13 +6,14 @@ interface ModalProps {
   onClose: () => void;
   /** When false, backdrop click / Escape / the ✕ are disabled (e.g. mid-transaction). */
   dismissible?: boolean;
-  size?: "sm" | "md";
+  size?: "sm" | "md" | "lg";
   children: React.ReactNode;
 }
 
 const SIZE: Record<NonNullable<ModalProps["size"]>, string> = {
   sm: "sm:max-w-sm",
   md: "sm:max-w-md",
+  lg: "sm:max-w-lg",
 };
 
 /**
@@ -40,7 +41,7 @@ export function Modal({ onClose, dismissible = true, size = "md", children }: Mo
       onClick={() => { if (dismissible) onClose(); }}
     >
       <div
-        className={`relative w-full ${SIZE[size]} h-full sm:h-auto sm:max-h-[90vh] overflow-y-auto no-scrollbar glass-card rounded-none sm:rounded-card p-6`}
+        className={`relative flex flex-col w-full ${SIZE[size]} h-full sm:h-auto sm:max-h-[90vh] glass-card rounded-none sm:rounded-card`}
         onClick={(e) => e.stopPropagation()}
       >
         {dismissible && (
@@ -52,7 +53,11 @@ export function Modal({ onClose, dismissible = true, size = "md", children }: Mo
             ✕
           </button>
         )}
-        {children}
+        {/* min-h-0 lets this child shrink below its content size inside the flex column,
+            which is required for overflow-y-auto to actually scroll instead of the box
+            growing past max-h-[90vh] (glass-card sets overflow:hidden on the outer box,
+            clipping anything that overflows it). */}
+        <div className="min-h-0 flex-1 overflow-y-auto no-scrollbar p-6">{children}</div>
       </div>
     </div>
   );
