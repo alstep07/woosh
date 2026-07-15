@@ -11,6 +11,7 @@ export const env = {
   slugRegistryAddress: process.env.NEXT_PUBLIC_SLUG_REGISTRY_ADDRESS as `0x${string}` | undefined,
   invoiceRegistryAddress: process.env.NEXT_PUBLIC_INVOICE_REGISTRY_ADDRESS as `0x${string}` | undefined,
   strategyRegistryAddress: process.env.NEXT_PUBLIC_STRATEGY_REGISTRY_ADDRESS as `0x${string}` | undefined,
+  savingsVaultAddress: process.env.NEXT_PUBLIC_SAVINGS_VAULT_ADDRESS as `0x${string}` | undefined,
   eurcAddress: process.env.NEXT_PUBLIC_EURC_ADDRESS as `0x${string}` | undefined,
   cirbtcAddress: process.env.NEXT_PUBLIC_CIRBTC_ADDRESS as `0x${string}` | undefined,
 };
