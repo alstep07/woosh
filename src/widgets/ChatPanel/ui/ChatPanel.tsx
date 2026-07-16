@@ -358,7 +358,7 @@ export default function ChatPanel({ name, walletAddress, userEmail, onPaymentSuc
       sdk.setAuthentication({ userToken, encryptionKey });
       sdk.execute(data.challengeId, (err) => {
         if (err) {
-          updateMsgStatus(msgId, "send_error", "Couldn't set up the strategy. Please try again.");
+          updateMsgStatus(msgId, "send_error", "Couldn't set it up. Please try again.");
           return;
         }
         updateMsgStatus(msgId, "strategy_done");
@@ -831,7 +831,7 @@ export default function ChatPanel({ name, walletAddress, userEmail, onPaymentSuc
                       <span>
                         {msg.pendingAction.type === "create_strategy" && msg.pendingAction.kind === "portfolio"
                           ? "Savings is live, it runs automatically."
-                          : "Strategy is live, it runs automatically."}{" "}
+                          : "Automation is live, it runs automatically."}{" "}
                         <a
                           href={
                             msg.pendingAction.type === "create_strategy" && msg.pendingAction.kind === "portfolio"

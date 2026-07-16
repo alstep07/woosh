@@ -34,7 +34,7 @@ interface Props {
 }
 
 /** Confirm + execute for owner actions on a strategy (pause/resume/cancel/fund). */
-export default function StrategyActionModal({ session, strategy, action, onClose, onDone, noun = "strategy" }: Props) {
+export default function StrategyActionModal({ session, strategy, action, onClose, onDone, noun = "automation" }: Props) {
   const [amount, setAmount] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
   const [done, setDone] = useState(false);

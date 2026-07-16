@@ -232,11 +232,6 @@ export default function AutomationsPage() {
                 allocation? That&apos;s in <a href="/dashboard/savings" className="text-blue-primary/70 hover:text-blue-primary">Savings</a>.
               </>
             }
-            cta={
-              <Button size="sm" onClick={() => setCreateOpen(true)}>
-                Create strategy
-              </Button>
-            }
           />
 
         ) : (

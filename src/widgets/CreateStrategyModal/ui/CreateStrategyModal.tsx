@@ -122,7 +122,7 @@ export default function CreateStrategyModal({ session, onClose, onCreated }: Pro
     <Modal onClose={onClose} dismissible={flow.phase !== "running"} size="md">
         {createdId ? (
           <ModalSuccess
-            title="Strategy created"
+            title="Automation created"
             body="It is funded and scheduled. It runs automatically, no PIN needed each time."
             onClose={onClose}
             closeLabel="Done"
@@ -130,7 +130,7 @@ export default function CreateStrategyModal({ session, onClose, onCreated }: Pro
         ) : flow.phase === "running" ? (
           <div className="text-center py-4">
             <span className="shimmer-text text-sm font-medium">
-              Setting up your strategy… a PIN window will appear to confirm.
+              Setting up your automation… a PIN window will appear to confirm.
             </span>
           </div>
         ) : flow.phase === "auth" ? (
@@ -138,11 +138,11 @@ export default function CreateStrategyModal({ session, onClose, onCreated }: Pro
             knownEmail={session.email}
             auth={flow.auth}
             onBack={flow.backToIdle}
-            intro="We need to verify you to fund the strategy onchain."
+            intro="We need to verify you to fund the automation onchain."
           />
         ) : (
           <div className="space-y-5">
-            <h2 className="text-lg font-bold text-text-primary">New strategy</h2>
+            <h2 className="text-lg font-bold text-text-primary">New automation</h2>
 
             {/* Kind — segmented control */}
             <SegmentedControl
@@ -281,7 +281,7 @@ export default function CreateStrategyModal({ session, onClose, onCreated }: Pro
             )}
 
             {error && <p className="text-sm text-red-400">{error}</p>}
-            <Button onClick={startCreate}>Create strategy</Button>
+            <Button onClick={startCreate}>Create automation</Button>
             <p className="text-xs text-text-secondary/40 text-center">
               Held in an onchain vault. Pause or cancel anytime and get the remaining balance back.
             </p>
