@@ -16,6 +16,7 @@ import { useVaultBalances } from "@/entities/savings/hooks/useVaultBalances";
 import { statusBadge, formatNextRun, intervalLabel, isOverdue, allocationLabel } from "@/entities/strategy/lib/format";
 import { tokenByAddress } from "@/shared/lib/tokens";
 import { fmtAmount as fmtVaultAmount, tokenGlyph as vaultGlyph } from "@/shared/lib/format";
+import { env } from "@/shared/config/env";
 import type { OnchainStrategy } from "@/entities/strategy/model/types";
 import type { VaultHoldings } from "@/entities/savings/model/types";
 import type { Session } from "@/entities/user/model/types";
@@ -268,7 +269,9 @@ export default function SavingsPage() {
         <VaultCard
           vault={vault.data}
           isLoading={vault.isLoading}
-          isError={vault.isError}
+          // A misconfigured vault address disables the query entirely; render that as
+          // the error dash, never as "Nothing saved yet" (the user may well have funds).
+          isError={vault.isError || !env.savingsVaultAddress}
           onDeposit={() => setSavingsAction("deposit")}
           onWithdraw={() => setSavingsAction("withdraw")}
         />
