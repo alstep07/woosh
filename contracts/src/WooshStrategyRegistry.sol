@@ -66,10 +66,18 @@ contract WooshStrategyRegistry {
         uint256 sweepThreshold; // Sweep only: never pull the owner's balance below this (18-dec)
     }
 
+    /// @dev Payroll-style extras for a batch Payment strategy: parallel arrays, each
+    ///      period forwards every leg (all-or-nothing within the period's tx).
+    struct BatchPayees {
+        address[] recipients;
+        uint256[] amounts; // native USDC (wei); amountPerPeriod == sum(amounts)
+    }
+
     address public constant USDC_ERC20 = 0x3600000000000000000000000000000000000000;
     uint256 private constant NATIVE_PER_ERC20 = 1e12; // 18-dec native units per 6-dec ERC-20 unit
     uint256 private constant BPS_DENOM = 10_000;
     uint256 private constant MAX_LEGS = 5;
+    uint256 private constant MAX_BATCH_RECIPIENTS = 10;
 
     address public admin;     // can set the executor; set to deployer
     address public executor;  // authorized to trigger executions (Woosh DCW wallet)
@@ -78,6 +86,12 @@ contract WooshStrategyRegistry {
     mapping(bytes32 => Strategy) private _strategies;
     mapping(address => bytes32[]) private _byOwner;
     bytes32[] private _allIds; // global list so the executor can scan for due strategies
+    mapping(bytes32 => string) private _memos;       // user-facing note per strategy ("rent", "payroll")
+    mapping(bytes32 => BatchPayees) private _batches; // Payment only; empty = single recipient
+    /// @notice Swap (DCA) only: executor delivers the swap output into the owner's
+    ///         savings vault instead of their spendable wallet. Coordination flag for
+    ///         the off-chain executor; stored onchain so it is user-auditable.
+    mapping(bytes32 => bool) public deliverToVault;
 
     uint256 private _locked = 1; // simple reentrancy guard
 
@@ -102,6 +116,9 @@ contract WooshStrategyRegistry {
     event StrategyCancelled(bytes32 indexed id, address indexed owner, uint256 refunded);
     event ExecutorChanged(address indexed executor);
     event AdminTransferred(address indexed admin);
+    event StrategyMemoSet(bytes32 indexed id, string memo);
+    event BatchCreated(bytes32 indexed id, address indexed owner, address[] recipients, uint256[] amounts);
+    event BatchLegPaid(bytes32 indexed id, address indexed recipient, uint256 amount);
 
     modifier nonReentrant() {
         require(_locked == 1, "WSR: reentrant");
@@ -157,11 +174,80 @@ contract WooshStrategyRegistry {
         uint64 intervalSeconds,
         uint32 periodsTotal
     ) external payable returns (bytes32 id) {
+        return _createCore(salt, kind, recipient, tokenOut, amountPerPeriod, intervalSeconds, periodsTotal);
+    }
+
+    /// @notice create() plus v2 extras: a user-facing memo ("rent", "netflix") and,
+    ///         for DCA, delivery of the swap output into the owner's savings vault
+    ///         instead of the spendable wallet.
+    function createV2(
+        uint256 salt,
+        Kind kind,
+        address recipient,
+        address tokenOut,
+        uint256 amountPerPeriod,
+        uint64 intervalSeconds,
+        uint32 periodsTotal,
+        string calldata memo,
+        bool toVault
+    ) external payable returns (bytes32 id) {
+        id = _createCore(salt, kind, recipient, tokenOut, amountPerPeriod, intervalSeconds, periodsTotal);
+        if (bytes(memo).length != 0) {
+            _memos[id] = memo;
+            emit StrategyMemoSet(id, memo);
+        }
+        if (toVault) {
+            require(kind == Kind.Swap, "WSR: vault delivery is DCA-only");
+            deliverToVault[id] = true;
+        }
+    }
+
+    /// @notice Recurring BATCH payment (payroll): every period the contract forwards
+    ///         each leg to its recipient, all-or-nothing within the period.
+    ///         amountPerPeriod is the sum of all legs. msg.value is the budget.
+    function createBatchPayment(
+        uint256 salt,
+        address[] calldata recipients,
+        uint256[] calldata amounts,
+        string calldata memo,
+        uint64 intervalSeconds,
+        uint32 periodsTotal
+    ) external payable returns (bytes32 id) {
+        require(recipients.length > 1 && recipients.length <= MAX_BATCH_RECIPIENTS, "WSR: bad batch size");
+        require(recipients.length == amounts.length, "WSR: length mismatch");
+        uint256 total;
+        for (uint256 i = 0; i < recipients.length; i++) {
+            require(recipients[i] != address(0), "WSR: zero recipient");
+            require(amounts[i] > 0, "WSR: zero leg");
+            total += amounts[i];
+        }
+
+        // recipient stays address(0): the batch config below is the payee list.
+        id = _createCore(salt, Kind.Payment, address(0), address(0), total, intervalSeconds, periodsTotal);
+        _batches[id] = BatchPayees({recipients: recipients, amounts: amounts});
+        if (bytes(memo).length != 0) {
+            _memos[id] = memo;
+            emit StrategyMemoSet(id, memo);
+        }
+        emit BatchCreated(id, msg.sender, recipients, amounts);
+    }
+
+    function _createCore(
+        uint256 salt,
+        Kind kind,
+        address recipient,
+        address tokenOut,
+        uint256 amountPerPeriod,
+        uint64 intervalSeconds,
+        uint32 periodsTotal
+    ) private returns (bytes32 id) {
         require(amountPerPeriod > 0, "WSR: zero amount");
         require(intervalSeconds > 0, "WSR: zero interval");
         require(msg.value >= amountPerPeriod, "WSR: underfunded");
         if (kind == Kind.Payment) {
-            require(recipient != address(0), "WSR: no recipient");
+            // recipient == 0 is allowed only for batch payments, whose payees are
+            // stored separately; createBatchPayment is the only zero-recipient caller.
+            require(recipient != address(0) || msg.sig == this.createBatchPayment.selector, "WSR: no recipient");
         } else {
             require(tokenOut != address(0), "WSR: no tokenOut");
         }
@@ -289,6 +375,18 @@ contract WooshStrategyRegistry {
     function executePayment(bytes32 id) external onlyExecutor nonReentrant {
         Strategy storage s = _strategies[id];
         _advance(id, s, Kind.Payment);
+
+        BatchPayees storage batch = _batches[id];
+        if (batch.recipients.length > 0) {
+            // Payroll: forward every leg, all-or-nothing within this period's tx.
+            emit PaymentExecuted(id, address(0), s.amountPerPeriod, s.periodsDone, s.nextRunAt);
+            for (uint256 i = 0; i < batch.recipients.length; i++) {
+                emit BatchLegPaid(id, batch.recipients[i], batch.amounts[i]);
+                (bool legOk, ) = payable(batch.recipients[i]).call{value: batch.amounts[i]}("");
+                require(legOk, "WSR: leg transfer failed");
+            }
+            return;
+        }
 
         address to = s.recipient;
         uint256 amount = s.amountPerPeriod;
@@ -461,6 +559,18 @@ contract WooshStrategyRegistry {
     /// @notice All strategy ids created by `owner`, newest last.
     function getStrategyIds(address owner) external view returns (bytes32[] memory) {
         return _byOwner[owner];
+    }
+
+    /// @notice A strategy's user-facing memo ("rent", "payroll"). Empty string if none.
+    function getMemo(bytes32 id) external view returns (string memory) {
+        return _memos[id];
+    }
+
+    /// @notice Batch payees for a payroll-style Payment strategy. Empty arrays for
+    ///         single-recipient strategies (check recipients.length before use).
+    function getBatch(bytes32 id) external view returns (address[] memory recipients, uint256[] memory amounts) {
+        BatchPayees storage b = _batches[id];
+        return (b.recipients, b.amounts);
     }
 
     /// @notice Read many strategies at once. Lets the executor pull a whole page in one

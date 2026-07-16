@@ -308,6 +308,172 @@ contract WooshStrategyRegistryTest is Test {
         reg.releaseForSwap(id);
         assertEq(executor.balance, ONE);
     }
+
+    // ── v2: memo, toVault, batch payments ───────────────────────────────────
+
+    function test_createV2_storesMemo() public {
+        address recipient = makeAddr("recipient");
+        vm.prank(owner);
+        bytes32 id = reg.createV2{value: 2 * ONE}(
+            50, WooshStrategyRegistry.Kind.Payment, recipient, address(0), ONE, 1 days, 0, "rent", false
+        );
+        assertEq(reg.getMemo(id), "rent");
+    }
+
+    function test_createV2_emptyMemoStoresNothing() public {
+        address recipient = makeAddr("recipient");
+        vm.prank(owner);
+        bytes32 id = reg.createV2{value: 2 * ONE}(
+            51, WooshStrategyRegistry.Kind.Payment, recipient, address(0), ONE, 1 days, 0, "", false
+        );
+        assertEq(bytes(reg.getMemo(id)).length, 0);
+    }
+
+    function test_createV2_toVaultOnSwap() public {
+        vm.prank(owner);
+        bytes32 id = reg.createV2{value: 2 * ONE}(
+            52, WooshStrategyRegistry.Kind.Swap, address(0), cirbtc, ONE, 1 days, 0, "into savings", true
+        );
+        assertTrue(reg.deliverToVault(id));
+        assertEq(reg.getMemo(id), "into savings");
+    }
+
+    function test_createV2_toVaultRejectsNonSwap() public {
+        address recipient = makeAddr("recipient");
+        vm.prank(owner);
+        vm.expectRevert(bytes("WSR: vault delivery is DCA-only"));
+        reg.createV2{value: 2 * ONE}(
+            53, WooshStrategyRegistry.Kind.Payment, recipient, address(0), ONE, 1 days, 0, "", true
+        );
+    }
+
+    function test_createV2_toVaultFalseOnPaymentOk() public {
+        address recipient = makeAddr("recipient");
+        vm.prank(owner);
+        bytes32 id = reg.createV2{value: 2 * ONE}(
+            54, WooshStrategyRegistry.Kind.Payment, recipient, address(0), ONE, 1 days, 0, "", false
+        );
+        assertFalse(reg.deliverToVault(id));
+    }
+
+    function batchLegs() internal returns (address[] memory r, uint256[] memory a) {
+        r = new address[](3);
+        a = new uint256[](3);
+        r[0] = makeAddr("alice"); a[0] = 2 * ONE;
+        r[1] = makeAddr("bob");   a[1] = 3 * ONE;
+        r[2] = makeAddr("carol"); a[2] = 1 * ONE;
+    }
+
+    function test_createBatchPayment_storesLegsAndSumsAmount() public {
+        (address[] memory r, uint256[] memory a) = batchLegs();
+        vm.prank(owner);
+        bytes32 id = reg.createBatchPayment{value: 6 * ONE}(60, r, a, "payroll", 1 days, 0);
+
+        WooshStrategyRegistry.Strategy memory s = reg.getStrategy(id);
+        assertEq(s.amountPerPeriod, 6 * ONE);
+        assertEq(uint8(s.kind), uint8(WooshStrategyRegistry.Kind.Payment));
+        assertEq(s.recipient, address(0));
+        assertEq(reg.getMemo(id), "payroll");
+
+        (address[] memory gotR, uint256[] memory gotA) = reg.getBatch(id);
+        assertEq(gotR.length, 3);
+        assertEq(gotR[1], r[1]);
+        assertEq(gotA[1], a[1]);
+    }
+
+    function test_executePayment_paysAllBatchLegs() public {
+        (address[] memory r, uint256[] memory a) = batchLegs();
+        vm.prank(owner);
+        bytes32 id = reg.createBatchPayment{value: 6 * ONE}(61, r, a, "payroll", 1 days, 0);
+
+        vm.prank(executor);
+        reg.executePayment(id);
+
+        assertEq(r[0].balance, a[0]);
+        assertEq(r[1].balance, a[1]);
+        assertEq(r[2].balance, a[2]);
+
+        WooshStrategyRegistry.Strategy memory s = reg.getStrategy(id);
+        assertEq(s.balance, 0); // fully depleted after one period (funded exactly 6 ONE)
+        assertEq(uint8(s.status), uint8(WooshStrategyRegistry.Status.Depleted));
+    }
+
+    function test_createBatchPayment_rejectsSingleRecipient() public {
+        address[] memory r = new address[](1);
+        uint256[] memory a = new uint256[](1);
+        r[0] = makeAddr("solo"); a[0] = ONE;
+        vm.prank(owner);
+        vm.expectRevert(bytes("WSR: bad batch size"));
+        reg.createBatchPayment{value: ONE}(62, r, a, "", 1 days, 0);
+    }
+
+    function test_createBatchPayment_rejectsTooManyRecipients() public {
+        address[] memory r = new address[](11);
+        uint256[] memory a = new uint256[](11);
+        for (uint256 i = 0; i < 11; i++) {
+            r[i] = makeAddr(string(abi.encodePacked("p", i)));
+            a[i] = ONE;
+        }
+        vm.prank(owner);
+        vm.expectRevert(bytes("WSR: bad batch size"));
+        reg.createBatchPayment{value: 11 * ONE}(63, r, a, "", 1 days, 0);
+    }
+
+    function test_createBatchPayment_rejectsLengthMismatch() public {
+        address[] memory r = new address[](2);
+        uint256[] memory a = new uint256[](3);
+        r[0] = makeAddr("a"); r[1] = makeAddr("b");
+        a[0] = ONE; a[1] = ONE; a[2] = ONE;
+        vm.prank(owner);
+        vm.expectRevert(bytes("WSR: length mismatch"));
+        reg.createBatchPayment{value: 3 * ONE}(64, r, a, "", 1 days, 0);
+    }
+
+    function test_createBatchPayment_rejectsZeroLeg() public {
+        address[] memory r = new address[](2);
+        uint256[] memory a = new uint256[](2);
+        r[0] = makeAddr("a"); r[1] = makeAddr("b");
+        a[0] = ONE; a[1] = 0;
+        vm.prank(owner);
+        vm.expectRevert(bytes("WSR: zero leg"));
+        reg.createBatchPayment{value: ONE}(65, r, a, "", 1 days, 0);
+    }
+
+    function test_createBatchPayment_rejectsZeroRecipient() public {
+        address[] memory r = new address[](2);
+        uint256[] memory a = new uint256[](2);
+        r[0] = address(0); r[1] = makeAddr("b");
+        a[0] = ONE; a[1] = ONE;
+        vm.prank(owner);
+        vm.expectRevert(bytes("WSR: zero recipient"));
+        reg.createBatchPayment{value: 2 * ONE}(66, r, a, "", 1 days, 0);
+    }
+
+    function test_regularCreate_stillRejectsZeroRecipient() public {
+        // Guards the msg.sig carve-out in _createCore: only createBatchPayment may
+        // pass recipient == address(0); create()/createV2() must still reject it.
+        vm.prank(owner);
+        vm.expectRevert(bytes("WSR: no recipient"));
+        reg.create{value: ONE}(67, WooshStrategyRegistry.Kind.Payment, address(0), address(0), ONE, 1 days, 0);
+    }
+
+    function test_batchPayment_multiPeriod() public {
+        (address[] memory r, uint256[] memory a) = batchLegs();
+        vm.prank(owner);
+        bytes32 id = reg.createBatchPayment{value: 12 * ONE}(68, r, a, "payroll", 1 days, 2);
+
+        vm.prank(executor);
+        reg.executePayment(id);
+        assertEq(r[0].balance, a[0]);
+
+        vm.warp(block.timestamp + 1 days);
+        vm.prank(executor);
+        reg.executePayment(id);
+        assertEq(r[0].balance, 2 * a[0]);
+
+        WooshStrategyRegistry.Strategy memory s = reg.getStrategy(id);
+        assertEq(uint8(s.status), uint8(WooshStrategyRegistry.Status.Completed));
+    }
 }
 
 /// @dev Fork test against Arc testnet: proves the REAL precompile honors
