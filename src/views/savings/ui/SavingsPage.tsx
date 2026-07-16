@@ -132,7 +132,7 @@ function PlanCard({
 }) {
   const overdue = isOverdue(s);
   const isSweep = s.portfolio?.mode === "sweep";
-  const target = allocationLabel(s, legSymbol) || "savings";
+  const target = allocationLabel(s, legSymbol) || "Loading allocation…";
 
   const isActive   = s.status === "active";
   const isPaused   = s.status === "paused";
@@ -201,7 +201,7 @@ function PlanCard({
 
 /** Compact row for a finished (completed/cancelled) plan, in the history list. */
 function PastRow({ s }: { s: OnchainStrategy }) {
-  const target = allocationLabel(s, legSymbol) || "savings";
+  const target = allocationLabel(s, legSymbol) || "Loading allocation…";
   return (
     <div className="flex items-center justify-between gap-3 border-b border-white/[0.05] last:border-0 py-3.5 px-1 opacity-45">
       <span className="text-sm font-semibold text-violet-400 truncate">{target}</span>
