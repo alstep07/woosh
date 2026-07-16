@@ -4,8 +4,9 @@ import { useRef, useState } from "react";
 import { erc20Abi } from "viem";
 import { Button } from "@/shared/ui/Button";
 import { Modal } from "@/shared/ui/Modal";
-import { EmailStep } from "@/features/auth/ui/EmailStep";
-import { AutoOtpStatus } from "@/features/auth/ui/AutoOtpStatus";
+import { ModalSuccess } from "@/shared/ui/ModalSuccess";
+import { AmountInput, Field, FIELD_CLS, LABEL_CLS } from "@/shared/ui/Field";
+import { ChallengeAuthSteps } from "@/features/auth/ui/ChallengeAuthSteps";
 import { useChallengeFlow } from "@/features/auth/model/useChallengeFlow";
 import { computeStrategyId, newStrategySalt } from "@/entities/strategy/lib/computeStrategyId";
 import { INTERVAL_PRESETS } from "@/entities/strategy/lib/format";
@@ -159,10 +160,6 @@ export default function CreateSavingsModal({ session, onClose, onCreated }: Prop
 
   const error = formError ?? flow.error;
 
-  const fieldCls =
-    "w-full bg-border/40 text-text-primary rounded-input px-3 py-2.5 text-sm border border-border focus:border-blue-primary outline-none transition-colors placeholder:text-text-secondary/40";
-  const labelCls = "block text-xs font-medium text-text-secondary mb-1.5";
-
   const cadence = INTERVAL_PRESETS.find((p) => p.seconds === interval)?.label.toLowerCase() ?? "";
   const runsNum = periods.trim() === "" ? 0 : Number(periods);
   const suggestedFunding =
@@ -187,23 +184,16 @@ export default function CreateSavingsModal({ session, onClose, onCreated }: Prop
   return (
     <Modal onClose={onClose} dismissible={flow.phase !== "running"} size="lg">
         {createdId ? (
-          <div className="text-center">
-            <div className="w-12 h-12 rounded-full bg-green-400/10 flex items-center justify-center mx-auto mb-3 text-2xl">
-              ✓
-            </div>
-            <h2 className="text-lg font-bold text-text-primary mb-1">Savings created</h2>
-            <p className="text-text-secondary text-sm mb-4">
-              {isSweep
+          <ModalSuccess
+            title="Savings created"
+            body={
+              isSweep
                 ? "It watches your balance and allocates the excess on schedule. No PIN needed each time."
-                : "It is funded and scheduled. It runs automatically, no PIN needed each time."}
-            </p>
-            <button
-              onClick={onClose}
-              className="block mx-auto text-xs text-text-secondary/50 hover:text-text-secondary transition-colors"
-            >
-              Done
-            </button>
-          </div>
+                : "It is funded and scheduled. It runs automatically, no PIN needed each time."
+            }
+            onClose={onClose}
+            closeLabel="Done"
+          />
         ) : flow.phase === "running" ? (
           <div className="text-center py-4">
             <span className="shimmer-text text-sm font-medium">
@@ -215,53 +205,12 @@ export default function CreateSavingsModal({ session, onClose, onCreated }: Prop
             </span>
           </div>
         ) : flow.phase === "auth" ? (
-          <div className="space-y-3">
-            <h2 className="text-lg font-bold text-text-primary">Confirm it&apos;s you</h2>
-            <p className="text-sm text-text-secondary">
-              We need to verify you to fund this onchain.
-            </p>
-            {flow.auth.step === "email" && !flow.auth.loading && (
-              session.email ? (
-                <AutoOtpStatus
-                  email={session.email}
-                  error={flow.auth.error}
-                  deviceIdError={flow.auth.deviceIdError}
-                  onRetryDeviceId={flow.auth.retryDeviceId}
-                  onResend={flow.auth.sendOtp}
-                />
-              ) : (
-                <EmailStep
-                  email={flow.auth.email}
-                  onEmailChange={flow.auth.setEmail}
-                  onSubmit={flow.auth.sendOtp}
-                  loading={false}
-                  deviceIdLoading={flow.auth.deviceIdLoading}
-                  deviceIdError={flow.auth.deviceIdError}
-                  onRetry={flow.auth.retryDeviceId}
-                  error={flow.auth.error}
-                  deviceId={flow.auth.deviceId}
-                />
-              )
-            )}
-            {flow.auth.step === "email" && flow.auth.loading && (
-              <div className="text-center py-2">
-                <span className="shimmer-text text-sm font-medium">Sending your code…</span>
-              </div>
-            )}
-            {flow.auth.step === "verify" && (
-              <div className="text-center py-2 space-y-1">
-                <span className="shimmer-text text-sm font-medium">Enter the code in the window that opened.</span>
-                <p className="text-xs text-text-secondary/50">Code sent to {flow.auth.email}</p>
-                {flow.auth.error && <p className="text-sm text-red-400 mt-2">{flow.auth.error}</p>}
-              </div>
-            )}
-            <button
-              onClick={flow.backToIdle}
-              className="w-full text-sm text-blue-primary/60 hover:text-blue-primary transition-colors"
-            >
-              Back
-            </button>
-          </div>
+          <ChallengeAuthSteps
+            knownEmail={session.email}
+            auth={flow.auth}
+            onBack={flow.backToIdle}
+            intro="We need to verify you to fund this onchain."
+          />
         ) : (
           <div className="space-y-5">
             <h2 className="text-lg font-bold text-text-primary">New savings</h2>
@@ -296,9 +245,10 @@ export default function CreateSavingsModal({ session, onClose, onCreated }: Prop
                           inputMode="numeric"
                           min={0}
                           max={100}
+                          aria-label={`${sym} allocation percent`}
                           value={pct[sym] ?? "0"}
                           onChange={(e) => { setPct((p) => ({ ...p, [sym]: e.target.value })); setFormError(null); }}
-                          className={`${fieldCls} pr-8`}
+                          className={`${FIELD_CLS} pr-8`}
                         />
                         <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-text-secondary/50">%</span>
                       </div>
@@ -309,7 +259,7 @@ export default function CreateSavingsModal({ session, onClose, onCreated }: Prop
             </div>
 
             <div>
-              <span className={labelCls}>Funded by</span>
+              <span className={LABEL_CLS}>Funded by</span>
               <div className="grid grid-cols-2 gap-2">
                 {([
                   { m: "deposit" as SavingsMode, label: "A deposit", hint: "budget held onchain" },
@@ -317,8 +267,9 @@ export default function CreateSavingsModal({ session, onClose, onCreated }: Prop
                 ]).map(({ m, label, hint }) => (
                   <button
                     key={m}
+                    aria-pressed={mode === m}
                     onClick={() => { setMode(m); setFormError(null); }}
-                    className={`rounded-input border px-3 py-2.5 text-left transition-colors ${
+                    className={`rounded-input border px-3 py-2.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-primary/40 ${
                       mode === m
                         ? "border-blue-primary bg-blue-primary/10"
                         : "border-border bg-border/30 hover:border-border/80"
@@ -332,54 +283,35 @@ export default function CreateSavingsModal({ session, onClose, onCreated }: Prop
             </div>
 
             {isSweep && (
-              <div>
-                <label htmlFor="threshold" className={labelCls}>Always keep in wallet</label>
-                <div className="relative">
-                  <input
-                    id="threshold"
-                    type="number"
-                    inputMode="decimal"
-                    value={threshold}
-                    onChange={(e) => { setThreshold(e.target.value); setFormError(null); }}
-                    placeholder="0.00"
-                    className={`${fieldCls} pr-16`}
-                  />
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-text-secondary/50">USDC</span>
-                </div>
-                <p className="text-[11px] text-text-secondary/50 mt-1.5">
-                  Anything above this gets allocated on schedule. Needs a one-time approval (extra PIN) the first time.
-                </p>
-              </div>
+              <AmountInput
+                id="threshold"
+                label="Always keep in wallet"
+                value={threshold}
+                onValueChange={(v) => { setThreshold(v); setFormError(null); }}
+                suffix="USDC"
+                hint="Anything above this gets allocated on schedule. Needs a one-time approval (extra PIN) the first time."
+              />
             )}
 
             {/* Amount per run */}
-            <div>
-              <label htmlFor="amount" className={labelCls}>
-                {isSweep ? "Max per sweep" : "Allocate per run"}
-              </label>
-              <div className="relative">
-                <input
-                  id="amount"
-                  type="number"
-                  inputMode="decimal"
-                  value={amount}
-                  onChange={(e) => { setAmount(e.target.value); setFormError(null); }}
-                  placeholder="0.00"
-                  className={`${fieldCls} pr-16`}
-                />
-                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-text-secondary/50">USDC</span>
-              </div>
-            </div>
+            <AmountInput
+              id="amount"
+              label={isSweep ? "Max per sweep" : "Allocate per run"}
+              value={amount}
+              onValueChange={(v) => { setAmount(v); setFormError(null); }}
+              suffix="USDC"
+            />
 
             {/* Interval — pills */}
             <div>
-              <span className={labelCls}>How often</span>
+              <span className={LABEL_CLS}>How often</span>
               <div className="grid grid-cols-3 gap-2">
                 {INTERVAL_PRESETS.map((p) => (
                   <button
                     key={p.seconds}
+                    aria-pressed={interval === p.seconds}
                     onClick={() => setInterval(p.seconds)}
-                    className={`rounded-input py-2 text-sm font-medium border transition-colors ${
+                    className={`rounded-input py-2 text-sm font-medium border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-primary/40 ${
                       interval === p.seconds
                         ? "border-blue-primary bg-blue-primary/10 text-text-primary"
                         : "border-border bg-border/30 text-text-secondary hover:text-text-primary"
@@ -393,8 +325,7 @@ export default function CreateSavingsModal({ session, onClose, onCreated }: Prop
 
             {/* Runs + deposit */}
             <div className={`grid gap-3 ${isSweep ? "grid-cols-1" : "grid-cols-2"}`}>
-              <div>
-                <label htmlFor="periods" className={labelCls}>Number of runs</label>
+              <Field label="Number of runs" htmlFor="periods">
                 <input
                   id="periods"
                   type="number"
@@ -402,34 +333,38 @@ export default function CreateSavingsModal({ session, onClose, onCreated }: Prop
                   value={periods}
                   onChange={(e) => { setPeriods(e.target.value); setFormError(null); }}
                   placeholder={isSweep ? "∞ until cancelled" : "∞ until empty"}
-                  className={fieldCls}
+                  className={FIELD_CLS}
                 />
-              </div>
-              {!isSweep && <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label htmlFor="funding" className="text-xs font-medium text-text-secondary">Total to deposit</label>
-                  {suggestedFunding && suggestedFunding !== funding && (
-                    <button
-                      onClick={() => { setFunding(suggestedFunding); setFormError(null); }}
-                      className="text-[11px] text-blue-primary/70 hover:text-blue-primary transition-colors"
-                    >
-                      use {suggestedFunding}
-                    </button>
-                  )}
-                </div>
-                <div className="relative">
-                  <input
-                    id="funding"
-                    type="number"
-                    inputMode="decimal"
-                    value={funding}
-                    onChange={(e) => { setFunding(e.target.value); setFormError(null); }}
-                    placeholder="0.00"
-                    className={`${fieldCls} pr-16`}
-                  />
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-text-secondary/50">USDC</span>
-                </div>
-              </div>}
+              </Field>
+              {!isSweep && (
+                <Field
+                  label="Total to deposit"
+                  htmlFor="funding"
+                  labelEnd={
+                    suggestedFunding && suggestedFunding !== funding ? (
+                      <button
+                        onClick={() => { setFunding(suggestedFunding); setFormError(null); }}
+                        className="text-[11px] text-blue-primary/70 hover:text-blue-primary transition-colors"
+                      >
+                        use {suggestedFunding}
+                      </button>
+                    ) : undefined
+                  }
+                >
+                  <div className="relative">
+                    <input
+                      id="funding"
+                      type="number"
+                      inputMode="decimal"
+                      value={funding}
+                      onChange={(e) => { setFunding(e.target.value); setFormError(null); }}
+                      placeholder="0.00"
+                      className={`${FIELD_CLS} pr-16`}
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-text-secondary/50">USDC</span>
+                  </div>
+                </Field>
+              )}
             </div>
 
             {/* Live summary */}

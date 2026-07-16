@@ -1,23 +1,10 @@
 "use client";
 
 import type { TokenHolding } from "@/entities/wallet/hooks/useTokenBalances";
-
-function fmtAmount(amount: string): string {
-  const n = parseFloat(amount);
-  if (n === 0) return "0";
-  if (n < 0.0001) return n.toPrecision(2);
-  return n.toLocaleString(undefined, { maximumFractionDigits: n < 1 ? 6 : 2 });
-}
+import { fmtAmount, tokenGlyph } from "@/shared/lib/format";
 
 function fmtUsd(n: number): string {
   return n.toLocaleString(undefined, { maximumFractionDigits: 2 });
-}
-
-/** Token glyph for the breakdown rows — keeps the list scannable. */
-function glyph(symbol: string): { ch: string; cls: string } {
-  if (symbol === "cirBTC") return { ch: "₿", cls: "text-amber-400 bg-amber-400/10" };
-  if (symbol === "EURC") return { ch: "€", cls: "text-blue-secondary bg-blue-secondary/10" };
-  return { ch: "$", cls: "text-blue-primary bg-blue-primary/10" }; // USDC
 }
 
 interface Props {
@@ -63,7 +50,7 @@ export function BalanceSummary({ balance, isLoading, isError, holdings, totalUsd
       {showTotal && (
         <div className="mt-3 space-y-2">
           {tokens.map((t) => {
-            const g = glyph(t.symbol);
+            const g = tokenGlyph(t.symbol);
             return (
               <div key={t.symbol} className="flex items-center gap-2.5">
                 <span className={`shrink-0 h-6 w-6 rounded-full grid place-items-center text-xs font-bold ${g.cls}`}>

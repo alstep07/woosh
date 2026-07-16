@@ -3,8 +3,10 @@
 import { useRef, useState } from "react";
 import { Button } from "@/shared/ui/Button";
 import { Modal } from "@/shared/ui/Modal";
-import { EmailStep } from "@/features/auth/ui/EmailStep";
-import { AutoOtpStatus } from "@/features/auth/ui/AutoOtpStatus";
+import { ModalSuccess } from "@/shared/ui/ModalSuccess";
+import { SegmentedControl } from "@/shared/ui/SegmentedControl";
+import { Field, AmountInput, FIELD_CLS, LABEL_CLS } from "@/shared/ui/Field";
+import { ChallengeAuthSteps } from "@/features/auth/ui/ChallengeAuthSteps";
 import { useChallengeFlow } from "@/features/auth/model/useChallengeFlow";
 import { computeStrategyId, newStrategySalt } from "@/entities/strategy/lib/computeStrategyId";
 import { INTERVAL_PRESETS } from "@/entities/strategy/lib/format";
@@ -98,10 +100,6 @@ export default function CreateStrategyModal({ session, onClose, onCreated }: Pro
 
   const error = formError ?? flow.error;
 
-  const fieldCls =
-    "w-full bg-border/40 text-text-primary rounded-input px-3 py-2.5 text-sm border border-border focus:border-blue-primary outline-none transition-colors placeholder:text-text-secondary/40";
-  const labelCls = "block text-xs font-medium text-text-secondary mb-1.5";
-
   const cadence = INTERVAL_PRESETS.find((p) => p.seconds === interval)?.label.toLowerCase() ?? "";
   const runsNum = periods.trim() === "" ? 0 : Number(periods);
   const suggestedFunding =
@@ -123,21 +121,12 @@ export default function CreateStrategyModal({ session, onClose, onCreated }: Pro
   return (
     <Modal onClose={onClose} dismissible={flow.phase !== "running"} size="md">
         {createdId ? (
-          <div className="text-center">
-            <div className="w-12 h-12 rounded-full bg-green-400/10 flex items-center justify-center mx-auto mb-3 text-2xl">
-              ✓
-            </div>
-            <h2 className="text-lg font-bold text-text-primary mb-1">Strategy created</h2>
-            <p className="text-text-secondary text-sm mb-4">
-              It is funded and scheduled. It runs automatically, no PIN needed each time.
-            </p>
-            <button
-              onClick={onClose}
-              className="block mx-auto text-xs text-text-secondary/50 hover:text-text-secondary transition-colors"
-            >
-              Done
-            </button>
-          </div>
+          <ModalSuccess
+            title="Strategy created"
+            body="It is funded and scheduled. It runs automatically, no PIN needed each time."
+            onClose={onClose}
+            closeLabel="Done"
+          />
         ) : flow.phase === "running" ? (
           <div className="text-center py-4">
             <span className="shimmer-text text-sm font-medium">
@@ -145,82 +134,30 @@ export default function CreateStrategyModal({ session, onClose, onCreated }: Pro
             </span>
           </div>
         ) : flow.phase === "auth" ? (
-          <div className="space-y-3">
-            <h2 className="text-lg font-bold text-text-primary">Confirm it&apos;s you</h2>
-            <p className="text-sm text-text-secondary">
-              We need to verify you to fund the strategy onchain.
-            </p>
-            {flow.auth.step === "email" && !flow.auth.loading && (
-              session.email ? (
-                <AutoOtpStatus
-                  email={session.email}
-                  error={flow.auth.error}
-                  deviceIdError={flow.auth.deviceIdError}
-                  onRetryDeviceId={flow.auth.retryDeviceId}
-                  onResend={flow.auth.sendOtp}
-                />
-              ) : (
-                <EmailStep
-                  email={flow.auth.email}
-                  onEmailChange={flow.auth.setEmail}
-                  onSubmit={flow.auth.sendOtp}
-                  loading={false}
-                  deviceIdLoading={flow.auth.deviceIdLoading}
-                  deviceIdError={flow.auth.deviceIdError}
-                  onRetry={flow.auth.retryDeviceId}
-                  error={flow.auth.error}
-                  deviceId={flow.auth.deviceId}
-                />
-              )
-            )}
-            {flow.auth.step === "email" && flow.auth.loading && (
-              <div className="text-center py-2">
-                <span className="shimmer-text text-sm font-medium">Sending your code…</span>
-              </div>
-            )}
-            {flow.auth.step === "verify" && (
-              <div className="text-center py-2 space-y-1">
-                <span className="shimmer-text text-sm font-medium">Enter the code in the window that opened.</span>
-                <p className="text-xs text-text-secondary/50">Code sent to {flow.auth.email}</p>
-                {flow.auth.error && <p className="text-sm text-red-400 mt-2">{flow.auth.error}</p>}
-              </div>
-            )}
-            <button
-              onClick={flow.backToIdle}
-              className="w-full text-sm text-blue-primary/60 hover:text-blue-primary transition-colors"
-            >
-              Back
-            </button>
-          </div>
+          <ChallengeAuthSteps
+            knownEmail={session.email}
+            auth={flow.auth}
+            onBack={flow.backToIdle}
+            intro="We need to verify you to fund the strategy onchain."
+          />
         ) : (
           <div className="space-y-5">
             <h2 className="text-lg font-bold text-text-primary">New strategy</h2>
 
             {/* Kind — segmented control */}
-            <div className="grid grid-cols-2 gap-1 p-1 bg-border/30 rounded-input">
-              {([
-                { k: "payment" as Kind, label: "Recurring", glyph: "↻" },
-                { k: "swap" as Kind, label: "Auto-buy", glyph: "₿" },
-              ]).map(({ k, label, glyph }) => (
-                <button
-                  key={k}
-                  onClick={() => { setKind(k); setFormError(null); }}
-                  className={`flex items-center justify-center gap-1.5 rounded-[5px] py-2 text-sm font-semibold transition-all ${
-                    kind === k
-                      ? "bg-blue-primary text-white shadow-glow"
-                      : "text-text-secondary hover:text-text-primary"
-                  }`}
-                >
-                  <span aria-hidden className="text-base leading-none">{glyph}</span>
-                  {label}
-                </button>
-              ))}
-            </div>
+            <SegmentedControl
+              aria-label="Strategy kind"
+              options={[
+                { value: "payment" as Kind, label: "Recurring", glyph: "↻" },
+                { value: "swap" as Kind, label: "Auto-buy", glyph: "₿" },
+              ]}
+              value={kind}
+              onChange={(k) => { setKind(k); setFormError(null); }}
+            />
 
             {/* Recipient (payment) or token (swap) */}
             {kind === "payment" ? (
-              <div>
-                <label htmlFor="recipient" className={labelCls}>Pay to</label>
+              <Field label="Pay to" htmlFor="recipient">
                 <input
                   id="recipient"
                   type="text"
@@ -228,12 +165,12 @@ export default function CreateStrategyModal({ session, onClose, onCreated }: Pro
                   onChange={(e) => { setRecipient(e.target.value); setFormError(null); }}
                   placeholder="username or 0x address"
                   autoFocus
-                  className={fieldCls}
+                  className={FIELD_CLS}
                 />
-              </div>
+              </Field>
             ) : (
               <div>
-                <span className={labelCls}>Buy</span>
+                <span className={LABEL_CLS}>Buy</span>
                 <div className="grid grid-cols-2 gap-2">
                   {swapTargets.length === 0 && (
                     <p className="col-span-2 text-xs text-text-secondary/50">No tokens configured</p>
@@ -244,8 +181,9 @@ export default function CreateStrategyModal({ session, onClose, onCreated }: Pro
                     return (
                       <button
                         key={t.symbol}
+                        aria-pressed={active}
                         onClick={() => { setTokenOut(t.address ?? ""); setFormError(null); }}
-                        className={`flex items-center gap-2 rounded-input border px-3 py-2.5 text-sm transition-colors ${
+                        className={`flex items-center gap-2 rounded-input border px-3 py-2.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-primary/40 ${
                           active
                             ? "border-blue-primary bg-blue-primary/10 text-text-primary"
                             : "border-border bg-border/30 text-text-secondary hover:text-text-primary"
@@ -263,33 +201,24 @@ export default function CreateStrategyModal({ session, onClose, onCreated }: Pro
             )}
 
             {/* Amount per run */}
-            <div>
-              <label htmlFor="amount" className={labelCls}>
-                {kind === "payment" ? "Amount per payment" : "Spend per run"}
-              </label>
-              <div className="relative">
-                <input
-                  id="amount"
-                  type="number"
-                  inputMode="decimal"
-                  value={amount}
-                  onChange={(e) => { setAmount(e.target.value); setFormError(null); }}
-                  placeholder="0.00"
-                  className={`${fieldCls} pr-16`}
-                />
-                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-text-secondary/50">USDC</span>
-              </div>
-            </div>
+            <AmountInput
+              id="amount"
+              label={kind === "payment" ? "Amount per payment" : "Spend per run"}
+              value={amount}
+              onValueChange={(v) => { setAmount(v); setFormError(null); }}
+              suffix="USDC"
+            />
 
             {/* Interval — pills */}
             <div>
-              <span className={labelCls}>How often</span>
+              <span className={LABEL_CLS}>How often</span>
               <div className="grid grid-cols-3 gap-2">
                 {INTERVAL_PRESETS.map((p) => (
                   <button
                     key={p.seconds}
+                    aria-pressed={interval === p.seconds}
                     onClick={() => setInterval(p.seconds)}
-                    className={`rounded-input py-2 text-sm font-medium border transition-colors ${
+                    className={`rounded-input py-2 text-sm font-medium border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-primary/40 ${
                       interval === p.seconds
                         ? "border-blue-primary bg-blue-primary/10 text-text-primary"
                         : "border-border bg-border/30 text-text-secondary hover:text-text-primary"
@@ -303,8 +232,7 @@ export default function CreateStrategyModal({ session, onClose, onCreated }: Pro
 
             {/* Runs + deposit */}
             <div className="grid gap-3 grid-cols-2">
-              <div>
-                <label htmlFor="periods" className={labelCls}>Number of runs</label>
+              <Field label="Number of runs" htmlFor="periods">
                 <input
                   id="periods"
                   type="number"
@@ -312,21 +240,23 @@ export default function CreateStrategyModal({ session, onClose, onCreated }: Pro
                   value={periods}
                   onChange={(e) => { setPeriods(e.target.value); setFormError(null); }}
                   placeholder="∞ until empty"
-                  className={fieldCls}
+                  className={FIELD_CLS}
                 />
-              </div>
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label htmlFor="funding" className="text-xs font-medium text-text-secondary">Total to deposit</label>
-                  {suggestedFunding && suggestedFunding !== funding && (
+              </Field>
+              <Field
+                label="Total to deposit"
+                htmlFor="funding"
+                labelEnd={
+                  suggestedFunding && suggestedFunding !== funding ? (
                     <button
                       onClick={() => { setFunding(suggestedFunding); setFormError(null); }}
                       className="text-[11px] text-blue-primary/70 hover:text-blue-primary transition-colors"
                     >
                       use {suggestedFunding}
                     </button>
-                  )}
-                </div>
+                  ) : undefined
+                }
+              >
                 <div className="relative">
                   <input
                     id="funding"
@@ -335,11 +265,11 @@ export default function CreateStrategyModal({ session, onClose, onCreated }: Pro
                     value={funding}
                     onChange={(e) => { setFunding(e.target.value); setFormError(null); }}
                     placeholder="0.00"
-                    className={`${fieldCls} pr-16`}
+                    className={`${FIELD_CLS} pr-16`}
                   />
                   <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-text-secondary/50">USDC</span>
                 </div>
-              </div>
+              </Field>
             </div>
 
             {/* Live summary */}

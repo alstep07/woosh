@@ -3,8 +3,9 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { Button } from "@/shared/ui/Button";
 import { Modal } from "@/shared/ui/Modal";
-import { EmailStep } from "@/features/auth/ui/EmailStep";
-import { AutoOtpStatus } from "@/features/auth/ui/AutoOtpStatus";
+import { ModalSuccess } from "@/shared/ui/ModalSuccess";
+import { AmountInput, Field, FIELD_CLS } from "@/shared/ui/Field";
+import { ChallengeAuthSteps } from "@/features/auth/ui/ChallengeAuthSteps";
 import { useAuth } from "@/features/auth/model/useAuth";
 import { env } from "@/shared/config/env";
 import {
@@ -18,10 +19,6 @@ import { buildRequestLink } from "@/entities/invoice/lib/buildRequestLink";
 import type { Session } from "@/entities/user/model/types";
 
 const AMOUNT_RE = /^\d+(\.\d{1,6})?$/;
-
-const FIELD_CLS =
-  "w-full bg-border/40 text-text-primary rounded-input px-3 py-2.5 text-sm border border-border focus:border-blue-primary outline-none transition-colors placeholder:text-text-secondary/40";
-const LABEL_CLS = "block text-xs font-medium text-text-secondary mb-1.5";
 
 function shortLink(url: string): string {
   const s = url.replace(/^https?:\/\//, "");
@@ -186,12 +183,7 @@ export default function CreateInvoiceModal({ session, onClose, onCreated }: Prop
   return (
     <Modal onClose={onClose} dismissible={phase !== "creating"} size="md">
         {lastLink ? (
-          <div className="text-center">
-            <div className="w-12 h-12 rounded-full bg-green-400/10 flex items-center justify-center mx-auto mb-3 text-2xl">
-              ✓
-            </div>
-            <h2 className="text-lg font-bold text-text-primary mb-1">Invoice created</h2>
-            <p className="text-text-secondary text-sm mb-4">Share this link to get paid.</p>
+          <ModalSuccess title="Invoice created" body="Share this link to get paid." onClose={onClose} closeLabel="Done">
             <button
               onClick={copyLastLink}
               className="inline-flex items-center gap-1.5 max-w-full text-xs bg-blue-primary/10 hover:bg-blue-primary/20 text-blue-primary px-3 py-1.5 rounded-input font-medium transition-colors"
@@ -208,65 +200,18 @@ export default function CreateInvoiceModal({ session, onClose, onCreated }: Prop
                 </>
               )}
             </button>
-            <button
-              onClick={onClose}
-              className="block mx-auto mt-3 text-xs text-text-secondary/50 hover:text-text-secondary transition-colors"
-            >
-              Done
-            </button>
-          </div>
+          </ModalSuccess>
         ) : phase === "creating" ? (
           <div className="text-center py-4">
             <span className="shimmer-text text-sm font-medium">Creating your invoice… a PIN window will appear to confirm.</span>
           </div>
         ) : phase === "auth" ? (
-          <div className="space-y-3">
-            <h2 className="text-lg font-bold text-text-primary">Confirm it&apos;s you</h2>
-            <p className="text-sm text-text-secondary">
-              We need to verify you to register the invoice onchain.
-            </p>
-            {auth.step === "email" && !auth.loading && (
-              session.email ? (
-                <AutoOtpStatus
-                  email={session.email}
-                  error={auth.error}
-                  deviceIdError={auth.deviceIdError}
-                  onRetryDeviceId={auth.retryDeviceId}
-                  onResend={auth.sendOtp}
-                />
-              ) : (
-                <EmailStep
-                  email={auth.email}
-                  onEmailChange={auth.setEmail}
-                  onSubmit={auth.sendOtp}
-                  loading={false}
-                  deviceIdLoading={auth.deviceIdLoading}
-                  deviceIdError={auth.deviceIdError}
-                  onRetry={auth.retryDeviceId}
-                  error={auth.error}
-                  deviceId={auth.deviceId}
-                />
-              )
-            )}
-            {auth.step === "email" && auth.loading && (
-              <div className="text-center py-2">
-                <span className="shimmer-text text-sm font-medium">Sending your code…</span>
-              </div>
-            )}
-            {auth.step === "verify" && (
-              <div className="text-center py-2 space-y-1">
-                <span className="shimmer-text text-sm font-medium">Enter the code in the window that opened.</span>
-                <p className="text-xs text-text-secondary/50">Code sent to {auth.email}</p>
-                {auth.error && <p className="text-sm text-red-400 mt-2">{auth.error}</p>}
-              </div>
-            )}
-            <button
-              onClick={() => { setPhase("form"); auth.resetToEmail(); }}
-              className="w-full text-sm text-blue-primary/60 hover:text-blue-primary transition-colors"
-            >
-              Back
-            </button>
-          </div>
+          <ChallengeAuthSteps
+            knownEmail={session.email}
+            auth={auth}
+            onBack={() => { setPhase("form"); auth.resetToEmail(); }}
+            intro="We need to verify you to register the invoice onchain."
+          />
         ) : (
           <div className="space-y-4">
             <div className="flex items-start gap-3">
@@ -281,24 +226,15 @@ export default function CreateInvoiceModal({ session, onClose, onCreated }: Prop
               </div>
             </div>
 
-            <div>
-              <label htmlFor="amount" className={LABEL_CLS}>Amount</label>
-              <div className="relative">
-                <input
-                  id="amount"
-                  type="number"
-                  inputMode="decimal"
-                  value={amount}
-                  onChange={(e) => { setAmount(e.target.value); setError(null); }}
-                  placeholder="0.00"
-                  autoFocus
-                  className={`${FIELD_CLS} pr-16`}
-                />
-                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-text-secondary/50">USDC</span>
-              </div>
-            </div>
-            <div>
-              <label htmlFor="memo" className={LABEL_CLS}>Note (optional)</label>
+            <AmountInput
+              id="amount"
+              label="Amount"
+              value={amount}
+              onValueChange={(v) => { setAmount(v); setError(null); }}
+              suffix="USDC"
+              autoFocus
+            />
+            <Field label="Note (optional)" htmlFor="memo">
               <input
                 id="memo"
                 type="text"
@@ -307,7 +243,7 @@ export default function CreateInvoiceModal({ session, onClose, onCreated }: Prop
                 placeholder="e.g. Brunch"
                 className={FIELD_CLS}
               />
-            </div>
+            </Field>
 
             {error && <p className="text-sm text-red-400">{error}</p>}
             <Button onClick={startCreate}>Create invoice</Button>

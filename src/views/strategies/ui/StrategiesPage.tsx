@@ -4,6 +4,9 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import AppHeader from "@/widgets/AppHeader/ui/AppHeader";
 import Footer from "@/widgets/Footer/ui/Footer";
+import { Button } from "@/shared/ui/Button";
+import { PageHeader } from "@/shared/ui/PageHeader";
+import { EmptyState } from "@/shared/ui/EmptyState";
 import CreateStrategyModal from "@/widgets/CreateStrategyModal/ui/CreateStrategyModal";
 import StrategyActionModal, { type StrategyAction } from "@/widgets/CreateStrategyModal/ui/StrategyActionModal";
 import { getSession as loadSession } from "@/shared/lib/session";
@@ -188,24 +191,22 @@ export default function StrategiesPage() {
       <AppHeader />
       <div className="flex-1 px-4 sm:px-6 lg:px-8 py-8 max-w-2xl mx-auto w-full">
 
-        {/* Header */}
-        <div className="flex items-center justify-between gap-4 mb-8">
-          <div>
-            <h1 className="text-2xl font-bold text-text-primary tracking-tight">Strategies</h1>
-            {running > 0 && (
-              <p className="text-xs text-text-secondary/50 mt-0.5 flex items-center gap-1.5">
+        <PageHeader
+          title="Strategies"
+          subtitle={
+            running > 0 ? (
+              <span className="flex items-center gap-1.5">
                 <span className="inline-block w-1.5 h-1.5 rounded-full bg-green-400" />
                 {running} running
-              </p>
-            )}
-          </div>
-          <button
-            onClick={() => setCreateOpen(true)}
-            className="shrink-0 bg-blue-primary hover:bg-blue-secondary text-white text-sm font-semibold px-4 py-2 rounded-input transition-colors shadow-glow"
-          >
-            New
-          </button>
-        </div>
+              </span>
+            ) : undefined
+          }
+          action={
+            <Button size="sm" onClick={() => setCreateOpen(true)}>
+              New
+            </Button>
+          }
+        />
 
         {loading ? (
           <div className="space-y-4">
@@ -222,20 +223,21 @@ export default function StrategiesPage() {
           </div>
 
         ) : strategies.length === 0 ? (
-          <div className="py-16 text-center">
-            <div className="text-3xl mb-4 opacity-20">↻</div>
-            <p className="text-text-secondary/60 text-sm">No strategies yet.</p>
-            <p className="text-text-secondary/35 text-xs mt-1 mb-6">
-              Set up a recurring payment or a DCA auto-buy. Looking for target
-              allocation? That&apos;s in <a href="/dashboard/savings" className="text-blue-primary/70 hover:text-blue-primary">Savings</a>.
-            </p>
-            <button
-              onClick={() => setCreateOpen(true)}
-              className="bg-blue-primary hover:bg-blue-secondary text-white text-sm font-semibold px-4 py-2 rounded-input transition-colors shadow-glow"
-            >
-              Create strategy
-            </button>
-          </div>
+          <EmptyState
+            glyph="↻"
+            primary="No strategies yet."
+            secondary={
+              <>
+                Set up a recurring payment or a DCA auto-buy. Looking for target
+                allocation? That&apos;s in <a href="/dashboard/savings" className="text-blue-primary/70 hover:text-blue-primary">Savings</a>.
+              </>
+            }
+            cta={
+              <Button size="sm" onClick={() => setCreateOpen(true)}>
+                Create strategy
+              </Button>
+            }
+          />
 
         ) : (
           <div>

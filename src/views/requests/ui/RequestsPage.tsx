@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import AppHeader from "@/widgets/AppHeader/ui/AppHeader";
 import Footer from "@/widgets/Footer/ui/Footer";
+import { Button } from "@/shared/ui/Button";
+import { PageHeader } from "@/shared/ui/PageHeader";
 import CreateInvoiceModal from "@/widgets/CreateInvoiceModal/ui/CreateInvoiceModal";
 import { getSession as loadSession } from "@/shared/lib/session";
 import { useMyInvoices } from "@/entities/invoice/hooks/useMyInvoices";
@@ -128,15 +130,15 @@ export default function RequestsPage() {
     <main className="min-h-screen bg-navy flex flex-col">
       <AppHeader />
       <div className="flex-1 px-4 sm:px-6 lg:px-8 py-8 max-w-4xl mx-auto w-full">
-        <div className="flex items-center justify-between gap-4 mb-6">
-          <h1 className="text-2xl font-bold text-text-primary">My invoices</h1>
-          <button
-            onClick={() => setCreateOpen(true)}
-            className="shrink-0 bg-blue-primary hover:bg-blue-secondary text-white text-sm font-semibold px-4 py-2 rounded-input transition-colors shadow-glow"
-          >
-            Create invoice
-          </button>
-        </div>
+        <PageHeader
+          title="My invoices"
+          className="mb-6"
+          action={
+            <Button size="sm" onClick={() => setCreateOpen(true)}>
+              Create invoice
+            </Button>
+          }
+        />
 
         {loading ? (
           <div className="grid gap-4 sm:grid-cols-2">
@@ -166,12 +168,9 @@ export default function RequestsPage() {
             <p className="text-text-secondary/60 text-sm mt-1 mb-5 max-w-xs mx-auto">
               Create an invoice and share the link to get paid in USDC.
             </p>
-            <button
-              onClick={() => setCreateOpen(true)}
-              className="bg-blue-primary hover:bg-blue-secondary text-white text-sm font-semibold px-4 py-2 rounded-input transition-colors shadow-glow"
-            >
+            <Button size="sm" onClick={() => setCreateOpen(true)}>
               Create your first invoice
-            </button>
+            </Button>
           </div>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2">

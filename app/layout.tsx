@@ -1,20 +1,24 @@
 import type { Metadata } from "next";
-import { Sora, JetBrains_Mono } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 import Providers from "@/app/Providers";
 
-const sans = Sora({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
+// Self-hosted variable fonts (latin subset, weights 100-800) so dev/prod never fall
+// back to a Google Fonts fetch. Non-latin glyphs fall through to the system stack.
+const sans = localFont({
+  src: "./fonts/Sora-Variable-latin.woff2",
+  weight: "100 800",
   variable: "--font-sans",
   display: "swap",
+  fallback: ["system-ui", "sans-serif"],
 });
 
-const mono = JetBrains_Mono({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
+const mono = localFont({
+  src: "./fonts/JetBrainsMono-Variable-latin.woff2",
+  weight: "100 800",
   variable: "--font-mono",
   display: "swap",
+  fallback: ["ui-monospace", "monospace"],
 });
 
 export const metadata: Metadata = {
