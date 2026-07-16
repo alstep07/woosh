@@ -124,7 +124,7 @@ export default function CreateStrategyModal({ session, onClose, onCreated }: Pro
         {createdId ? (
           <ModalSuccess
             title="Automation created"
-            body="It is funded and scheduled. It runs automatically, no PIN needed each time."
+            body="It is funded and scheduled. It runs automatically."
             onClose={onClose}
             closeLabel="Done"
           />

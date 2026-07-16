@@ -148,7 +148,7 @@ export default function ParallaxLanding() {
           <div className="head" data-speed="22" data-speed-x="-13">
             <p className="eyebrow rise">01 / Wallet</p>
             <h2 className="rise d1">Start with an <span className="grad">email.</span></h2>
-            <p className="sub rise d2">Type a code, skip the seed phrase. Your self-custodial USDC wallet goes live in one tap.</p>
+            <p className="sub rise d2">Type a code. Your USDC wallet goes live in one tap.</p>
           </div>
           <div className="stage otp-flow" data-speed="-42" data-speed-x="18">
             <div className="email-pill rise d2">you@example.com<span className="cursor" /></div>

@@ -189,8 +189,8 @@ export default function CreateSavingsModal({ session, onClose, onCreated }: Prop
             title="Savings created"
             body={
               isSweep
-                ? "It watches your balance and allocates the excess on schedule. No PIN needed each time."
-                : "It is funded and scheduled. It runs automatically, no PIN needed each time."
+                ? "It watches your balance and allocates the excess on schedule."
+                : "It is funded and scheduled. It runs automatically."
             }
             onClose={onClose}
             closeLabel="Done"
