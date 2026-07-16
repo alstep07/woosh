@@ -1,2 +1,6 @@
-export const dynamic = "force-dynamic";
-export { default } from "@/views/strategies/ui/StrategiesPage";
+import { redirect } from "next/navigation";
+
+/** Legacy route: the page moved when Strategies became Automations. */
+export default function StrategiesRedirect() {
+  redirect("/dashboard/automations");
+}

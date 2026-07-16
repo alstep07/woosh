@@ -14,7 +14,7 @@ const NAV: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", match: (p) => p === "/dashboard" },
   { href: "/pay", label: "Send", match: (p) => p === "/pay" || p.startsWith("/pay/") },
   { href: "/dashboard/swap", label: "Swap", match: (p) => p.startsWith("/dashboard/swap") },
-  { href: "/dashboard/strategies", label: "Automations", match: (p) => p.startsWith("/dashboard/strategies") },
+  { href: "/dashboard/automations", label: "Automations", match: (p) => p.startsWith("/dashboard/automations") },
   { href: "/dashboard/savings", label: "Savings", match: (p) => p.startsWith("/dashboard/savings") },
   { href: "/dashboard/invoices", label: "Invoices", match: (p) => p.startsWith("/dashboard/invoices") },
 ];

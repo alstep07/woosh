@@ -158,7 +158,7 @@ function StrategyRow({
   );
 }
 
-export default function StrategiesPage() {
+export default function AutomationsPage() {
   const router = useRouter();
   const [session, setSession] = useState<Session | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
