@@ -45,7 +45,7 @@ Automated onchain strategies, no PIN after setup.
 - **DCW executor:** Developer-Controlled wallet (`entitySecret`, no PIN) triggers due strategies
 - **Swap rail:** Synthra SynRoute API (`trading-api.synthra.org`), multi-hop routing on Arc testnet. Circle App Kit / Stablecoin Service has no routes on testnet
 - **Manual swap:** `/dashboard/swap`, configurable slippage (0.1/1/5/15%), two-step UCW flow (send to executor → executor swaps), refund guarantee on failure
-- "Strategies" at `/dashboard/strategies`. Agent tools: `create_strategy`, `get_strategies`
+- Recurring payments manage from `/pay` (Send), auto-buys from `/dashboard/swap` (Swap). Agent tools: `create_strategy`, `get_strategies`
 - Runs via Vercel Cron (`/api/cron/execute-strategies`), idempotent, daily granularity on free tier
 
 ### V3.1: Portfolio strategies (target allocation)

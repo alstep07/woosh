@@ -3,20 +3,35 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
+import { parseUnits, formatUnits } from "viem";
 import AppHeader from "@/widgets/AppHeader/ui/AppHeader";
 import Footer from "@/widgets/Footer/ui/Footer";
 import { Button } from "@/shared/ui/Button";
 import { Modal } from "@/shared/ui/Modal";
+import { EmptyState } from "@/shared/ui/EmptyState";
+import { SegmentedControl } from "@/shared/ui/SegmentedControl";
+import { FIELD_CLS, LABEL_CLS } from "@/shared/ui/Field";
+import { RecurringScheduleFields } from "@/shared/ui/RecurringScheduleFields";
+import { RecurringCard, RecurringPastRow } from "@/shared/ui/RecurringCard";
+import { ConfirmActionModal } from "@/features/auth/ui/ConfirmActionModal";
+import StrategyActionModal, { type StrategyAction } from "@/widgets/CreateStrategyModal/ui/StrategyActionModal";
 import { useChallengeFlow } from "@/features/auth/model/useChallengeFlow";
 import { useTokenBalances } from "@/entities/wallet/hooks/useTokenBalances";
 import { getSession as loadSession, getCachedTokens } from "@/shared/lib/session";
-import { SWAP_TARGETS } from "@/shared/lib/tokens";
+import { useMyStrategies } from "@/entities/strategy/hooks/useMyStrategies";
+import { INTERVAL_PRESETS } from "@/entities/strategy/lib/format";
+import { newStrategySalt } from "@/entities/strategy/lib/computeStrategyId";
+import { AMOUNT_RE as RECURRING_AMOUNT_RE, isValidAmount } from "@/shared/lib/amount";
+import { SWAP_TARGETS, tokenByAddress } from "@/shared/lib/tokens";
+import type { OnchainStrategy } from "@/entities/strategy/model/types";
 import type { Session } from "@/entities/user/model/types";
 
 const AMOUNT_RE = /^\d+(\.\d{1,8})?$/;
 const GAS_RESERVE = 0.1;
 const PERCENTS = [25, 50, 100] as const;
 const SLIPPAGE_OPTIONS = [0.1, 1, 5, 15];
+
+type Mode = "once" | "recurring";
 
 function TokenBadge({ symbol }: { symbol: string }) {
   const isCircBTC = symbol === "cirBTC";
@@ -37,6 +52,7 @@ export default function SwapPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const [session, setSession] = useState<Session | null>(null);
+  const [mode, setMode] = useState<Mode>("once");
 
   const swapTargets = SWAP_TARGETS.filter((t) => t.address);
   const [token, setToken] = useState<string>(swapTargets[0]?.symbol ?? "EURC");
@@ -48,6 +64,22 @@ export default function SwapPage() {
   const [slippage, setSlippage] = useState(1);
   const [result, setResult] = useState<{ amountOut: string; tokenOut: string } | null>(null);
   const [failure, setFailure] = useState<{ tokenIn: string; refunded: boolean } | null>(null);
+
+  // Recurring auto-buy (DCA)
+  const [dcaToken, setDcaToken] = useState<string>(swapTargets[0]?.address ?? "");
+  const [dcaAmount, setDcaAmount] = useState("");
+  const [dcaInterval, setDcaInterval] = useState(INTERVAL_PRESETS[0].seconds);
+  const [dcaPeriods, setDcaPeriods] = useState("");
+  const [dcaFunding, setDcaFunding] = useState("");
+  const [dcaError, setDcaError] = useState<string | null>(null);
+  const [dcaConfirm, setDcaConfirm] = useState(false);
+  const saltRef = useRef<string>("");
+  const [pendingStrategy, setPendingStrategy] = useState<{ strategy: OnchainStrategy; action: StrategyAction } | null>(null);
+
+  const { strategies: allStrategies, loading: strategiesLoading, refetch } = useMyStrategies(session?.walletAddress);
+  const dcaStrategies = allStrategies.filter((s) => s.kind === "swap");
+  const activeDca = dcaStrategies.filter((s) => s.status === "active" || s.status === "paused" || s.status === "depleted");
+  const closedDca = dcaStrategies.filter((s) => s.status === "completed" || s.status === "cancelled");
 
   const tokenIn = direction === "buy" ? "USDC" : token;
   const tokenOut = direction === "buy" ? token : "USDC";
@@ -191,6 +223,29 @@ export default function SwapPage() {
     flow.start();
   }
 
+  const dcaCadence = INTERVAL_PRESETS.find((p) => p.seconds === dcaInterval)?.label.toLowerCase() ?? "";
+  const dcaRuns = dcaPeriods.trim() === "" ? 0 : Number(dcaPeriods);
+  const dcaSuggestedFunding =
+    isValidAmount(dcaAmount) && Number.isInteger(dcaRuns) && dcaRuns > 0
+      ? formatUnits(parseUnits(dcaAmount.trim(), 18) * BigInt(dcaRuns), 18).replace(/(\.\d*?)0+$/, "$1").replace(/\.$/, "")
+      : "";
+  const dcaTokenSymbol = swapTargets.find((t) => t.address === dcaToken)?.symbol;
+
+  function startDca() {
+    const a = dcaAmount.trim();
+    const f = dcaFunding.trim();
+    if (!dcaToken) { setDcaError("Pick a token to buy"); return; }
+    if (!RECURRING_AMOUNT_RE.test(a) || parseFloat(a) <= 0) { setDcaError("Enter a valid amount per run"); return; }
+    if (dcaPeriods.trim() !== "" && (!/^\d+$/.test(dcaPeriods.trim()) || Number(dcaPeriods) < 1)) {
+      setDcaError("Number of runs must be a whole number, or leave it empty");
+      return;
+    }
+    if (!RECURRING_AMOUNT_RE.test(f) || parseFloat(f) < parseFloat(a)) { setDcaError("Total to deposit must be at least one run"); return; }
+    setDcaError(null);
+    saltRef.current = newStrategySalt();
+    setDcaConfirm(true);
+  }
+
   if (!session) {
     return (
       <main className="min-h-screen bg-navy flex items-center justify-center">
@@ -225,8 +280,6 @@ export default function SwapPage() {
         </Modal>
       )}
 
-
-      {/* Mobile: edge-to-edge. Desktop: centered card. */}
       <div className="flex-1 flex flex-col sm:items-center sm:justify-start sm:py-10 sm:px-4">
         <div className="w-full sm:max-w-md">
 
@@ -235,15 +288,23 @@ export default function SwapPage() {
             <h1 className="text-2xl font-bold text-text-primary tracking-tight">Swap</h1>
           </div>
 
-          {/* Card shell — only on desktop */}
-          <div className="sm:glass-card sm:rounded-card sm:overflow-hidden">
-            <div className="px-4 pb-6 sm:px-6 sm:pt-6">
+          <div className="px-5 sm:px-0 mb-5">
+            <SegmentedControl
+              aria-label="Swap mode"
+              options={[
+                { value: "once" as Mode, label: "Once", glyph: "⇄" },
+                { value: "recurring" as Mode, label: "Recurring", glyph: "↻" },
+              ]}
+              value={mode}
+              onChange={setMode}
+            />
+          </div>
 
-              {/* ── Main form — always visible; dimmed while any flow runs ── */}
-              {true && (
+          {/* ── Once — the existing one-off swap card, untouched internals ──── */}
+          {mode === "once" && (
+            <div className="sm:glass-card sm:rounded-card sm:overflow-hidden">
+              <div className="px-4 pb-6 sm:px-6 sm:pt-6">
                 <div className="space-y-2 transition-opacity duration-200">
-
-                  {/* Form controls — dimmed while a flow is running, but action row stays interactive */}
                   <div className={`space-y-2 transition-opacity duration-200 ${busy ? "opacity-40 pointer-events-none" : ""}`}>
 
                   {/* Alt-token tabs */}
@@ -456,13 +517,211 @@ export default function SwapPage() {
                     Routed via Synthra DEX
                   </p>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── Recurring — DCA auto-buy ─────────────────────────────────────── */}
+          {mode === "recurring" && (
+            <div className="glass-card rounded-card p-5 sm:p-6 mb-8 mx-4 sm:mx-0">
+              <div className="space-y-4">
+                <div>
+                  <h2 className="text-base font-semibold text-text-primary mb-1">Auto-buy (DCA)</h2>
+                  <p className="text-text-secondary/50 text-xs">
+                    Funded once, converts USDC into your target token on schedule.
+                  </p>
+                </div>
+
+                <div>
+                  <span className={LABEL_CLS}>Buy</span>
+                  <div className="grid grid-cols-2 gap-2">
+                    {swapTargets.length === 0 && (
+                      <p className="col-span-2 text-xs text-text-secondary/50">No tokens configured</p>
+                    )}
+                    {swapTargets.map((t) => {
+                      const active = dcaToken === t.address;
+                      const g = t.symbol === "cirBTC" ? "₿" : "€";
+                      return (
+                        <button
+                          key={t.symbol}
+                          aria-pressed={active}
+                          onClick={() => { setDcaToken(t.address ?? ""); setDcaError(null); }}
+                          className={`flex items-center gap-2 rounded-input border px-3 py-2.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-primary/40 ${
+                            active
+                              ? "border-blue-primary bg-blue-primary/10 text-text-primary"
+                              : "border-border bg-border/30 text-text-secondary hover:text-text-primary"
+                          }`}
+                        >
+                          <span className={`h-6 w-6 shrink-0 rounded-full grid place-items-center text-xs font-bold ${
+                            t.symbol === "cirBTC" ? "bg-amber-400/15 text-amber-400" : "bg-blue-secondary/15 text-blue-secondary"
+                          }`}>{g}</span>
+                          <span className="font-semibold">{t.symbol}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div>
+                  <span className={LABEL_CLS}>Spend per run</span>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      value={dcaAmount}
+                      onChange={(e) => { setDcaAmount(e.target.value); setDcaError(null); }}
+                      placeholder="0.00"
+                      className={`${FIELD_CLS} pr-16`}
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-text-secondary/50">USDC</span>
+                  </div>
+                </div>
+
+                <RecurringScheduleFields
+                  interval={dcaInterval}
+                  onIntervalChange={setDcaInterval}
+                  periods={dcaPeriods}
+                  onPeriodsChange={(v) => { setDcaPeriods(v); setDcaError(null); }}
+                  funding={dcaFunding}
+                  onFundingChange={(v) => { setDcaFunding(v); setDcaError(null); }}
+                  suggestedFunding={dcaSuggestedFunding}
+                />
+
+                {dcaAmount.trim() && (
+                  <div className="rounded-input bg-blue-primary/[0.06] border border-blue-primary/15 px-4 py-3">
+                    <p className="text-sm text-text-primary font-medium">
+                      Buy {dcaTokenSymbol ?? "token"} with {dcaAmount} USDC {dcaCadence}
+                    </p>
+                    <p className="text-xs text-text-secondary/50 mt-1">
+                      {dcaRuns > 0
+                        ? `${dcaRuns} run${dcaRuns > 1 ? "s" : ""}${dcaFunding.trim() ? ` · ${dcaFunding} USDC deposit` : ""}`
+                        : "Runs until the deposit runs out"}
+                    </p>
+                  </div>
+                )}
+
+                {dcaError && <p className="text-sm text-red-400">{dcaError}</p>}
+                <Button onClick={startDca}>Create auto-buy</Button>
+              </div>
+            </div>
+          )}
+
+          {/* ── Auto-buys already running ────────────────────────────────────── */}
+          {mode === "recurring" && (
+            <div className="px-4 sm:px-0">
+              <h2 className="text-sm font-semibold text-text-primary mb-3">Your auto-buys</h2>
+              {strategiesLoading ? (
+                <div className="glass-card rounded-card p-4">
+                  <div className="h-4 w-40 bg-border rounded animate-pulse mb-3" />
+                  <div className="h-3 w-full bg-border/60 rounded animate-pulse" />
+                </div>
+              ) : activeDca.length === 0 && closedDca.length === 0 ? (
+                <EmptyState
+                  glyph="↻"
+                  primary="No auto-buys yet."
+                  secondary="Set one up above, USDC converted into EURC or cirBTC on a schedule."
+                  className="glass-card rounded-card p-6 text-center"
+                />
+              ) : (
+                <div>
+                  {activeDca.length > 0 && (
+                    <div className="space-y-3 mb-6">
+                      {activeDca.map((s) => {
+                        const symbol = tokenByAddress(s.tokenOut)?.symbol;
+                        const accent = symbol === "cirBTC" ? "text-amber-400" : "text-cyan-400";
+                        return (
+                          <RecurringCard
+                            key={s.id}
+                            s={s}
+                            target={symbol ?? "token"}
+                            accent={accent}
+                            onAction={(action) => setPendingStrategy({ strategy: s, action })}
+                          />
+                        );
+                      })}
+                    </div>
+                  )}
+                  {closedDca.length > 0 && (
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-widest text-text-secondary/30 mb-3 px-1">
+                        Past
+                      </p>
+                      <div className="glass-card rounded-card px-4">
+                        {closedDca.map((s) => {
+                          const symbol = tokenByAddress(s.tokenOut)?.symbol;
+                          const accent = symbol === "cirBTC" ? "text-amber-400" : "text-cyan-400";
+                          return <RecurringPastRow key={s.id} s={s} target={symbol ?? "token"} accent={accent} />;
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
               )}
             </div>
-          </div>
+          )}
         </div>
       </div>
 
       <Footer />
+
+      {dcaConfirm && (
+        <ConfirmActionModal
+          session={session}
+          icon="↻"
+          title="New auto-buy"
+          subtitle="DCA into a token, funded once and run on autopilot."
+          summary={
+            <div className="rounded-input bg-blue-primary/[0.06] border border-blue-primary/15 px-4 py-3">
+              <p className="text-sm text-text-primary font-medium">
+                Buy {dcaTokenSymbol ?? "token"} with {dcaAmount} USDC {dcaCadence}
+              </p>
+              <p className="text-xs text-text-secondary/50 mt-1">
+                {dcaRuns > 0
+                  ? `${dcaRuns} run${dcaRuns > 1 ? "s" : ""} · ${dcaFunding.trim()} USDC deposit`
+                  : `Runs until the ${dcaFunding.trim()} USDC deposit runs out`}
+              </p>
+            </div>
+          }
+          authIntro="We need to verify you to fund the auto-buy onchain."
+          cta="Create auto-buy"
+          successTitle="Auto-buy created"
+          successBody="It is funded and scheduled. It runs automatically."
+          request={(userToken) =>
+            fetch("/api/wallet/create-strategy", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                userToken,
+                salt: saltRef.current,
+                kind: "swap",
+                tokenOut: dcaToken,
+                amountPerPeriod: dcaAmount.trim(),
+                intervalSeconds: dcaInterval,
+                periodsTotal: dcaPeriods.trim() === "" ? 0 : Number(dcaPeriods),
+                funding: dcaFunding.trim(),
+              }),
+            })
+          }
+          onClose={() => setDcaConfirm(false)}
+          onSuccess={() => {
+            setDcaAmount("");
+            setDcaPeriods("");
+            setDcaFunding("");
+            void refetch();
+          }}
+        />
+      )}
+
+      {pendingStrategy && (
+        <StrategyActionModal
+          session={session}
+          strategy={pendingStrategy.strategy}
+          action={pendingStrategy.action}
+          onClose={() => setPendingStrategy(null)}
+          onDone={refetch}
+          noun="auto-buy"
+        />
+      )}
     </main>
   );
 }

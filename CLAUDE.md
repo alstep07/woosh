@@ -22,9 +22,9 @@ integration (UCW, CCTP, StableFX, USYC). "No second token ever" is the killer fe
 | V2a | ✅ | Woosh Agent chat (Claude via OpenRouter, 4 tools) |
 | V2b | ✅ | Direct payment execution from chat (PIN inline) |
 | V2.2 | ✅ | Payment requests / invoices, onchain via `WooshInvoiceRegistry` (`/i/[id]` links, "My invoices" list, chat tools) |
-| V3.0 | ✅ | Automated strategies, onchain via `WooshStrategyRegistry`: recurring USDC payments + DCA auto-buys (EURC/cirBTC). DCW executor (no PIN), Vercel Cron, swaps via Synthra SynRoute API. `/dashboard/strategies`, chat tools. Manual swap at `/dashboard/swap`. |
-| V3.1 | 🔄 | Portfolio strategies (hackathon DeFi track): target percent allocation across USDC/EURC/cirBTC, funded by a custodied deposit per period OR by sweeping the wallet balance above a threshold (one-time allowance on the USDC precompile, threshold + per-period cap enforced onchain). Kind.Portfolio in the registry, cron fan-out with exact-leg refunds, Portfolio tab in CreateStrategyModal, chat tool support. |
-| V3.2+ | 🔄 | Next candidates: MCP server (repackage chat tools), claim links, "you got paid" notifications, bridge/off-ramp |
+| V3.0 | ✅ | Automated strategies, onchain via `WooshStrategyRegistry`: recurring USDC payments + DCA auto-buys (EURC/cirBTC). DCW executor (no PIN), Vercel Cron, swaps via Synthra SynRoute API. Managed from Send (`/pay`) and Swap (`/dashboard/swap`), chat tools. |
+| V3.1 | 🔄 | Portfolio strategies (hackathon DeFi track): target percent allocation across USDC/EURC/cirBTC. `Kind.Portfolio` is now frozen (no new creation in UI, existing plans still manageable from `/dashboard/savings`) in favor of the V3.2 savings vault. |
+| V3.2 | 🔄 | Product split: Send (`/pay`, once/batch/recurring/payroll payments), Swap (`/dashboard/swap`, once/recurring DCA), Savings (`/dashboard/savings`, `WooshSavingsVault` deposit/withdraw). The standalone Automations page is gone, recurring lists moved onto Send/Swap. `WooshBatchPay` for one-off batch sends, `createBatchPayment`/memo/`deliverToVault` added to `WooshStrategyRegistry` (registry v2). See `memory/savings-vault-roadmap.md` for the phased plan. |
 
 ---
 

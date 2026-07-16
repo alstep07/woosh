@@ -442,7 +442,7 @@ export default function ChatPanel({ name, walletAddress, userEmail, onPaymentSuc
         pa.type === "send_payment"
           ? `/pay/${pa.to}?amount=${pa.amount}`
           : pa.type === "create_strategy"
-          ? (pa.kind === "portfolio" ? `/dashboard/savings` : `/dashboard/automations`)
+          ? (pa.kind === "portfolio" ? `/dashboard/savings` : pa.kind === "swap" ? `/dashboard/swap` : `/pay`)
           : pa.type === "swap"
           ? `/dashboard/swap`
           : `/dashboard/invoices`;
@@ -831,12 +831,14 @@ export default function ChatPanel({ name, walletAddress, userEmail, onPaymentSuc
                       <span>
                         {msg.pendingAction.type === "create_strategy" && msg.pendingAction.kind === "portfolio"
                           ? "Savings is live, it runs automatically."
-                          : "Automation is live, it runs automatically."}{" "}
+                          : "It's live, it runs automatically."}{" "}
                         <a
                           href={
                             msg.pendingAction.type === "create_strategy" && msg.pendingAction.kind === "portfolio"
                               ? "/dashboard/savings"
-                              : "/dashboard/automations"
+                              : msg.pendingAction.type === "create_strategy" && msg.pendingAction.kind === "swap"
+                              ? "/dashboard/swap"
+                              : "/pay"
                           }
                           className="underline underline-offset-2 opacity-70 hover:opacity-100 transition-opacity"
                         >
