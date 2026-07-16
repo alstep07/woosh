@@ -378,3 +378,57 @@ export async function createStrategyActionChallenge(
   });
   return { challengeId: res.data!.challengeId! };
 }
+
+/**
+ * Challenge to deposit native USDC into WooshSavingsVault via deposit(). The vault is
+ * separate from the spendable wallet balance; `amount` is the native value moved in
+ * (msg.value), same human-decimal convention as the strategy challenges above.
+ */
+export async function createSavingsDepositChallenge(
+  userToken: string,
+  walletId: string,
+  vaultAddress: `0x${string}`,
+  amount: string
+) {
+  if (!/^\d+(\.\d+)?$/.test(amount) || parseFloat(amount) <= 0) {
+    throw new Error(`Invalid amount: ${amount}`);
+  }
+  const client = getClient();
+  const res = await client.createUserTransactionContractExecutionChallenge({
+    userToken,
+    walletId,
+    contractAddress: vaultAddress,
+    abiFunctionSignature: "deposit()",
+    abiParameters: [],
+    amount,
+    fee: { type: "level", config: { feeLevel: "MEDIUM" } },
+    idempotencyKey: crypto.randomUUID(),
+  });
+  return { challengeId: res.data!.challengeId! };
+}
+
+/**
+ * Challenge to take funds back out of WooshSavingsVault via withdraw(token, amount).
+ * Owner-only on-chain, any amount, any time. `amountBaseUnits` must already be in the
+ * token's own base units (18-dec native USDC as address(0), 6-dec EURC, 8-dec cirBTC);
+ * callers resolve token address and decimals server-side before calling this.
+ */
+export async function createSavingsWithdrawChallenge(
+  userToken: string,
+  walletId: string,
+  vaultAddress: `0x${string}`,
+  token: `0x${string}`,
+  amountBaseUnits: string
+) {
+  const client = getClient();
+  const res = await client.createUserTransactionContractExecutionChallenge({
+    userToken,
+    walletId,
+    contractAddress: vaultAddress,
+    abiFunctionSignature: "withdraw(address,uint256)",
+    abiParameters: [token, amountBaseUnits],
+    fee: { type: "level", config: { feeLevel: "MEDIUM" } },
+    idempotencyKey: crypto.randomUUID(),
+  });
+  return { challengeId: res.data!.challengeId! };
+}

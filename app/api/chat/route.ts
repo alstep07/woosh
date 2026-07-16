@@ -5,6 +5,7 @@ import { resolveSlug } from "@/entities/slug/lib/resolveSlug";
 import { getMyInvoices } from "@/entities/invoice/lib/readInvoice";
 import { getMyStrategies } from "@/entities/strategy/lib/readStrategy";
 import { strategySummary, statusBadge } from "@/entities/strategy/lib/format";
+import { getVaultHoldings } from "@/entities/savings/lib/readVault";
 import { EURC, CIRBTC, tokenByAddress } from "@/shared/lib/tokens";
 import { env } from "@/shared/config/env";
 import { erc20Abi, formatUnits } from "viem";
@@ -180,16 +181,24 @@ const TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
   {
     type: "function",
     function: {
+      name: "get_savings",
+      description: "Get the user's savings vault balances (USDC, EURC, cirBTC held in the vault, separate from their spendable wallet balance) and their auto-sweep rule if one is set. Use for 'how much do I have saved?', 'what's in my vault?', 'is auto-save on?'.",
+      parameters: { type: "object", properties: {}, required: [] },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "create_strategy",
       description:
-        "Set up an automated strategy: a recurring USDC payment, a DCA auto-buy of another token with USDC, or a PORTFOLIO (keep a target percent allocation across USDC/EURC/cirBTC, e.g. '50% USDC, 30% bitcoin, 20% euro'). It runs onchain on schedule with NO PIN each time after a one-time setup the user confirms. You MUST have all required fields before calling; if any is missing, ask first, do not guess. For 'funding' (total to deposit): if the user gives a number of runs, you may compute funding = amountPerPeriod x runs; otherwise ask how much to deposit. Portfolios in 'sweep' mode need NO funding (they allocate the wallet balance above sweepThreshold each run).",
+        "Set up an automated strategy: a recurring USDC payment, a DCA auto-buy of another token with USDC, or target allocation automation (legacy portfolio: keep a target percent allocation across USDC/EURC/cirBTC, e.g. '50% USDC, 30% bitcoin, 20% euro'). This is NOT the savings vault, do not use it when the user just wants to save or deposit money, guide them to /dashboard/savings for that instead. It runs onchain on schedule with NO PIN each time after a one-time setup the user confirms. You MUST have all required fields before calling; if any is missing, ask first, do not guess. For 'funding' (total to deposit): if the user gives a number of runs, you may compute funding = amountPerPeriod x runs; otherwise ask how much to deposit. Portfolios in 'sweep' mode need NO funding (they allocate the wallet balance above sweepThreshold each run).",
       parameters: {
         type: "object",
         properties: {
           kind: {
             type: "string",
             enum: ["payment", "swap", "portfolio"],
-            description: "'payment' = recurring payment to someone, 'swap' = DCA auto-buy of one token, 'portfolio' = keep a percent allocation across tokens",
+            description: "'payment' = recurring payment to someone, 'swap' = DCA auto-buy of one token, 'portfolio' = target allocation automation (legacy, keep a percent allocation across tokens); do not use 'portfolio' when the user just wants to save money, that is the savings vault, not this tool",
           },
           recipient: {
             type: "string",
@@ -342,6 +351,23 @@ async function getStrategiesSummary(address: string): Promise<string> {
   }
 }
 
+async function getSavingsSummary(address: string): Promise<string> {
+  try {
+    const vault = await getVaultHoldings(address as `0x${string}`);
+    const lines: string[] = [];
+    if (parseFloat(vault.usdc) > 0) lines.push(`${vault.usdc} USDC`);
+    if (parseFloat(vault.eurc) > 0) lines.push(`${vault.eurc} EURC`);
+    if (parseFloat(vault.cirbtc) > 0) lines.push(`${vault.cirbtc} cirBTC`);
+    const balanceLine = lines.length ? `Vault holds ${lines.join(", ")}.` : "The vault is empty, nothing saved yet.";
+    const ruleLine = vault.sweepRule.enabled
+      ? `Auto-save is on: sweeps excess over ${vault.sweepRule.threshold} USDC in the wallet, up to ${vault.sweepRule.capPerRun} USDC per run.`
+      : "Auto-save is off.";
+    return `${balanceLine} ${ruleLine}`;
+  } catch {
+    return "Could not load savings vault.";
+  }
+}
+
 type ApiMessage = { role: "user" | "assistant"; content: string };
 
 export async function POST(req: NextRequest) {
@@ -405,15 +431,19 @@ Invoice rules: when the user wants to BE paid or to invoice money, you need the 
 
 When the user asks if someone paid them (e.g. "did alex pay me?"): first call resolve_slug to get their address, then call get_transaction_history, then check if that address appears in received transactions. Confirm clearly: "Yes, alex sent you $X on [date]" or "No, I don't see any payments from alex."
 
-Strategies (automation): users can set up recurring USDC payments (pay someone a fixed amount on a schedule), DCA auto-buys (buy EURC or cirBTC with USDC on a schedule), or SAVINGS (keep a target percent allocation across USDC, EURC and cirBTC, kind "portfolio" in tool calls, called "Savings" to the user). How it works, explain plainly if asked: the strategy's budget is deposited into an onchain vault during a one-time setup the user confirms with their PIN; after that it runs automatically onchain on schedule with NO PIN each time. The user can pause or cancel anytime and gets the remaining balance back. Cadence options are daily, weekly, monthly.
+"Savings" means ONLY the savings vault at /dashboard/savings (see below); it is separate from the spendable wallet balance. When the user wants to save, put money aside, or deposit into savings ("положи 50 в сбережения", "put 50 into savings", "keep 30% of my money in bitcoin" meaning save it), guide them to /dashboard/savings to deposit, do NOT call create_strategy for this. There is no chat action to deposit or withdraw from the vault yet.
 
-Savings: two funding modes. "deposit" allocates a fixed USDC amount per run from a deposited budget (needs funding). "sweep" allocates whatever the wallet holds ABOVE a threshold the user sets, straight from their wallet, no deposit; it needs a one-time extra approval (a second PIN at setup) and a max-per-run cap (amountPerPeriod). Phrases like "keep 30% of my money in bitcoin", "invest everything above 100 USDC", "разложи баланс 50/30/20" mean savings, not a recurring payment or auto-buy. For sweep, ask for: the allocation percents, the threshold to keep, the max per run, and the cadence. The USDC share of savings just stays as USDC.
+Strategies (automation): users can set up recurring USDC payments (pay someone a fixed amount on a schedule), DCA auto-buys (buy EURC or cirBTC with USDC on a schedule), or target allocation automation (kind "portfolio" in tool calls; keep a target percent allocation across USDC, EURC and cirBTC). This is a legacy feature, existing setups keep running but do NOT describe it to the user as "savings" and do not steer new users toward it when they say they want to save money, point them to the savings vault instead; only use it if the user explicitly asks for scheduled rebalancing or percent-allocation automation. How it works, explain plainly if asked: the strategy's budget is deposited into an onchain vault during a one-time setup the user confirms with their PIN; after that it runs automatically onchain on schedule with NO PIN each time. The user can pause or cancel anytime and gets the remaining balance back. Cadence options are daily, weekly, monthly.
+
+Target allocation automation, two funding modes. "deposit" allocates a fixed USDC amount per run from a deposited budget (needs funding). "sweep" allocates whatever the wallet holds ABOVE a threshold the user sets, straight from their wallet, no deposit; it needs a one-time extra approval (a second PIN at setup) and a max-per-run cap (amountPerPeriod). For sweep, ask for: the allocation percents, the threshold to keep, the max per run, and the cadence. The USDC share just stays as USDC.
 
 Strategy questions: when the user asks about their strategies (is my DCA running, how much is left, what automations do I have), call get_strategies and answer concisely from the data.
 
+Savings vault: when the user asks how much they have saved or what is in the vault, call get_savings and answer concisely from the data.
+
 Swaps (one-off): users can swap (convert) between USDC and EURC or cirBTC right now, in either direction, separate from a recurring DCA. To do one you need the action (buy = USDC to token, sell = token to USDC), which token (EURC or cirBTC), and the amount (always the token they pay WITH: USDC when buying, the token when selling). As soon as you have all three, you MUST call the swap tool in that same turn, do not just say you will; calling it shows the confirmation card. It takes one PIN and the result lands in their wallet. If someone asks to do this repeatedly on a schedule, that is a DCA strategy (create_strategy), not a one-off swap.
 
-Strategy setup: to create one you need the kind (recurring payment, auto-buy, or savings), amount per run, how often (daily/weekly/monthly), the recipient (for payments) or which token to buy (for auto-buy) or the allocation (for savings), and the total to deposit (funding, not needed for sweep-mode savings). If the user gives a number of runs but not a total, compute funding = amount per run x runs. If you cannot determine the total, ask for it. As soon as you have everything, you MUST call create_strategy in that same turn, do not just say you will. To pause or cancel a recurring payment or auto-buy, guide the user to /dashboard/strategies; for savings, guide them to /dashboard/savings.`,
+Strategy setup: to create one you need the kind (recurring payment, auto-buy, or target allocation), amount per run, how often (daily/weekly/monthly), the recipient (for payments) or which token to buy (for auto-buy) or the allocation (for target allocation), and the total to deposit (funding, not needed for sweep mode). If the user gives a number of runs but not a total, compute funding = amount per run x runs. If you cannot determine the total, ask for it. As soon as you have everything, you MUST call create_strategy in that same turn, do not just say you will. To pause or cancel a recurring payment, auto-buy, or target allocation automation, guide the user to /dashboard/strategies.`,
     },
     // Cap context to the most recent messages so long chats can't drown the model
     // in stale history (the client also caps, this is defense in depth).
@@ -634,6 +664,8 @@ Strategy setup: to create one you need the kind (recurring payment, auto-buy, or
           result = await getInvoicesSummary(walletAddress);
         } else if (call.function.name === "get_strategies") {
           result = await getStrategiesSummary(walletAddress);
+        } else if (call.function.name === "get_savings") {
+          result = await getSavingsSummary(walletAddress);
         } else if (call.function.name === "create_payment_request") {
           const amount = String(args.amount ?? "");
           const memo = String(args.memo ?? "").trim();

@@ -4,16 +4,111 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import AppHeader from "@/widgets/AppHeader/ui/AppHeader";
 import Footer from "@/widgets/Footer/ui/Footer";
-import { BalanceSummary } from "@/widgets/WalletCard/ui/BalanceSummary";
+import { Button } from "@/shared/ui/Button";
+import { PageHeader } from "@/shared/ui/PageHeader";
+import { EmptyState } from "@/shared/ui/EmptyState";
 import CreateSavingsModal from "@/widgets/CreateSavingsModal/ui/CreateSavingsModal";
 import StrategyActionModal, { type StrategyAction } from "@/widgets/CreateStrategyModal/ui/StrategyActionModal";
+import SavingsActionModal, { type SavingsActionMode } from "@/widgets/SavingsActionModal/ui/SavingsActionModal";
 import { getSession as loadSession } from "@/shared/lib/session";
 import { useMyStrategies } from "@/entities/strategy/hooks/useMyStrategies";
-import { useTokenBalances } from "@/entities/wallet/hooks/useTokenBalances";
+import { useVaultBalances } from "@/entities/savings/hooks/useVaultBalances";
 import { statusBadge, formatNextRun, intervalLabel, isOverdue, allocationLabel } from "@/entities/strategy/lib/format";
 import { tokenByAddress } from "@/shared/lib/tokens";
+import { fmtAmount as fmtVaultAmount, tokenGlyph as vaultGlyph } from "@/shared/lib/format";
 import type { OnchainStrategy } from "@/entities/strategy/model/types";
+import type { VaultHoldings } from "@/entities/savings/model/types";
 import type { Session } from "@/entities/user/model/types";
+
+const EMPTY_VAULT: VaultHoldings = {
+  usdc: "0",
+  eurc: "0",
+  cirbtc: "0",
+  sweepRule: { threshold: "0", capPerRun: "0", intervalSeconds: 0, nextRunAt: 0, enabled: false },
+};
+
+/** What's actually saved, straight from the vault contract, separate from the
+ *  spendable wallet balance. USDC is the headline figure; EURC/cirBTC show below when
+ *  held. Deposit/Withdraw open SavingsActionModal. */
+function VaultCard({
+  vault,
+  isLoading,
+  isError,
+  onDeposit,
+  onWithdraw,
+}: {
+  vault: VaultHoldings | undefined;
+  isLoading: boolean;
+  isError: boolean;
+  onDeposit: () => void;
+  onWithdraw: () => void;
+}) {
+  const rows = [
+    { symbol: "EURC", amount: vault?.eurc ?? "0" },
+    { symbol: "cirBTC", amount: vault?.cirbtc ?? "0" },
+  ].filter((r) => parseFloat(r.amount) > 0);
+
+  const hasAnything =
+    !!vault && (parseFloat(vault.usdc) > 0 || parseFloat(vault.eurc) > 0 || parseFloat(vault.cirbtc) > 0);
+
+  return (
+    <div className="glass-card rounded-card p-5 mb-6">
+      <p className="text-xs font-semibold text-text-secondary uppercase tracking-widest mb-1">Vault</p>
+
+      {isLoading ? (
+        <div className="h-9 w-32 bg-border rounded animate-pulse mb-3" />
+      ) : isError ? (
+        <p className="text-3xl font-bold text-text-secondary/40 mb-3">—</p>
+      ) : !hasAnything ? (
+        <div className="mb-4">
+          <p className="text-text-secondary/60 text-sm">Nothing saved yet.</p>
+          <p className="text-text-secondary/35 text-xs mt-1">
+            Deposit USDC into the vault to keep it separate from your spendable balance.
+          </p>
+        </div>
+      ) : (
+        <div className="mb-3">
+          <p className="font-mono text-3xl font-semibold text-text-primary tracking-tight">
+            {fmtVaultAmount(vault!.usdc)}
+            <span className="font-sans text-base font-medium text-text-secondary/50 ml-1.5">USDC</span>
+          </p>
+          {rows.length > 0 && (
+            <div className="mt-3 space-y-2">
+              {rows.map((r) => {
+                const g = vaultGlyph(r.symbol);
+                return (
+                  <div key={r.symbol} className="flex items-center gap-2.5">
+                    <span className={`shrink-0 h-6 w-6 rounded-full grid place-items-center text-xs font-bold ${g.cls}`}>
+                      {g.ch}
+                    </span>
+                    <span className="text-sm text-text-secondary flex-1">{r.symbol}</span>
+                    <span className="font-mono text-sm text-text-primary tabular-nums">{fmtVaultAmount(r.amount)}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="flex gap-2 mt-2">
+        <Button size="sm" className="flex-1" onClick={onDeposit}>
+          Deposit
+        </Button>
+        <Button size="sm" variant="secondary" className="flex-1" onClick={onWithdraw} disabled={!hasAnything}>
+          Withdraw
+        </Button>
+      </div>
+
+      {vault?.sweepRule.enabled && (
+        <p className="text-[11px] text-text-secondary/40 mt-3">
+          Auto-save: sweeps excess over {fmtVaultAmount(vault.sweepRule.threshold)} USDC in your wallet, up to{" "}
+          {fmtVaultAmount(vault.sweepRule.capPerRun)} USDC per run.
+        </p>
+      )}
+    </div>
+  );
+}
 
 /** Symbol for an allocation leg token (null = the USDC leg). */
 function legSymbol(token: `0x${string}` | null): string {
@@ -130,10 +225,11 @@ export default function SavingsPage() {
   const [session, setSession] = useState<Session | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [pending, setPending] = useState<{ strategy: OnchainStrategy; action: StrategyAction } | null>(null);
+  const [savingsAction, setSavingsAction] = useState<SavingsActionMode | null>(null);
 
   const { strategies: allStrategies, loading, refetch } = useMyStrategies(session?.walletAddress);
   const strategies = allStrategies.filter((s) => s.kind === "portfolio");
-  const holdings = useTokenBalances(session?.walletAddress as `0x${string}` | undefined);
+  const vault = useVaultBalances(session?.walletAddress as `0x${string}` | undefined);
 
   useEffect(() => {
     const s = loadSession();
@@ -161,24 +257,21 @@ export default function SavingsPage() {
       <AppHeader />
       <div className="flex-1 px-4 sm:px-6 lg:px-8 py-8 max-w-2xl mx-auto w-full">
 
-        {/* Header */}
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold text-text-primary tracking-tight">Savings</h1>
-          <p className="text-xs text-text-secondary/50 mt-0.5">
-            One vault, a target mix of USDC, EURC and cirBTC, topped up on autopilot
-          </p>
-        </div>
+        <PageHeader
+          title="Savings"
+          subtitle="One vault, a target mix of USDC, EURC and cirBTC, topped up on autopilot"
+          className="mb-6"
+        />
 
-        {/* Vault: what's actually saved, right now, straight from the wallet */}
-        <div className="glass-card rounded-card p-5 mb-6">
-          <BalanceSummary
-            balance={holdings.data?.tokens.find((t) => t.symbol === "USDC")?.amount}
-            isLoading={holdings.isLoading}
-            isError={holdings.isError}
-            holdings={holdings.data?.tokens}
-            totalUsd={holdings.data?.totalUsd}
-          />
-        </div>
+        {/* Vault: what's actually saved, held in WooshSavingsVault, separate from
+            the spendable wallet balance */}
+        <VaultCard
+          vault={vault.data}
+          isLoading={vault.isLoading}
+          isError={vault.isError}
+          onDeposit={() => setSavingsAction("deposit")}
+          onWithdraw={() => setSavingsAction("withdraw")}
+        />
 
         {/* Plan */}
         {loading ? (
@@ -193,20 +286,17 @@ export default function SavingsPage() {
             ))}
           </div>
         ) : (
-          <div className="glass-card rounded-card p-6 text-center mb-6">
-            <div className="text-3xl mb-3 opacity-20">◔</div>
-            <p className="text-text-secondary/60 text-sm">No savings plan yet.</p>
-            <p className="text-text-secondary/35 text-xs mt-1 mb-5">
-              Set a target mix, e.g. 50% USDC / 30% cirBTC / 20% EURC, funded by a
-              deposit or by sweeping your wallet balance above a threshold.
-            </p>
-            <button
-              onClick={() => setCreateOpen(true)}
-              className="bg-blue-primary hover:bg-blue-secondary text-white text-sm font-semibold px-4 py-2 rounded-input transition-colors shadow-glow"
-            >
-              Set up savings
-            </button>
-          </div>
+          <EmptyState
+            glyph="◔"
+            primary="No savings plan yet."
+            secondary="Set a target mix, e.g. 50% USDC / 30% cirBTC / 20% EURC, funded by a deposit or by sweeping your wallet balance above a threshold."
+            cta={
+              <Button size="sm" onClick={() => setCreateOpen(true)}>
+                Set up savings
+              </Button>
+            }
+            className="glass-card rounded-card p-6 text-center mb-6"
+          />
         )}
 
         {active.length > 0 && (
@@ -244,6 +334,15 @@ export default function SavingsPage() {
           onClose={() => setPending(null)}
           onDone={refetch}
           noun="savings"
+        />
+      )}
+      {savingsAction && (
+        <SavingsActionModal
+          session={session}
+          mode={savingsAction}
+          vault={vault.data ?? EMPTY_VAULT}
+          onClose={() => setSavingsAction(null)}
+          onDone={() => vault.refetch()}
         />
       )}
     </main>
