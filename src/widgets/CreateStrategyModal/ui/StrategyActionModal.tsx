@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Button } from "@/shared/ui/Button";
 import { Modal } from "@/shared/ui/Modal";
 import { ModalSuccess } from "@/shared/ui/ModalSuccess";
+import { ModalHeader } from "@/shared/ui/ModalHeader";
 import { AmountInput } from "@/shared/ui/Field";
 import { ChallengeAuthSteps } from "@/features/auth/ui/ChallengeAuthSteps";
 import { useChallengeFlow } from "@/features/auth/model/useChallengeFlow";
@@ -84,15 +85,7 @@ export default function StrategyActionModal({ session, strategy, action, onClose
           <ChallengeAuthSteps knownEmail={session.email} auth={flow.auth} onBack={flow.backToIdle} />
         ) : (
           <div className="space-y-4">
-            <div className="flex items-start gap-3">
-              <span className={`shrink-0 h-9 w-9 rounded-full grid place-items-center text-base font-bold ${copy.cls}`}>
-                {copy.glyph}
-              </span>
-              <div className="min-w-0">
-                <h2 className="text-lg font-bold text-text-primary leading-tight">{copy.title}</h2>
-                <p className="text-sm text-text-secondary mt-1">{copy.body}</p>
-              </div>
-            </div>
+            <ModalHeader title={copy.title} subtitle={copy.body} icon={copy.glyph} iconClassName={copy.cls} />
             {action === "fund" && (
               <AmountInput
                 id="fund-amount"

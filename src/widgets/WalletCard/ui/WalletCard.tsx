@@ -52,9 +52,9 @@ export default function WalletCard({
   }
 
   return (
-    <div className="glass-card rounded-card p-5 flex flex-col h-full min-h-0">
+    <div className="glass-card rounded-card p-6 flex flex-col h-full min-h-0">
       {/* Identity row: slug chip (copies the share link) + raw wallet address (copies 0x) */}
-      <div className="flex items-center justify-between gap-2 mb-4">
+      <div className="flex items-center justify-between gap-2 mb-5">
         {slug ? (
           <button
             onClick={() => copy("link")}
@@ -99,7 +99,7 @@ export default function WalletCard({
         totalUsd={totalUsd}
       />
 
-      <div className="mt-4 mb-4 border-t border-border shrink-0" />
+      <div className="mt-5 mb-5 border-t border-border shrink-0" />
 
       {/* Recent payments — fills the remaining height, scrolls internally if long */}
       <div className="flex-1 min-h-0 overflow-y-auto no-scrollbar">

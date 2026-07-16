@@ -7,6 +7,7 @@ import Footer from "@/widgets/Footer/ui/Footer";
 import { Button } from "@/shared/ui/Button";
 import { PageHeader } from "@/shared/ui/PageHeader";
 import { EmptyState } from "@/shared/ui/EmptyState";
+import { ActionPill } from "@/shared/ui/ActionPill";
 import CreateStrategyModal from "@/widgets/CreateStrategyModal/ui/CreateStrategyModal";
 import StrategyActionModal, { type StrategyAction } from "@/widgets/CreateStrategyModal/ui/StrategyActionModal";
 import { getSession as loadSession } from "@/shared/lib/session";
@@ -85,7 +86,7 @@ function StrategyRow({
             : symbol === "cirBTC" ? "text-amber-400"
             : "text-cyan-400"
           }`}>{target}</span>
-          <span className="text-text-secondary/30 text-[11px]">· {intervalLabel(s.intervalSeconds)}</span>
+          <span className="text-text-secondary/30 text-xs">· {intervalLabel(s.intervalSeconds)}</span>
         </div>
 
         {/* Status / next run — right-aligned */}
@@ -97,7 +98,7 @@ function StrategyRow({
               : "text-text-secondary/35"
             }`}>{runLabel}</span>
           ) : (
-            <span className="text-[11px] text-text-secondary/25">{statusBadge(s.status).text.toLowerCase()}</span>
+            <span className="text-xs text-text-secondary/30">{statusBadge(s.status).text.toLowerCase()}</span>
           )}
         </div>
       </div>
@@ -108,7 +109,7 @@ function StrategyRow({
           <div className="flex-1 h-[2px] bg-white/[0.05] rounded-full overflow-hidden">
             <div className={`h-full rounded-full ${accent} transition-all`} style={{ width: `${progress}%` }} />
           </div>
-          <span className="text-[10px] font-mono text-text-secondary/35 tabular-nums shrink-0">
+          <span className="text-xs font-mono text-text-secondary/35 tabular-nums shrink-0">
             {s.periodsDone}/{s.periodsTotal}
           </span>
         </div>
@@ -116,41 +117,25 @@ function StrategyRow({
 
       {/* Bottom row: balance + actions */}
       {isRunning && (
-        <div className="ml-6 mt-2 flex items-center justify-between">
-          <span className="text-[11px] font-mono text-text-secondary/35 tabular-nums">
+        <div className="ml-6 mt-2 flex items-center justify-between -mr-2.5">
+          <span className="text-xs font-mono text-text-secondary/35 tabular-nums">
             {s.balance} USDC left
           </span>
           <div className="flex items-center gap-0.5">
             {canFund && (
-              <button
-                onClick={() => onAction("fund")}
-                className="text-[11px] text-blue-primary/60 hover:text-blue-primary px-2 py-0.5 rounded hover:bg-blue-primary/8 transition-colors"
-              >
+              <ActionPill tone="accent" onClick={() => onAction("fund")}>
                 Fund
-              </button>
+              </ActionPill>
             )}
             {isActive && (
-              <button
-                onClick={() => onAction("pause")}
-                className="text-[11px] text-text-secondary/40 hover:text-text-secondary px-2 py-0.5 rounded hover:bg-white/5 transition-colors"
-              >
-                Pause
-              </button>
+              <ActionPill onClick={() => onAction("pause")}>Pause</ActionPill>
             )}
             {isPaused && (
-              <button
-                onClick={() => onAction("resume")}
-                className="text-[11px] text-text-secondary/40 hover:text-text-secondary px-2 py-0.5 rounded hover:bg-white/5 transition-colors"
-              >
-                Resume
-              </button>
+              <ActionPill onClick={() => onAction("resume")}>Resume</ActionPill>
             )}
-            <button
-              onClick={() => onAction("cancel")}
-              className="text-[11px] text-red-400/40 hover:text-red-400 px-2 py-0.5 rounded hover:bg-red-400/8 transition-colors"
-            >
+            <ActionPill tone="danger" onClick={() => onAction("cancel")}>
               Cancel
-            </button>
+            </ActionPill>
           </div>
         </div>
       )}
@@ -246,7 +231,7 @@ export default function AutomationsPage() {
 
             {closed.length > 0 && (
               <div>
-                <p className="text-[10px] font-semibold uppercase tracking-widest text-text-secondary/30 mb-3 px-1">
+                <p className="text-xs font-semibold uppercase tracking-widest text-text-secondary/30 mb-3 px-1">
                   Past
                 </p>
                 <div className="glass-card rounded-card px-4">

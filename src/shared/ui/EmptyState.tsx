@@ -19,9 +19,18 @@ interface Props {
 export function EmptyState({ glyph, primary, secondary, cta, className = "py-16 text-center" }: Props) {
   return (
     <div className={className}>
-      <div aria-hidden className="text-3xl mb-4 opacity-20">{glyph}</div>
-      <p className="text-text-secondary/60 text-sm">{primary}</p>
-      {secondary && <div className={`text-text-secondary/35 text-xs mt-1 ${cta ? "mb-6" : ""}`}>{secondary}</div>}
+      <div
+        aria-hidden
+        className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-white/[0.04] text-2xl text-text-secondary/30"
+      >
+        {glyph}
+      </div>
+      <p className="text-text-secondary/70 text-sm font-medium">{primary}</p>
+      {secondary && (
+        <div className={`text-text-secondary/40 text-xs mt-1.5 leading-relaxed max-w-xs mx-auto ${cta ? "mb-6" : ""}`}>
+          {secondary}
+        </div>
+      )}
       {cta}
     </div>
   );

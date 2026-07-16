@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { Button } from "@/shared/ui/Button";
 import { Modal } from "@/shared/ui/Modal";
 import { ModalSuccess } from "@/shared/ui/ModalSuccess";
+import { ModalHeader } from "@/shared/ui/ModalHeader";
 import { SegmentedControl } from "@/shared/ui/SegmentedControl";
 import { Field, AmountInput, FIELD_CLS, LABEL_CLS } from "@/shared/ui/Field";
 import { ChallengeAuthSteps } from "@/features/auth/ui/ChallengeAuthSteps";
@@ -142,7 +143,11 @@ export default function CreateStrategyModal({ session, onClose, onCreated }: Pro
           />
         ) : (
           <div className="space-y-5">
-            <h2 className="text-lg font-bold text-text-primary">New automation</h2>
+            <ModalHeader
+              title="New automation"
+              subtitle="A recurring payment or a scheduled auto-buy, funded once and run on autopilot."
+              icon="↻"
+            />
 
             {/* Kind — segmented control */}
             <SegmentedControl
@@ -250,7 +255,7 @@ export default function CreateStrategyModal({ session, onClose, onCreated }: Pro
                   suggestedFunding && suggestedFunding !== funding ? (
                     <button
                       onClick={() => { setFunding(suggestedFunding); setFormError(null); }}
-                      className="text-[11px] text-blue-primary/70 hover:text-blue-primary transition-colors"
+                      className="text-xs text-blue-primary/70 hover:text-blue-primary transition-colors"
                     >
                       use {suggestedFunding}
                     </button>
@@ -274,9 +279,9 @@ export default function CreateStrategyModal({ session, onClose, onCreated }: Pro
 
             {/* Live summary */}
             {summary && (
-              <div className="rounded-input bg-blue-primary/5 border border-blue-primary/15 px-3.5 py-2.5">
-                <p className="text-sm text-text-primary">{summary}</p>
-                <p className="text-xs text-text-secondary/50 mt-0.5">{scheduleNote}</p>
+              <div className="rounded-input bg-blue-primary/[0.06] border border-blue-primary/15 px-4 py-3">
+                <p className="text-sm text-text-primary font-medium">{summary}</p>
+                <p className="text-xs text-text-secondary/50 mt-1">{scheduleNote}</p>
               </div>
             )}
 

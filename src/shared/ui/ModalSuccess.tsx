@@ -17,16 +17,16 @@ interface Props {
  */
 export function ModalSuccess({ title, body, children, onClose, closeLabel = "Close" }: Props) {
   return (
-    <div className="text-center">
-      <div className="w-12 h-12 rounded-full bg-green-400/10 flex items-center justify-center mx-auto mb-3 text-2xl">
+    <div className="text-center py-1">
+      <div className="w-14 h-14 rounded-full bg-green-400/10 border border-green-400/20 flex items-center justify-center mx-auto mb-4 text-2xl text-green-400">
         ✓
       </div>
-      <h2 className="text-lg font-bold text-text-primary mb-1">{title}</h2>
-      {body && <p className="text-text-secondary text-sm mb-4">{body}</p>}
+      <h2 className="text-lg font-bold text-text-primary mb-1.5">{title}</h2>
+      {body && <p className="text-text-secondary text-sm mb-5 leading-relaxed">{body}</p>}
       {children}
       <button
         onClick={onClose}
-        className="block mx-auto mt-2 text-xs text-text-secondary/50 hover:text-text-secondary transition-colors"
+        className="mx-auto mt-4 block rounded-input px-3 py-1.5 text-xs font-medium text-text-secondary/50 transition-colors hover:bg-white/5 hover:text-text-secondary"
       >
         {closeLabel}
       </button>

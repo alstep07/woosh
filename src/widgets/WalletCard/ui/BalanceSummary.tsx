@@ -48,7 +48,7 @@ export function BalanceSummary({ balance, isLoading, isError, holdings, totalUsd
       )}
 
       {showTotal && (
-        <div className="mt-3 space-y-2">
+        <div className="mt-4 space-y-2.5">
           {tokens.map((t) => {
             const g = tokenGlyph(t.symbol);
             return (

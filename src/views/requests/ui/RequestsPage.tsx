@@ -53,14 +53,14 @@ function InvoiceCard({
   return (
     <div className="relative glass-card rounded-card p-5 overflow-hidden">
       {inv.paid && (
-        <span className="pointer-events-none select-none absolute top-4 right-4 rotate-[-8deg] font-mono text-[11px] font-bold tracking-[0.14em] text-green-400 border-2 border-green-400 rounded-md px-2 py-0.5">
+        <span className="pointer-events-none select-none absolute top-4 right-4 rotate-[-8deg] font-mono text-xs font-bold tracking-[0.14em] text-green-400 border-2 border-green-400 rounded-md px-2 py-0.5">
           PAID
         </span>
       )}
 
       <div className="mb-4">
-        <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-text-secondary/50">Invoice</p>
-        <p className="text-[13px] font-semibold text-text-primary mt-0.5">#{invoiceNumber(inv.id)}</p>
+        <p className="font-mono text-xs uppercase tracking-[0.14em] text-text-secondary/50">Invoice</p>
+        <p className="text-sm font-semibold text-text-primary mt-0.5">#{invoiceNumber(inv.id)}</p>
       </div>
 
       <div className="flex items-center justify-between gap-3 py-2.5 border-b border-border text-sm">

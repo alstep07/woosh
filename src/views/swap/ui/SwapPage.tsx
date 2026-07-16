@@ -263,7 +263,7 @@ export default function SwapPage() {
                               : "bg-white/[0.04] text-text-secondary/50 border border-transparent hover:text-text-secondary"
                           }`}
                         >
-                          <span className={`w-5 h-5 rounded-full text-[10px] font-bold flex items-center justify-center ${
+                          <span className={`w-5 h-5 rounded-full text-xs font-bold flex items-center justify-center ${
                             isCircBTC ? "bg-amber-400/15 text-amber-400" : "bg-cyan-400/15 text-cyan-400"
                           }`}>
                             {isCircBTC ? "₿" : "€"}
@@ -299,7 +299,7 @@ export default function SwapPage() {
                             key={p}
                             onClick={() => setPercent(p)}
                             disabled={spendable <= 0}
-                            className="px-2 py-0.5 rounded text-[11px] font-medium bg-white/[0.05] text-text-secondary/50 hover:text-text-primary hover:bg-white/[0.1] disabled:opacity-25 transition-colors"
+                            className="px-2.5 py-1 rounded-full text-xs font-medium bg-white/[0.05] text-text-secondary/50 hover:text-text-primary hover:bg-white/[0.1] disabled:opacity-25 transition-colors"
                           >
                             {p === 100 ? "Max" : `${p}%`}
                           </button>
@@ -307,7 +307,7 @@ export default function SwapPage() {
                       </div>
                     </div>
                     {tokenIn === "USDC" && spendable < balanceNum && (
-                      <p className="text-[10px] text-text-secondary/30 mt-1.5">
+                      <p className="text-xs text-text-secondary/30 mt-1.5">
                         ${GAS_RESERVE.toFixed(2)} reserved for gas
                       </p>
                     )}
@@ -357,13 +357,13 @@ export default function SwapPage() {
                   <div className={`flex items-center gap-2 pt-1 transition-all ${
                     failure?.refunded ? "rounded-lg ring-1 ring-amber-400/25 bg-amber-400/[0.03] px-2 py-1.5 -mx-2" : ""
                   }`}>
-                    <span className={`text-[11px] shrink-0 ${failure?.refunded ? "text-amber-400/70" : "text-text-secondary/40"}`}>Slippage</span>
+                    <span className={`text-xs shrink-0 ${failure?.refunded ? "text-amber-400/70" : "text-text-secondary/40"}`}>Slippage</span>
                     <div className="flex gap-1.5 flex-1">
                       {SLIPPAGE_OPTIONS.map((pct) => (
                         <button
                           key={pct}
                           onClick={() => setSlippage(pct)}
-                          className={`flex-1 py-1 rounded text-[11px] font-semibold transition-colors ${
+                          className={`flex-1 py-1.5 rounded-full text-xs font-semibold transition-colors ${
                             slippage === pct
                               ? "bg-blue-primary/15 text-blue-primary border border-blue-primary/30"
                               : "bg-white/[0.04] text-text-secondary/40 border border-transparent hover:text-text-secondary/70"
@@ -452,7 +452,7 @@ export default function SwapPage() {
                     )}
                   </div>
 
-                  <p className="text-[11px] text-text-secondary/25 text-center pt-1">
+                  <p className="text-xs text-text-secondary/25 text-center pt-1">
                     Routed via Synthra DEX
                   </p>
                 </div>

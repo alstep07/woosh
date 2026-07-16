@@ -5,6 +5,7 @@ import { parseUnits } from "viem";
 import { Button } from "@/shared/ui/Button";
 import { Modal } from "@/shared/ui/Modal";
 import { ModalSuccess } from "@/shared/ui/ModalSuccess";
+import { ModalHeader } from "@/shared/ui/ModalHeader";
 import { AmountInput } from "@/shared/ui/Field";
 import { ChallengeAuthSteps } from "@/features/auth/ui/ChallengeAuthSteps";
 import { useChallengeFlow } from "@/features/auth/model/useChallengeFlow";
@@ -130,10 +131,12 @@ export default function SavingsActionModal({ session, mode, vault, onClose, onDo
         <ChallengeAuthSteps knownEmail={session.email} auth={flow.auth} onBack={flow.backToIdle} />
       ) : (
         <div className="space-y-4">
-          <div>
-            <h2 className="text-lg font-bold text-text-primary leading-tight">{title}</h2>
-            <p className="text-sm text-text-secondary mt-1">{body}</p>
-          </div>
+          <ModalHeader
+            title={title}
+            subtitle={body}
+            icon={mode === "deposit" ? "↓" : "↑"}
+            iconClassName="bg-violet-400/10 text-violet-400"
+          />
 
           {mode === "withdraw" && options.length > 0 && (
             <div className="flex gap-2">

@@ -7,6 +7,7 @@ import Footer from "@/widgets/Footer/ui/Footer";
 import { Button } from "@/shared/ui/Button";
 import { PageHeader } from "@/shared/ui/PageHeader";
 import { EmptyState } from "@/shared/ui/EmptyState";
+import { ActionPill } from "@/shared/ui/ActionPill";
 import CreateSavingsModal from "@/widgets/CreateSavingsModal/ui/CreateSavingsModal";
 import StrategyActionModal, { type StrategyAction } from "@/widgets/CreateStrategyModal/ui/StrategyActionModal";
 import SavingsActionModal, { type SavingsActionMode } from "@/widgets/SavingsActionModal/ui/SavingsActionModal";
@@ -53,33 +54,33 @@ function VaultCard({
     !!vault && (parseFloat(vault.usdc) > 0 || parseFloat(vault.eurc) > 0 || parseFloat(vault.cirbtc) > 0);
 
   return (
-    <div className="glass-card rounded-card p-5 mb-6">
-      <p className="text-xs font-semibold text-text-secondary uppercase tracking-widest mb-1">Vault</p>
+    <div className="glass-card rounded-card p-6 sm:p-7 mb-6">
+      <p className="text-xs font-semibold text-text-secondary uppercase tracking-widest mb-2">Saved</p>
 
       {isLoading ? (
-        <div className="h-9 w-32 bg-border rounded animate-pulse mb-3" />
+        <div className="h-11 w-40 bg-border rounded animate-pulse mb-5" />
       ) : isError ? (
-        <p className="text-3xl font-bold text-text-secondary/40 mb-3">—</p>
+        <p className="text-4xl font-bold text-text-secondary/40 mb-5">—</p>
       ) : !hasAnything ? (
-        <div className="mb-4">
-          <p className="text-text-secondary/60 text-sm">Nothing saved yet.</p>
-          <p className="text-text-secondary/35 text-xs mt-1">
+        <div className="mb-6">
+          <p className="font-mono text-4xl sm:text-5xl font-semibold text-text-primary/30 tracking-tight">0.00</p>
+          <p className="text-text-secondary/45 text-sm mt-2 leading-relaxed max-w-sm">
             Deposit USDC into the vault to keep it separate from your spendable balance.
           </p>
         </div>
       ) : (
-        <div className="mb-3">
-          <p className="font-mono text-3xl font-semibold text-text-primary tracking-tight">
+        <div className="mb-6">
+          <p className="font-mono text-4xl sm:text-5xl font-semibold text-text-primary tracking-tight leading-none">
             {fmtVaultAmount(vault!.usdc)}
-            <span className="font-sans text-base font-medium text-text-secondary/50 ml-1.5">USDC</span>
+            <span className="font-sans text-base font-medium text-text-secondary/45 ml-2">USDC</span>
           </p>
           {rows.length > 0 && (
-            <div className="mt-3 space-y-2">
+            <div className="mt-5 space-y-3">
               {rows.map((r) => {
                 const g = vaultGlyph(r.symbol);
                 return (
-                  <div key={r.symbol} className="flex items-center gap-2.5">
-                    <span className={`shrink-0 h-6 w-6 rounded-full grid place-items-center text-xs font-bold ${g.cls}`}>
+                  <div key={r.symbol} className="flex items-center gap-3">
+                    <span className={`shrink-0 h-7 w-7 rounded-full grid place-items-center text-xs font-bold ${g.cls}`}>
                       {g.ch}
                     </span>
                     <span className="text-sm text-text-secondary flex-1">{r.symbol}</span>
@@ -92,20 +93,23 @@ function VaultCard({
         </div>
       )}
 
-      <div className="flex gap-2 mt-2">
-        <Button size="sm" className="flex-1" onClick={onDeposit}>
+      <div className="flex gap-3">
+        <Button className="flex-1" onClick={onDeposit}>
           Deposit
         </Button>
-        <Button size="sm" variant="secondary" className="flex-1" onClick={onWithdraw} disabled={!hasAnything}>
+        <Button variant="secondary" className="flex-1 min-h-[48px] py-3.5" onClick={onWithdraw} disabled={!hasAnything}>
           Withdraw
         </Button>
       </div>
 
       {vault?.sweepRule.enabled && (
-        <p className="text-[11px] text-text-secondary/40 mt-3">
-          Auto-save: sweeps excess over {fmtVaultAmount(vault.sweepRule.threshold)} USDC in your wallet, up to{" "}
-          {fmtVaultAmount(vault.sweepRule.capPerRun)} USDC per run.
-        </p>
+        <div className="mt-5 pt-4 border-t border-white/[0.06] flex items-start gap-2.5">
+          <span className="mt-1 h-1.5 w-1.5 rounded-full bg-green-400 shrink-0" aria-hidden />
+          <p className="text-xs text-text-secondary/45 leading-relaxed">
+            Auto-save active. Sweeps balance above {fmtVaultAmount(vault.sweepRule.threshold)} USDC, up to{" "}
+            {fmtVaultAmount(vault.sweepRule.capPerRun)} USDC per run.
+          </p>
+        </div>
       )}
     </div>
   );
@@ -147,14 +151,15 @@ function PlanCard({
   else                     runLabel = "paused";
 
   return (
-    <div className="glass-card rounded-card p-4">
-      <div className="flex items-center justify-between gap-3 mb-1">
-        <span className="text-sm font-semibold text-violet-400">{target}</span>
-        <span className={`text-[11px] font-mono ${
-          overdue || isDepleted ? "text-amber-400" : "text-text-secondary/50"
+    <div className="rounded-card border border-white/[0.06] bg-white/[0.02] p-4">
+      <div className="flex items-center justify-between gap-3 mb-1.5">
+        <span className="text-xs font-semibold uppercase tracking-widest text-text-secondary/35">Plan</span>
+        <span className={`text-xs font-mono ${
+          overdue || isDepleted ? "text-amber-400" : "text-text-secondary/45"
         }`}>{runLabel}</span>
       </div>
-      <p className="text-[11px] text-text-secondary/40 mb-3">
+      <p className="text-sm font-semibold text-violet-400 mb-1.5">{target}</p>
+      <p className="text-xs text-text-secondary/40 mb-3 leading-relaxed">
         {isSweep
           ? `Sweeps up to ${s.amountPerPeriod} USDC above ${s.portfolio?.sweepThreshold ?? "0"} USDC in your wallet, ${intervalLabel(s.intervalSeconds)}`
           : `Allocates ${s.amountPerPeriod} USDC ${intervalLabel(s.intervalSeconds)}, ${s.balance} USDC deposit left`}
@@ -165,45 +170,29 @@ function PlanCard({
           <div className="flex-1 h-[2px] bg-white/[0.05] rounded-full overflow-hidden">
             <div className="h-full rounded-full bg-violet-400 transition-all" style={{ width: `${progress}%` }} />
           </div>
-          <span className="text-[10px] font-mono text-text-secondary/35 tabular-nums shrink-0">
+          <span className="text-xs font-mono text-text-secondary/35 tabular-nums shrink-0">
             {s.periodsDone}/{s.periodsTotal}
           </span>
         </div>
       )}
 
-      <div className="flex items-center justify-between">
-        <span className="text-[11px] text-text-secondary/25">{statusBadge(s.status).text}</span>
+      <div className="flex items-center justify-between -mx-2.5">
+        <span className="text-xs text-text-secondary/30 pl-2.5">{statusBadge(s.status).text}</span>
         <div className="flex items-center gap-0.5">
           {canFund && (
-            <button
-              onClick={() => onAction("fund")}
-              className="text-[11px] text-blue-primary/60 hover:text-blue-primary px-2 py-0.5 rounded hover:bg-blue-primary/8 transition-colors"
-            >
+            <ActionPill tone="accent" onClick={() => onAction("fund")}>
               Add funds
-            </button>
+            </ActionPill>
           )}
           {isActive && (
-            <button
-              onClick={() => onAction("pause")}
-              className="text-[11px] text-text-secondary/40 hover:text-text-secondary px-2 py-0.5 rounded hover:bg-white/5 transition-colors"
-            >
-              Pause
-            </button>
+            <ActionPill onClick={() => onAction("pause")}>Pause</ActionPill>
           )}
           {isPaused && (
-            <button
-              onClick={() => onAction("resume")}
-              className="text-[11px] text-text-secondary/40 hover:text-text-secondary px-2 py-0.5 rounded hover:bg-white/5 transition-colors"
-            >
-              Resume
-            </button>
+            <ActionPill onClick={() => onAction("resume")}>Resume</ActionPill>
           )}
-          <button
-            onClick={() => onAction("cancel")}
-            className="text-[11px] text-red-400/40 hover:text-red-400 px-2 py-0.5 rounded hover:bg-red-400/8 transition-colors"
-          >
+          <ActionPill tone="danger" onClick={() => onAction("cancel")}>
             Cancel
-          </button>
+          </ActionPill>
         </div>
       </div>
     </div>
@@ -214,9 +203,9 @@ function PlanCard({
 function PastRow({ s }: { s: OnchainStrategy }) {
   const target = allocationLabel(s, legSymbol) || "savings";
   return (
-    <div className="flex items-center justify-between gap-3 border-b border-white/[0.05] last:border-0 py-3 px-1 opacity-45">
+    <div className="flex items-center justify-between gap-3 border-b border-white/[0.05] last:border-0 py-3.5 px-1 opacity-45">
       <span className="text-sm font-semibold text-violet-400 truncate">{target}</span>
-      <span className="text-[11px] text-text-secondary/25 shrink-0">{statusBadge(s.status).text.toLowerCase()}</span>
+      <span className="text-xs text-text-secondary/30 shrink-0">{statusBadge(s.status).text.toLowerCase()}</span>
     </div>
   );
 }
@@ -313,7 +302,7 @@ export default function SavingsPage() {
 
         {closed.length > 0 && (
           <div>
-            <p className="text-[10px] font-semibold uppercase tracking-widest text-text-secondary/30 mb-3 px-1">
+            <p className="text-xs font-semibold uppercase tracking-widest text-text-secondary/30 mb-3 px-1">
               Past
             </p>
             <div className="glass-card rounded-card px-4">

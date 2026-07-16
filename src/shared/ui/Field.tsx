@@ -8,7 +8,7 @@ import { InputHTMLAttributes, ReactNode } from "react";
  * keep them here so every modal input looks and focuses the same.
  */
 export const FIELD_CLS =
-  "w-full bg-border/40 text-text-primary rounded-input px-3 py-2.5 text-sm border border-border focus:border-blue-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-primary/40 outline-none transition-colors placeholder:text-text-secondary/40";
+  "w-full bg-border/40 text-text-primary rounded-input px-3.5 py-3 text-sm border border-border focus:border-blue-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-primary/40 outline-none transition-colors placeholder:text-text-secondary/40";
 
 export const LABEL_CLS = "block text-xs font-medium text-text-secondary mb-1.5";
 
@@ -38,7 +38,7 @@ export function Field({ label, htmlFor, labelEnd, children, hint }: FieldProps) 
         </label>
       )}
       {children}
-      {hint && <p className="text-[11px] text-text-secondary/50 mt-1.5">{hint}</p>}
+      {hint && <p className="text-xs text-text-secondary/45 mt-1.5 leading-relaxed">{hint}</p>}
     </div>
   );
 }

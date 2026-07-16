@@ -5,6 +5,7 @@ import { erc20Abi } from "viem";
 import { Button } from "@/shared/ui/Button";
 import { Modal } from "@/shared/ui/Modal";
 import { ModalSuccess } from "@/shared/ui/ModalSuccess";
+import { ModalHeader } from "@/shared/ui/ModalHeader";
 import { AmountInput, Field, FIELD_CLS, LABEL_CLS } from "@/shared/ui/Field";
 import { ChallengeAuthSteps } from "@/features/auth/ui/ChallengeAuthSteps";
 import { useChallengeFlow } from "@/features/auth/model/useChallengeFlow";
@@ -213,12 +214,17 @@ export default function CreateSavingsModal({ session, onClose, onCreated }: Prop
           />
         ) : (
           <div className="space-y-5">
-            <h2 className="text-lg font-bold text-text-primary">New savings</h2>
+            <ModalHeader
+              title="New savings"
+              subtitle="A target mix across USDC, EURC and cirBTC, topped up on autopilot."
+              icon="◔"
+              iconClassName="bg-violet-400/10 text-violet-400"
+            />
 
             <div>
               <div className="flex items-center justify-between mb-1.5">
                 <span className="text-xs font-medium text-text-secondary">Target allocation</span>
-                <span className={`text-[11px] ${
+                <span className={`text-xs ${
                   allocation().reduce((s, l) => s + l.bps, 0) === 10_000
                     ? "text-green-400/70"
                     : "text-amber-400/80"
@@ -276,7 +282,7 @@ export default function CreateSavingsModal({ session, onClose, onCreated }: Prop
                     }`}
                   >
                     <span className="block text-sm font-semibold text-text-primary">{label}</span>
-                    <span className="block text-[11px] text-text-secondary/60">{hint}</span>
+                    <span className="block text-xs text-text-secondary/60 mt-0.5">{hint}</span>
                   </button>
                 ))}
               </div>
@@ -344,7 +350,7 @@ export default function CreateSavingsModal({ session, onClose, onCreated }: Prop
                     suggestedFunding && suggestedFunding !== funding ? (
                       <button
                         onClick={() => { setFunding(suggestedFunding); setFormError(null); }}
-                        className="text-[11px] text-blue-primary/70 hover:text-blue-primary transition-colors"
+                        className="text-xs text-blue-primary/70 hover:text-blue-primary transition-colors"
                       >
                         use {suggestedFunding}
                       </button>
@@ -369,9 +375,9 @@ export default function CreateSavingsModal({ session, onClose, onCreated }: Prop
 
             {/* Live summary */}
             {summary && (
-              <div className="rounded-input bg-blue-primary/5 border border-blue-primary/15 px-3.5 py-2.5">
-                <p className="text-sm text-text-primary">{summary}</p>
-                <p className="text-xs text-text-secondary/50 mt-0.5">{scheduleNote}</p>
+              <div className="rounded-input bg-blue-primary/[0.06] border border-blue-primary/15 px-4 py-3">
+                <p className="text-sm text-text-primary font-medium">{summary}</p>
+                <p className="text-xs text-text-secondary/50 mt-1">{scheduleNote}</p>
               </div>
             )}
 
