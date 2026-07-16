@@ -6,7 +6,7 @@ import {
   initiateUserControlledWalletsClient,
   Blockchain,
 } from "@circle-fin/user-controlled-wallets";
-import { parseUnits } from "viem";
+import { parseUnits, formatUnits } from "viem";
 
 function getClient() {
   const key = process.env.CIRCLE_API_KEY;
@@ -427,6 +427,68 @@ export async function createSavingsWithdrawChallenge(
     contractAddress: vaultAddress,
     abiFunctionSignature: "withdraw(address,uint256)",
     abiParameters: [token, amountBaseUnits],
+    fee: { type: "level", config: { feeLevel: "MEDIUM" } },
+    idempotencyKey: crypto.randomUUID(),
+  });
+  return { challengeId: res.data!.challengeId! };
+}
+
+/**
+ * Challenge for a one-off batch send via WooshBatchPay.pay(recipients, amounts, memo).
+ * Stateless: msg.value must equal the exact sum of `amountsWei` (caller's job to add
+ * them up so Circle doesn't silently under/over-fund the call).
+ */
+export async function createBatchPayChallenge(
+  userToken: string,
+  walletId: string,
+  batchPayAddress: `0x${string}`,
+  recipients: string[],
+  amountsWei: string[],
+  memo: string,
+  totalWei: string
+) {
+  const client = getClient();
+  const res = await client.createUserTransactionContractExecutionChallenge({
+    userToken,
+    walletId,
+    contractAddress: batchPayAddress,
+    abiFunctionSignature: "pay(address[],uint256[],string)",
+    abiParameters: [recipients, amountsWei, memo],
+    amount: formatUnits(BigInt(totalWei), 18), // Circle wants the human-decimal native value
+    fee: { type: "level", config: { feeLevel: "MEDIUM" } },
+    idempotencyKey: crypto.randomUUID(),
+  });
+  return { challengeId: res.data!.challengeId! };
+}
+
+/**
+ * Challenge to create a recurring BATCH payment (payroll) via
+ * WooshStrategyRegistry.createBatchPayment. Every period forwards every leg,
+ * all-or-nothing; `funding` (human decimal) is the initial custodied budget.
+ */
+export async function createBatchPaymentChallenge(
+  userToken: string,
+  walletId: string,
+  registryAddress: `0x${string}`,
+  salt: string,
+  recipients: string[],
+  amountsWei: string[],
+  memo: string,
+  intervalSeconds: number,
+  periodsTotal: number,
+  funding: string
+) {
+  if (!/^\d+(\.\d+)?$/.test(funding) || parseFloat(funding) <= 0) {
+    throw new Error(`Invalid funding: ${funding}`);
+  }
+  const client = getClient();
+  const res = await client.createUserTransactionContractExecutionChallenge({
+    userToken,
+    walletId,
+    contractAddress: registryAddress,
+    abiFunctionSignature: "createBatchPayment(uint256,address[],uint256[],string,uint64,uint32)",
+    abiParameters: [salt, recipients, amountsWei, memo, String(intervalSeconds), String(periodsTotal)],
+    amount: funding,
     fee: { type: "level", config: { feeLevel: "MEDIUM" } },
     idempotencyKey: crypto.randomUUID(),
   });
