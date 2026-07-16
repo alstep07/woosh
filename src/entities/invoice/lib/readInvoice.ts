@@ -31,20 +31,17 @@ export async function getInvoice(id: `0x${string}`): Promise<OnchainInvoice | nu
   }
 }
 
-/** The creator's own requests, read straight from the chain (newest first). */
+/** The creator's own requests, read straight from the chain (newest first). Throws on
+ *  RPC failure so react-query can surface isError instead of a false empty state. */
 export async function getMyInvoices(creator: `0x${string}`): Promise<OnchainInvoice[]> {
   if (!env.invoiceRegistryAddress) return [];
-  try {
-    const ids = (await arcPublicClient.readContract({
-      address: env.invoiceRegistryAddress,
-      abi: INVOICE_REGISTRY_ABI,
-      functionName: "getInvoiceIds",
-      args: [creator],
-    })) as readonly `0x${string}`[];
+  const ids = (await arcPublicClient.readContract({
+    address: env.invoiceRegistryAddress,
+    abi: INVOICE_REGISTRY_ABI,
+    functionName: "getInvoiceIds",
+    args: [creator],
+  })) as readonly `0x${string}`[];
 
-    const invoices = await Promise.all([...ids].reverse().map((id) => getInvoice(id)));
-    return invoices.filter((x): x is OnchainInvoice => x !== null);
-  } catch {
-    return [];
-  }
+  const invoices = await Promise.all([...ids].reverse().map((id) => getInvoice(id)));
+  return invoices.filter((x): x is OnchainInvoice => x !== null);
 }

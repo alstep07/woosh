@@ -86,20 +86,18 @@ export async function getStrategy(id: `0x${string}`): Promise<OnchainStrategy | 
   }
 }
 
-/** The owner's strategies, read straight from the chain (newest first). */
+/** The owner's strategies, read straight from the chain (newest first). Throws on RPC
+ *  failure (caller's react-query surfaces isError) rather than swallowing it as an
+ *  empty list, which used to render as a false "no strategies" empty state. */
 export async function getMyStrategies(owner: `0x${string}`): Promise<OnchainStrategy[]> {
   if (!env.strategyRegistryAddress) return [];
-  try {
-    const ids = (await arcPublicClient.readContract({
-      address: env.strategyRegistryAddress,
-      abi: STRATEGY_REGISTRY_ABI,
-      functionName: "getStrategyIds",
-      args: [owner],
-    })) as readonly `0x${string}`[];
+  const ids = (await arcPublicClient.readContract({
+    address: env.strategyRegistryAddress,
+    abi: STRATEGY_REGISTRY_ABI,
+    functionName: "getStrategyIds",
+    args: [owner],
+  })) as readonly `0x${string}`[];
 
-    const strategies = await Promise.all([...ids].reverse().map((id) => getStrategy(id)));
-    return strategies.filter((x): x is OnchainStrategy => x !== null);
-  } catch {
-    return [];
-  }
+  const strategies = await Promise.all([...ids].reverse().map((id) => getStrategy(id)));
+  return strategies.filter((x): x is OnchainStrategy => x !== null);
 }

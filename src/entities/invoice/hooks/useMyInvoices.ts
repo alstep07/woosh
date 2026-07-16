@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { getMyInvoices } from "@/entities/invoice/lib/readInvoice";
 import type { OnchainInvoice } from "@/entities/invoice/model/types";
 
@@ -9,22 +9,19 @@ import type { OnchainInvoice } from "@/entities/invoice/model/types";
  * Polls so a request flips to Paid shortly after it settles on-chain.
  */
 export function useMyInvoices(creator?: `0x${string}`) {
-  const [invoices, setInvoices] = useState<OnchainInvoice[]>([]);
-  const [loading, setLoading] = useState(true);
+  const query = useQuery<OnchainInvoice[], Error>({
+    queryKey: ["invoices", creator],
+    enabled: !!creator,
+    retry: 1,
+    refetchInterval: 15_000,
+    placeholderData: keepPreviousData, // don't blank the list while a background refetch is in flight
+    queryFn: () => getMyInvoices(creator!),
+  });
 
-  const refetch = useCallback(async () => {
-    if (!creator) return;
-    const list = await getMyInvoices(creator);
-    setInvoices(list);
-    setLoading(false);
-  }, [creator]);
-
-  useEffect(() => {
-    void refetch();
-    if (!creator) return;
-    const t = setInterval(() => void refetch(), 15_000);
-    return () => clearInterval(t);
-  }, [creator, refetch]);
-
-  return { invoices, loading, refetch };
+  return {
+    invoices: query.data ?? [],
+    loading: query.isPending,
+    isError: query.isError,
+    refetch: query.refetch,
+  };
 }
