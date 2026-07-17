@@ -6,20 +6,13 @@ import AppHeader from "@/widgets/AppHeader/ui/AppHeader";
 import Footer from "@/widgets/Footer/ui/Footer";
 import { Button } from "@/shared/ui/Button";
 import { PageHeader } from "@/shared/ui/PageHeader";
-import { EmptyState } from "@/shared/ui/EmptyState";
 import { RefreshButton } from "@/shared/ui/RefreshButton";
-import { ActionPill } from "@/shared/ui/ActionPill";
-import StrategyActionModal, { type StrategyAction } from "@/widgets/CreateStrategyModal/ui/StrategyActionModal";
 import SavingsActionModal, { type SavingsActionMode } from "@/widgets/SavingsActionModal/ui/SavingsActionModal";
 import { getSession as loadSession } from "@/shared/lib/session";
-import { useMyStrategies } from "@/entities/strategy/hooks/useMyStrategies";
 import { useVaultBalances } from "@/entities/savings/hooks/useVaultBalances";
-import { statusBadge, formatNextRun, intervalLabel, isOverdue, allocationLabel } from "@/entities/strategy/lib/format";
-import { tokenByAddress } from "@/shared/lib/tokens";
 import { fmtAmount as fmtVaultAmount } from "@/shared/lib/format";
 import { TokenIcon } from "@/shared/ui/TokenIcon";
 import { env } from "@/shared/config/env";
-import type { OnchainStrategy } from "@/entities/strategy/model/types";
 import type { VaultHoldings } from "@/entities/savings/model/types";
 import type { Session } from "@/entities/user/model/types";
 
@@ -114,116 +107,18 @@ function VaultCard({
   );
 }
 
-/** Symbol for an allocation leg token (null = the USDC leg). */
-function legSymbol(token: `0x${string}` | null): string {
-  return token === null ? "USDC" : tokenByAddress(token)?.symbol ?? "?";
-}
-
-/** The current savings plan: target allocation, funding method, schedule, and actions.
- *  There is at most one active plan at a time (the contract has no "edit allocation" —
- *  changing the target means cancelling this one and creating a new one). */
-function PlanCard({
-  s,
-  onAction,
-}: {
-  s: OnchainStrategy;
-  onAction: (action: StrategyAction) => void;
-}) {
-  const overdue = isOverdue(s);
-  const isSweep = s.portfolio?.mode === "sweep";
-  const target = allocationLabel(s, legSymbol) || "Loading allocation…";
-
-  const isActive   = s.status === "active";
-  const isPaused   = s.status === "paused";
-  const isDepleted = s.status === "depleted";
-
-  const capped   = s.periodsTotal > 0;
-  const progress = capped ? Math.min(100, Math.round((s.periodsDone / s.periodsTotal) * 100)) : 0;
-
-  // Sweep savings custody nothing: there is no balance to fund or show.
-  const canFund = !isSweep;
-
-  let runLabel: string;
-  if (isActive && overdue) runLabel = "due now";
-  else if (isActive)       runLabel = formatNextRun(s.nextRunAt, s.status);
-  else if (isDepleted)     runLabel = "needs funds";
-  else                     runLabel = "paused";
-
-  return (
-    <div className="rounded-card border border-white/[0.06] bg-white/[0.02] p-4">
-      {/* This card only ever shows a plan created before Portfolio was frozen (see the
-          comment above). Labeled explicitly as a legacy holdover, not a live product
-          surface, and the target-mix text is muted secondary text, not a heading, so
-          it can't be mistaken for the vault's own name. */}
-      <div className="flex items-center justify-between gap-3 mb-1.5">
-        <span className="text-xs font-semibold uppercase tracking-widest text-text-secondary/35">
-          Legacy plan · {intervalLabel(s.intervalSeconds)}
-        </span>
-        <span className={`text-xs font-mono ${
-          overdue || isDepleted ? "text-amber-400" : "text-text-secondary/45"
-        }`}>{runLabel}</span>
-      </div>
-      <p className="text-sm font-medium text-text-secondary mb-1.5">{target}</p>
-      <p className="text-xs text-text-secondary/40 mb-3 leading-relaxed">
-        {isSweep
-          ? `Sweeps up to ${s.amountPerPeriod} USDC above ${s.portfolio?.sweepThreshold ?? "0"} USDC in your wallet, ${intervalLabel(s.intervalSeconds)}`
-          : `Allocates ${s.amountPerPeriod} USDC ${intervalLabel(s.intervalSeconds)}, ${s.balance} USDC deposit left`}
-      </p>
-
-      {capped && (
-        <div className="flex items-center gap-2 mb-3">
-          <div className="flex-1 h-[2px] bg-white/[0.05] rounded-full overflow-hidden">
-            <div className="h-full rounded-full bg-text-secondary/50 transition-all" style={{ width: `${progress}%` }} />
-          </div>
-          <span className="text-xs font-mono text-text-secondary/35 tabular-nums shrink-0">
-            {s.periodsDone}/{s.periodsTotal}
-          </span>
-        </div>
-      )}
-
-      <div className="flex items-center justify-between -mx-2.5">
-        <span className="text-xs text-text-secondary/30 pl-2.5">{statusBadge(s.status).text}</span>
-        <div className="flex items-center gap-0.5">
-          {canFund && (
-            <ActionPill tone="accent" onClick={() => onAction("fund")}>
-              Add funds
-            </ActionPill>
-          )}
-          {isActive && (
-            <ActionPill onClick={() => onAction("pause")}>Pause</ActionPill>
-          )}
-          {isPaused && (
-            <ActionPill onClick={() => onAction("resume")}>Resume</ActionPill>
-          )}
-          <ActionPill tone="danger" onClick={() => onAction("cancel")}>
-            Cancel
-          </ActionPill>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/** Compact row for a finished (completed/cancelled) plan, in the history list. */
-function PastRow({ s }: { s: OnchainStrategy }) {
-  const target = allocationLabel(s, legSymbol) || "Loading allocation…";
-  return (
-    <div className="flex items-center justify-between gap-3 border-b border-white/[0.05] last:border-0 py-3.5 px-1 opacity-45">
-      <span className="text-sm font-medium text-text-secondary truncate">{target}</span>
-      <span className="text-xs text-text-secondary/30 shrink-0">{statusBadge(s.status).text.toLowerCase()}</span>
-    </div>
-  );
-}
-
+/**
+ * Savings: a WooshSavingsVault balance (USDC/EURC/cirBTC), separate from the spendable
+ * wallet balance. Deposit and withdraw anytime, no schedule, no lockup, no allocation to
+ * configure. Kind.Portfolio (the old target-percent-mix automation) is a different
+ * contract mechanism entirely and is not surfaced here at all.
+ */
 export default function SavingsPage() {
   const router = useRouter();
   const [session, setSession] = useState<Session | null>(null);
-  const [pending, setPending] = useState<{ strategy: OnchainStrategy; action: StrategyAction } | null>(null);
   const [savingsAction, setSavingsAction] = useState<SavingsActionMode | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  const { strategies: allStrategies, loading, isError: strategiesError, refetch } = useMyStrategies(session?.walletAddress);
-  const strategies = allStrategies.filter((s) => s.kind === "portfolio");
   const vault = useVaultBalances(session?.walletAddress as `0x${string}` | undefined);
 
   useEffect(() => {
@@ -232,12 +127,9 @@ export default function SavingsPage() {
     setSession(s);
   }, [router]);
 
-  // One refresh button drives both the vault balance and the plan list: they're two
-  // reads of the same underlying savings state, so a user hitting "refresh" expects
-  // both to update together rather than picking which one they meant.
   async function handleRefresh() {
     setIsRefreshing(true);
-    await Promise.all([refetch(), vault.refetch()]);
+    await vault.refetch();
     setIsRefreshing(false);
   }
 
@@ -249,20 +141,13 @@ export default function SavingsPage() {
     );
   }
 
-  // At most one plan is ever active/paused/depleted at a time (enforced here in the UI;
-  // the contract itself would happily run several, but "one target allocation" is the
-  // whole point of a single vault). If somehow more than one is running (e.g. created
-  // before this page existed), show all of them rather than silently hiding funds.
-  const active = strategies.filter((s) => s.status === "active" || s.status === "paused" || s.status === "depleted");
-  const closed = strategies.filter((s) => s.status === "completed" || s.status === "cancelled");
-
   return (
     <main className="min-h-screen bg-navy flex flex-col">
       <AppHeader />
-      {/* Content width: Savings is a plain list page (vault card + at most one plan +
-          history), so it stays at the narrower max-w-2xl throughout, same as Invoices.
-          Payments and Swap are list-and-tool pages (a create form plus a recurring
-          list) and widen to a two-column layout at lg+, see PayEntryPage.tsx. */}
+      {/* Content width: Savings is a plain list page (just the vault card), so it stays
+          at the narrower max-w-2xl throughout, same as Invoices. Payments and Swap are
+          list-and-tool pages (a create form plus a recurring list) and widen to a
+          two-column layout at lg+, see PayEntryPage.tsx. */}
       <div className="flex-1 px-4 sm:px-6 lg:px-8 py-8 max-w-2xl mx-auto w-full">
 
         <PageHeader
@@ -283,63 +168,9 @@ export default function SavingsPage() {
           onDeposit={() => setSavingsAction("deposit")}
           onWithdraw={() => setSavingsAction("withdraw")}
         />
-
-        {/* Plan */}
-        {loading ? (
-          // Same min-height as the empty/error states below, so finishing a load never
-          // visibly resizes the card.
-          <div className="rounded-card border border-white/[0.05] p-6 min-h-[220px] mb-6 space-y-3">
-            <div className="h-4 w-40 bg-border rounded animate-pulse" />
-            <div className="h-3 w-full bg-border/60 rounded animate-pulse" />
-            <div className="h-3 w-2/3 bg-border/60 rounded animate-pulse" />
-          </div>
-        ) : /* Same rule as everywhere else this session: a transient background-poll
-               error must not hide a real cached plan that's still sitting in `active`
-               (keepPreviousData), only show the error box when there's truly nothing. */
-        active.length > 0 ? (
-          // Kind.Portfolio (target % allocation, "the plan") is frozen: no new creation,
-          // existing plans stay manageable (pause/resume/add funds/cancel) for whoever
-          // already had one running before the V3.2 vault split. New savings is just
-          // the vault above, deposit/withdraw, nothing to "set up" first.
-          <div className="space-y-3 mb-6">
-            {active.map((s) => (
-              <PlanCard key={s.id} s={s} onAction={(action) => setPending({ strategy: s, action })} />
-            ))}
-          </div>
-        ) : strategiesError ? (
-          <EmptyState
-            glyph="!"
-            primary="Couldn't load your savings plan."
-            secondary="There was a problem reading from the network. Try again in a moment."
-            className="rounded-card border border-white/[0.05] p-6 text-center mb-6 min-h-[220px] flex flex-col items-center justify-center"
-          />
-        ) : null}
-
-        {closed.length > 0 && (
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-widest text-text-secondary/30 mb-3 px-1">
-              Past
-            </p>
-            <div className="glass-card rounded-card px-4">
-              {closed.map((s) => (
-                <PastRow key={s.id} s={s} />
-              ))}
-            </div>
-          </div>
-        )}
       </div>
       <Footer />
 
-      {pending && (
-        <StrategyActionModal
-          session={session}
-          strategy={pending.strategy}
-          action={pending.action}
-          onClose={() => setPending(null)}
-          onDone={refetch}
-          noun="savings"
-        />
-      )}
       {savingsAction && (
         <SavingsActionModal
           session={session}
