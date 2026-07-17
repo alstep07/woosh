@@ -140,14 +140,13 @@ export default function RequestsPage() {
   return (
     <main className="min-h-screen bg-navy flex flex-col">
       <AppHeader />
-      {/* Content width: Invoices is a grid-style list page (an unordered, multi-column
-          card grid, not a chronological single-column list), so it keeps the wider
-          max-w-4xl. Savings and Payments' recurring lists are single-column and use
-          max-w-2xl / the two-column list-and-tool layout instead, see PayEntryPage.tsx
-          and SavingsPage.tsx for the rest of the width rule. */}
-      <div className="flex-1 px-4 sm:px-6 lg:px-8 py-8 max-w-4xl mx-auto w-full">
+      {/* Same container width as Savings (max-w-2xl): standardized across the
+          list-style pages so switching between them via nav never shifts the content
+          column. The invoice card grid still reads fine at this width (2 cards per
+          row, ~300px each). */}
+      <div className="flex-1 px-4 sm:px-6 lg:px-8 py-8 max-w-2xl mx-auto w-full">
         <PageHeader
-          title="My invoices"
+          title="Invoices"
           className="mb-6"
           action={
             <div className="flex items-center gap-3">
