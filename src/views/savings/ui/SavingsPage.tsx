@@ -8,9 +8,11 @@ import { Button } from "@/shared/ui/Button";
 import { PageHeader } from "@/shared/ui/PageHeader";
 import { RefreshButton } from "@/shared/ui/RefreshButton";
 import SavingsActionModal, { type SavingsActionMode } from "@/widgets/SavingsActionModal/ui/SavingsActionModal";
+import SweepRuleModal from "@/widgets/SweepRuleModal/ui/SweepRuleModal";
 import { getSession as loadSession } from "@/shared/lib/session";
 import { useVaultBalances } from "@/entities/savings/hooks/useVaultBalances";
 import { fmtAmount as fmtVaultAmount } from "@/shared/lib/format";
+import { intervalLabel } from "@/entities/strategy/lib/format";
 import { TokenIcon } from "@/shared/ui/TokenIcon";
 import { env } from "@/shared/config/env";
 import type { VaultHoldings } from "@/entities/savings/model/types";
@@ -93,16 +95,56 @@ function VaultCard({
           Withdraw
         </Button>
       </div>
+    </div>
+  );
+}
 
-      {vault?.sweepRule.enabled && (
-        <div className="mt-5 pt-4 border-t border-white/[0.06] flex items-start gap-2.5">
-          <span className="mt-1 h-1.5 w-1.5 rounded-full bg-green-400 shrink-0" aria-hidden />
-          <p className="text-xs text-text-secondary/45 leading-relaxed">
-            Auto-save active. Sweeps balance above {fmtVaultAmount(vault.sweepRule.threshold)} USDC, up to{" "}
-            {fmtVaultAmount(vault.sweepRule.capPerRun)} USDC per run.
-          </p>
+/**
+ * Funding methods: every way money can land in the vault, each independently on/off.
+ * Manual deposit (the Deposit button above) always exists; auto-sweep is the first
+ * addable/removable method. More can join this list later (e.g. DCA delivering straight
+ * to the vault) without changing the vault balance model itself.
+ */
+function FundingMethods({
+  vault,
+  onManageSweep,
+}: {
+  vault: VaultHoldings | undefined;
+  onManageSweep: () => void;
+}) {
+  const sweepOn = vault?.sweepRule.enabled ?? false;
+
+  return (
+    <div className="glass-card rounded-card p-6 sm:p-7 mb-6">
+      <p className="text-xs font-semibold text-text-secondary uppercase tracking-widest mb-4">Funding methods</p>
+
+      <div className="space-y-3">
+        <div className="flex items-center gap-3 py-1">
+          <span className="h-1.5 w-1.5 rounded-full bg-green-400 shrink-0" aria-hidden />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-text-primary">Manual deposit</p>
+            <p className="text-xs text-text-secondary/45">Always on. Use Deposit above anytime.</p>
+          </div>
         </div>
-      )}
+
+        <div className="flex items-center gap-3 py-1">
+          <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${sweepOn ? "bg-green-400" : "bg-text-secondary/25"}`} aria-hidden />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-text-primary">Auto-sweep from wallet</p>
+            <p className="text-xs text-text-secondary/45">
+              {sweepOn && vault
+                ? `Sweeps up to ${fmtVaultAmount(vault.sweepRule.capPerRun)} USDC ${intervalLabel(vault.sweepRule.intervalSeconds)}, keeping ${fmtVaultAmount(vault.sweepRule.threshold)} USDC in your wallet.`
+                : "Off. Keep a minimum in your wallet, sweep the rest in automatically."}
+            </p>
+          </div>
+          <button
+            onClick={onManageSweep}
+            className="shrink-0 text-xs font-medium text-blue-primary/80 hover:text-blue-primary transition-colors"
+          >
+            {sweepOn ? "Manage" : "Turn on"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -117,6 +159,7 @@ export default function SavingsPage() {
   const router = useRouter();
   const [session, setSession] = useState<Session | null>(null);
   const [savingsAction, setSavingsAction] = useState<SavingsActionMode | null>(null);
+  const [sweepModalOpen, setSweepModalOpen] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const vault = useVaultBalances(session?.walletAddress as `0x${string}` | undefined);
@@ -168,6 +211,10 @@ export default function SavingsPage() {
           onDeposit={() => setSavingsAction("deposit")}
           onWithdraw={() => setSavingsAction("withdraw")}
         />
+
+        {/* Funding methods: how money gets INTO the vault. Manual deposit is always
+            available above; auto-sweep is the first addable/removable method. */}
+        <FundingMethods vault={vault.data} onManageSweep={() => setSweepModalOpen(true)} />
       </div>
       <Footer />
 
@@ -177,6 +224,14 @@ export default function SavingsPage() {
           mode={savingsAction}
           vault={vault.data ?? EMPTY_VAULT}
           onClose={() => setSavingsAction(null)}
+          onDone={() => vault.refetch()}
+        />
+      )}
+      {sweepModalOpen && (
+        <SweepRuleModal
+          session={session}
+          vault={vault.data ?? EMPTY_VAULT}
+          onClose={() => setSweepModalOpen(false)}
           onDone={() => vault.refetch()}
         />
       )}
