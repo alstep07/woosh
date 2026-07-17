@@ -9,7 +9,6 @@ import { PageHeader } from "@/shared/ui/PageHeader";
 import { EmptyState } from "@/shared/ui/EmptyState";
 import { RefreshButton } from "@/shared/ui/RefreshButton";
 import { ActionPill } from "@/shared/ui/ActionPill";
-import CreateSavingsModal from "@/widgets/CreateSavingsModal/ui/CreateSavingsModal";
 import StrategyActionModal, { type StrategyAction } from "@/widgets/CreateStrategyModal/ui/StrategyActionModal";
 import SavingsActionModal, { type SavingsActionMode } from "@/widgets/SavingsActionModal/ui/SavingsActionModal";
 import { getSession as loadSession } from "@/shared/lib/session";
@@ -152,15 +151,19 @@ function PlanCard({
 
   return (
     <div className="rounded-card border border-white/[0.06] bg-white/[0.02] p-4">
+      {/* This card only ever shows a plan created before Portfolio was frozen (see the
+          comment above). Labeled explicitly as a legacy holdover, not a live product
+          surface, and the target-mix text is muted secondary text, not a heading, so
+          it can't be mistaken for the vault's own name. */}
       <div className="flex items-center justify-between gap-3 mb-1.5">
         <span className="text-xs font-semibold uppercase tracking-widest text-text-secondary/35">
-          {intervalLabel(s.intervalSeconds)}
+          Legacy plan · {intervalLabel(s.intervalSeconds)}
         </span>
         <span className={`text-xs font-mono ${
           overdue || isDepleted ? "text-amber-400" : "text-text-secondary/45"
         }`}>{runLabel}</span>
       </div>
-      <p className="text-sm font-semibold text-violet-400 mb-1.5">{target}</p>
+      <p className="text-sm font-medium text-text-secondary mb-1.5">{target}</p>
       <p className="text-xs text-text-secondary/40 mb-3 leading-relaxed">
         {isSweep
           ? `Sweeps up to ${s.amountPerPeriod} USDC above ${s.portfolio?.sweepThreshold ?? "0"} USDC in your wallet, ${intervalLabel(s.intervalSeconds)}`
@@ -170,7 +173,7 @@ function PlanCard({
       {capped && (
         <div className="flex items-center gap-2 mb-3">
           <div className="flex-1 h-[2px] bg-white/[0.05] rounded-full overflow-hidden">
-            <div className="h-full rounded-full bg-violet-400 transition-all" style={{ width: `${progress}%` }} />
+            <div className="h-full rounded-full bg-text-secondary/50 transition-all" style={{ width: `${progress}%` }} />
           </div>
           <span className="text-xs font-mono text-text-secondary/35 tabular-nums shrink-0">
             {s.periodsDone}/{s.periodsTotal}
@@ -206,7 +209,7 @@ function PastRow({ s }: { s: OnchainStrategy }) {
   const target = allocationLabel(s, legSymbol) || "Loading allocation…";
   return (
     <div className="flex items-center justify-between gap-3 border-b border-white/[0.05] last:border-0 py-3.5 px-1 opacity-45">
-      <span className="text-sm font-semibold text-violet-400 truncate">{target}</span>
+      <span className="text-sm font-medium text-text-secondary truncate">{target}</span>
       <span className="text-xs text-text-secondary/30 shrink-0">{statusBadge(s.status).text.toLowerCase()}</span>
     </div>
   );
@@ -215,7 +218,6 @@ function PastRow({ s }: { s: OnchainStrategy }) {
 export default function SavingsPage() {
   const router = useRouter();
   const [session, setSession] = useState<Session | null>(null);
-  const [createOpen, setCreateOpen] = useState(false);
   const [pending, setPending] = useState<{ strategy: OnchainStrategy; action: StrategyAction } | null>(null);
   const [savingsAction, setSavingsAction] = useState<SavingsActionMode | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -265,7 +267,7 @@ export default function SavingsPage() {
 
         <PageHeader
           title="Savings"
-          subtitle="One vault, a target mix of USDC, EURC and cirBTC, topped up on autopilot"
+          subtitle="A vault for USDC, EURC and cirBTC, separate from your spendable balance. Deposit and withdraw anytime."
           className="mb-6"
           action={<RefreshButton onRefresh={handleRefresh} isRefreshing={isRefreshing} />}
         />
@@ -291,6 +293,19 @@ export default function SavingsPage() {
             <div className="h-3 w-full bg-border/60 rounded animate-pulse" />
             <div className="h-3 w-2/3 bg-border/60 rounded animate-pulse" />
           </div>
+        ) : /* Same rule as everywhere else this session: a transient background-poll
+               error must not hide a real cached plan that's still sitting in `active`
+               (keepPreviousData), only show the error box when there's truly nothing. */
+        active.length > 0 ? (
+          // Kind.Portfolio (target % allocation, "the plan") is frozen: no new creation,
+          // existing plans stay manageable (pause/resume/add funds/cancel) for whoever
+          // already had one running before the V3.2 vault split. New savings is just
+          // the vault above, deposit/withdraw, nothing to "set up" first.
+          <div className="space-y-3 mb-6">
+            {active.map((s) => (
+              <PlanCard key={s.id} s={s} onAction={(action) => setPending({ strategy: s, action })} />
+            ))}
+          </div>
         ) : strategiesError ? (
           <EmptyState
             glyph="!"
@@ -298,34 +313,7 @@ export default function SavingsPage() {
             secondary="There was a problem reading from the network. Try again in a moment."
             className="rounded-card border border-white/[0.05] p-6 text-center mb-6 min-h-[220px] flex flex-col items-center justify-center"
           />
-        ) : active.length > 0 ? (
-          <div className="space-y-3 mb-6">
-            {active.map((s) => (
-              <PlanCard key={s.id} s={s} onAction={(action) => setPending({ strategy: s, action })} />
-            ))}
-          </div>
-        ) : (
-          <EmptyState
-            glyph="◔"
-            primary="No savings plan yet."
-            secondary="Set a target mix, e.g. 50% USDC / 30% cirBTC / 20% EURC, funded by a deposit or by sweeping your wallet balance above a threshold."
-            cta={
-              <Button size="sm" onClick={() => setCreateOpen(true)}>
-                Set up savings
-              </Button>
-            }
-            className="rounded-card border border-white/[0.05] p-6 text-center mb-6 min-h-[220px] flex flex-col items-center justify-center"
-          />
-        )}
-
-        {active.length > 0 && (
-          <button
-            onClick={() => setCreateOpen(true)}
-            className="w-full text-center text-xs text-text-secondary/40 hover:text-text-secondary transition-colors mb-6"
-          >
-            Want a different mix? Cancel the plan above, then set up a new one.
-          </button>
-        )}
+        ) : null}
 
         {closed.length > 0 && (
           <div>
@@ -342,9 +330,6 @@ export default function SavingsPage() {
       </div>
       <Footer />
 
-      {createOpen && (
-        <CreateSavingsModal session={session} onClose={() => setCreateOpen(false)} onCreated={refetch} />
-      )}
       {pending && (
         <StrategyActionModal
           session={session}
