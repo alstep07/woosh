@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/shared/ui/Button";
 import { Modal } from "@/shared/ui/Modal";
 import { ModalSuccess } from "@/shared/ui/ModalSuccess";
@@ -36,6 +37,7 @@ interface Props {
 
 /** Confirm + execute for owner actions on a strategy (pause/resume/cancel/fund). */
 export default function StrategyActionModal({ session, strategy, action, onClose, onDone, noun = "automation" }: Props) {
+  const queryClient = useQueryClient();
   const [amount, setAmount] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
@@ -57,8 +59,16 @@ export default function StrategyActionModal({ session, strategy, action, onClose
           }),
     onSuccess: () => {
       setDone(true);
-      onDone?.();
-      setTimeout(() => onDone?.(), 2500);
+      // Exactly one refetch pass, slightly delayed: challenge success means the PIN was
+      // confirmed, the tx still needs a beat to land onchain. The old immediate call PLUS
+      // a 2.5s repeat fired two refetches per action; the polling queries with
+      // keepPreviousData make a single delayed pass enough.
+      setTimeout(() => {
+        // fund pulls USDC from the wallet, cancel refunds the remaining balance to it.
+        void queryClient.invalidateQueries({ queryKey: ["token-balances", session.walletAddress] });
+        void queryClient.invalidateQueries({ queryKey: ["usdc-balance", session.walletAddress] });
+        onDone?.();
+      }, 2_000);
     },
   });
 

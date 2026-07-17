@@ -4,6 +4,7 @@ import { WagmiProvider } from "wagmi";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { RainbowKitProvider, darkTheme } from "@rainbow-me/rainbowkit";
 import { wagmiConfig } from "@/shared/lib/wagmi";
+import { NetworkStatusBanner } from "@/shared/ui/NetworkStatusBanner";
 import { useState } from "react";
 import "@rainbow-me/rainbowkit/styles.css";
 
@@ -38,6 +39,8 @@ export default function Providers({ children }: { children: React.ReactNode }) {
           borderRadius: "medium",
         })}>
           {children}
+          {/* Global "degraded network" toast: shows while any active query is erroring. */}
+          <NetworkStatusBanner />
         </RainbowKitProvider>
       </QueryClientProvider>
     </WagmiProvider>

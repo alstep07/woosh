@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import ReactMarkdown from "react-markdown";
 import type { W3SSdk } from "@circle-fin/w3s-pw-web-sdk";
 import "@/features/payments/chat-tools"; // registers examples
@@ -128,6 +129,17 @@ interface Props {
 }
 
 export default function ChatPanel({ name, walletAddress, userEmail, onPaymentSuccess, knownCounterparties }: Props) {
+  const queryClient = useQueryClient();
+  // Chat actions mutate onchain state the pages read via react-query. Mark the affected
+  // queries stale (one delayed pass, after the tx has had a beat to land) so active
+  // queries refetch now and inactive ones refetch on next mount.
+  function invalidateAfterAction(keys: string[]) {
+    setTimeout(() => {
+      for (const key of keys) {
+        void queryClient.invalidateQueries({ queryKey: [key, walletAddress] });
+      }
+    }, 2_000);
+  }
   const [messages, setMessages] = useState<ChatMessage[]>(() => {
     try {
       const saved = sessionStorage.getItem(CHAT_STORAGE_KEY);
@@ -290,6 +302,7 @@ export default function ChatPanel({ name, walletAddress, userEmail, onPaymentSuc
         setMessages((prev) =>
           prev.map((m) => (m.id === msgId ? { ...m, actionStatus: "created", requestLink: link } : m))
         );
+        invalidateAfterAction(["invoices"]);
       });
       return "ok";
     } catch (err) {
@@ -362,6 +375,8 @@ export default function ChatPanel({ name, walletAddress, userEmail, onPaymentSuc
           return;
         }
         updateMsgStatus(msgId, "strategy_done");
+        // The new strategy shows up in its list; deposit-funded ones also moved USDC.
+        invalidateAfterAction(["strategies", "token-balances", "usdc-balance"]);
       });
       return "ok";
     } catch (err) {
@@ -415,6 +430,7 @@ export default function ChatPanel({ name, walletAddress, userEmail, onPaymentSuc
           setMessages((prev) =>
             prev.map((m) => (m.id === msgId ? { ...m, actionStatus: "swap_done", swapOut: out } : m))
           );
+          invalidateAfterAction(["token-balances", "usdc-balance", "tx-history"]);
         } catch {
           updateMsgStatus(msgId, "send_error", "Swap failed. Please try again.");
         }

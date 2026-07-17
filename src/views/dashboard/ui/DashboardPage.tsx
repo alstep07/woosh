@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { useUSDCBalance } from "@/entities/wallet/hooks/useUSDCBalance";
 import { useTokenBalances } from "@/entities/wallet/hooks/useTokenBalances";
 import { useTransactionHistory } from "@/entities/payment/hooks/useTransactionHistory";
 import AppHeader from "@/widgets/AppHeader/ui/AppHeader";
@@ -26,14 +25,19 @@ export default function DashboardPage() {
     setSession(s);
   }, [router]);
 
+  // One balances query, not two: useTokenBalances already reads the native USDC
+  // balance (its tokens list always includes a USDC entry), so the previous separate
+  // useUSDCBalance call here was a duplicate getBalance() RPC on its own poll loop.
   const {
-    data: balance,
+    data: holdings,
     isLoading: balanceLoading,
     isError: balanceError,
     refetch: refetchBalance,
-  } = useUSDCBalance(session?.walletAddress);
+  } = useTokenBalances(session?.walletAddress);
 
-  const { data: holdings } = useTokenBalances(session?.walletAddress);
+  const usdcHolding = holdings?.tokens.find((t) => t.symbol === "USDC");
+  // Same display string useUSDCBalance produced ($X.XX), derived from the shared query.
+  const balanceDisplay = usdcHolding ? `$${parseFloat(usdcHolding.amount).toFixed(2)}` : undefined;
 
   const [isTxRefreshing, setIsTxRefreshing] = useState(false);
   const { data: txs, isLoading: txsLoading, isError: txsError, refetch: refetchTxs } =
@@ -63,8 +67,9 @@ export default function DashboardPage() {
     void refetchBalance();
     txCountAtPaymentRef.current = txs?.length ?? 0;
     setPendingTx({ amount: parseFloat(amount).toFixed(2), counterparty });
-    // Poll twice — Blockscout usually indexes within 2–4s
-    setTimeout(() => void refetchTxs(), 2500);
+    // Poll twice — Blockscout usually indexes within 2-4s. The balance query now polls
+    // every 30s (token-balances), so re-read it once the tx has definitely landed too.
+    setTimeout(() => { void refetchTxs(); void refetchBalance(); }, 2500);
     setTimeout(() => void refetchTxs(), 5000);
     // Safety net: always clear after 10s
     setTimeout(() => {
@@ -119,7 +124,7 @@ export default function DashboardPage() {
           {/* Mobile only: compact balance + slug + actions dropdown */}
           <div className="lg:hidden mb-4">
             <AccountBar
-              balance={balance?.display}
+              balance={balanceDisplay}
               isLoading={balanceLoading}
               isError={balanceError}
               paymentLink={paymentLink}
@@ -146,7 +151,7 @@ export default function DashboardPage() {
               Left column, stretched to full height. */}
           <div className="hidden lg:block lg:order-1 lg:col-span-6 lg:h-full lg:min-h-0 min-w-0">
             <WalletCard
-              balance={balance?.display}
+              balance={balanceDisplay}
               isLoading={balanceLoading}
               isError={balanceError}
               paymentLink={paymentLink}

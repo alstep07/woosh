@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { erc20Abi } from "viem";
 import { Button } from "@/shared/ui/Button";
 import { Modal } from "@/shared/ui/Modal";
@@ -36,6 +37,7 @@ interface Props {
  * "savings" is UI-only naming, the contract/API vocabulary stays "portfolio".
  */
 export default function CreateSavingsModal({ session, onClose, onCreated }: Props) {
+  const queryClient = useQueryClient();
   const swapTargets = SWAP_TARGETS.filter((t) => t.address);
 
   const [amount, setAmount] = useState("");
@@ -102,8 +104,14 @@ export default function CreateSavingsModal({ session, onClose, onCreated }: Prop
       }
       const id = computeStrategyId(session.walletAddress, saltRef.current);
       setCreatedId(id);
-      onCreated?.();
-      setTimeout(() => onCreated?.(), 2500);
+      // One delayed refetch pass (see StrategyActionModal): the new savings strategy
+      // shows up in the list; in deposit mode the funding also left the wallet.
+      setTimeout(() => {
+        void queryClient.invalidateQueries({ queryKey: ["strategies", session.walletAddress] });
+        void queryClient.invalidateQueries({ queryKey: ["token-balances", session.walletAddress] });
+        void queryClient.invalidateQueries({ queryKey: ["usdc-balance", session.walletAddress] });
+        onCreated?.();
+      }, 2_000);
     },
   });
 

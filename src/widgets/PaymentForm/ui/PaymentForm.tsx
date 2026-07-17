@@ -9,6 +9,7 @@ import {
   useSwitchChain,
 } from "wagmi";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
+import { useQueryClient } from "@tanstack/react-query";
 import { parseUnits, encodeFunctionData } from "viem";
 import { useUSDCBalance } from "@/entities/wallet/hooks/useUSDCBalance";
 import { INVOICE_REGISTRY_ABI } from "@/entities/invoice/model/abi";
@@ -71,6 +72,7 @@ export default function PaymentForm({ recipientAddress, recipientLabel, initialA
   const { switchChain } = useSwitchChain();
   const { sendTransactionAsync } = useSendTransaction();
   const { data: balance } = useUSDCBalance(address);
+  const queryClient = useQueryClient();
 
   const isWrongNetwork = isConnected && chainId !== arcTestnet.id;
   const amountTrimmed = amount.trim();
@@ -144,6 +146,10 @@ export default function PaymentForm({ recipientAddress, recipientLabel, initialA
       }
       setTxHash(hash);
       setTxState("success");
+      // Refresh the payer balance shown on this page once the tx has landed.
+      setTimeout(() => {
+        void queryClient.invalidateQueries({ queryKey: ["usdc-balance", address] });
+      }, 2_000);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error("[pay]", msg);

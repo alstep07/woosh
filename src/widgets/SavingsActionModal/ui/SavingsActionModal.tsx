@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { parseUnits } from "viem";
 import { Button } from "@/shared/ui/Button";
 import { Modal } from "@/shared/ui/Modal";
@@ -44,6 +45,7 @@ function maxDecimals(mode: SavingsActionMode, symbol: string): number {
 
 /** Confirm + execute a deposit into or withdrawal from the savings vault. */
 export default function SavingsActionModal({ session, mode, vault, onClose, onDone }: Props) {
+  const queryClient = useQueryClient();
   const options = withdrawableTokens(vault);
   const [amount, setAmount] = useState("");
   const [token, setToken] = useState(options[0]?.symbol ?? "USDC");
@@ -80,8 +82,14 @@ export default function SavingsActionModal({ session, mode, vault, onClose, onDo
           }),
     onSuccess: () => {
       setDone(true);
-      onDone?.();
-      setTimeout(() => onDone?.(), 2500);
+      // One delayed refetch pass (see StrategyActionModal): deposit/withdraw moves USDC
+      // between the wallet and the vault, so both sides of that move must refresh.
+      setTimeout(() => {
+        void queryClient.invalidateQueries({ queryKey: ["vault-balances", session.walletAddress] });
+        void queryClient.invalidateQueries({ queryKey: ["token-balances", session.walletAddress] });
+        void queryClient.invalidateQueries({ queryKey: ["usdc-balance", session.walletAddress] });
+        onDone?.();
+      }, 2_000);
     },
   });
 

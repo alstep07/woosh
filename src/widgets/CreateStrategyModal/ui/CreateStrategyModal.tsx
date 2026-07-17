@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/shared/ui/Button";
 import { Modal } from "@/shared/ui/Modal";
 import { ModalSuccess } from "@/shared/ui/ModalSuccess";
@@ -31,6 +32,7 @@ interface Props {
  * Target-allocation savings (Kind.Portfolio) live in a separate CreateSavingsModal.
  */
 export default function CreateStrategyModal({ session, onClose, onCreated }: Props) {
+  const queryClient = useQueryClient();
   const swapTargets = SWAP_TARGETS.filter((t) => t.address);
 
   const [kind, setKind] = useState<Kind>("payment");
@@ -66,8 +68,14 @@ export default function CreateStrategyModal({ session, onClose, onCreated }: Pro
     onSuccess: () => {
       const id = computeStrategyId(session.walletAddress, saltRef.current);
       setCreatedId(id);
-      onCreated?.();
-      setTimeout(() => onCreated?.(), 2500);
+      // One delayed refetch pass (see StrategyActionModal): the new strategy shows up in
+      // the list, and the funding deposit left the wallet balance.
+      setTimeout(() => {
+        void queryClient.invalidateQueries({ queryKey: ["strategies", session.walletAddress] });
+        void queryClient.invalidateQueries({ queryKey: ["token-balances", session.walletAddress] });
+        void queryClient.invalidateQueries({ queryKey: ["usdc-balance", session.walletAddress] });
+        onCreated?.();
+      }, 2_000);
     },
   });
 

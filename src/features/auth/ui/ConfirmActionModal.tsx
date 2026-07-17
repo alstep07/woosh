@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/shared/ui/Button";
 import { Modal } from "@/shared/ui/Modal";
 import { ModalHeader } from "@/shared/ui/ModalHeader";
@@ -52,12 +53,22 @@ export function ConfirmActionModal({
   onSuccess,
 }: Props) {
   const [done, setDone] = useState(false);
+  const queryClient = useQueryClient();
 
   const flow = useChallengeFlow({
     prefillEmail: session.email,
     request,
     onSuccess: () => {
       setDone(true);
+      // Every action routed through this modal spends USDC from the wallet (batch pay,
+      // recurring/payroll/DCA funding), so refresh the wallet-money queries centrally,
+      // one delayed pass, after the tx has had a beat to land onchain. Callers keep
+      // anything action-specific (e.g. the strategies list) in their own onSuccess.
+      setTimeout(() => {
+        void queryClient.invalidateQueries({ queryKey: ["token-balances", session.walletAddress] });
+        void queryClient.invalidateQueries({ queryKey: ["usdc-balance", session.walletAddress] });
+        void queryClient.invalidateQueries({ queryKey: ["tx-history", session.walletAddress] });
+      }, 2_000);
       onSuccess?.();
     },
   });

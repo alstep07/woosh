@@ -102,13 +102,15 @@ export async function GET(
   const { address } = params;
   const lower = address.toLowerCase();
 
+  // Throws on failure: a dropped Blockscout leg must fail the whole request (502 below)
+  // instead of silently returning a partial list — e.g. token-transfers failing would
+  // otherwise make every swap output vanish while native txs still show, and the client
+  // would cache the shrunken list as a successful fetch.
   async function fetchItems(path: string): Promise<RawTx[]> {
-    try {
-      const res = await fetch(`${EXPLORER_BASE}/api/v2/addresses/${address}/${path}`, { cache: "no-store" });
-      if (!res.ok) return [];
-      const data = (await res.json()) as { items?: unknown[]; result?: unknown[] };
-      return (data.items ?? data.result ?? []) as RawTx[];
-    } catch { return []; }
+    const res = await fetch(`${EXPLORER_BASE}/api/v2/addresses/${address}/${path}`, { cache: "no-store" });
+    if (!res.ok) throw new Error(`Blockscout ${path} ${res.status}`);
+    const data = (await res.json()) as { items?: unknown[]; result?: unknown[] };
+    return (data.items ?? data.result ?? []) as RawTx[];
   }
 
   try {
@@ -232,6 +234,8 @@ export async function GET(
     return NextResponse.json(merged);
   } catch (err) {
     console.error("[transactions]", err);
-    return NextResponse.json([]);
+    // 502, not an empty 200: the client must see an error state (and keep its last
+    // good list via keepPreviousData), never a false "no transactions yet".
+    return NextResponse.json({ error: "Upstream explorer unavailable" }, { status: 502 });
   }
 }

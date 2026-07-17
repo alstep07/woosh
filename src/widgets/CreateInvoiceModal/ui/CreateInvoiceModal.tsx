@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/shared/ui/Button";
 import { Modal } from "@/shared/ui/Modal";
 import { ModalSuccess } from "@/shared/ui/ModalSuccess";
@@ -40,6 +41,7 @@ interface Props {
  * while open (parent renders it conditionally), so the auth/SDK hooks run on demand.
  */
 export default function CreateInvoiceModal({ session, onClose, onCreated }: Props) {
+  const queryClient = useQueryClient();
   const sessionRef = useRef(session);
   sessionRef.current = session;
 
@@ -165,8 +167,12 @@ export default function CreateInvoiceModal({ session, onClose, onCreated }: Prop
         setMemo("");
         setPhase("form");
         pendingRef.current = null;
-        onCreated?.();
-        setTimeout(() => onCreated?.(), 2000);
+        // One delayed refetch pass (see StrategyActionModal): the new invoice shows up
+        // in the My invoices list once the tx has landed.
+        setTimeout(() => {
+          void queryClient.invalidateQueries({ queryKey: ["invoices", s.walletAddress] });
+          onCreated?.();
+        }, 2_000);
       });
     } catch {
       setError("Network error. Please try again.");
