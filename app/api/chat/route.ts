@@ -116,6 +116,32 @@ const TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
   {
     type: "function",
     function: {
+      name: "send_batch_payment",
+      description: "Send USDC to 2 or more people at once, right now, in a single transaction. Use when the user names multiple recipients with amounts for an immediate send. For a schedule that repeats, use create_payroll instead. You MUST have every recipient and amount before calling.",
+      parameters: {
+        type: "object",
+        properties: {
+          recipients: {
+            type: "array",
+            description: "2 to 20 entries",
+            items: {
+              type: "object",
+              properties: {
+                to: { type: "string", description: "username or wallet address" },
+                amount: { type: "string", description: "USDC amount for this recipient" },
+              },
+              required: ["to", "amount"],
+            },
+          },
+          memo: { type: "string", description: "optional note for what this batch is for" },
+        },
+        required: ["recipients"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "get_invoices",
       description: "Get the invoices (payment requests) the user has created, with amount, what each is for, paid/unpaid status and creation date. Use to answer questions like 'do I have unpaid invoices?', 'what did I invoice this month?', or 'how much is owed to me?'.",
       parameters: { type: "object", properties: {}, required: [] },
@@ -228,6 +254,92 @@ const TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
           },
         },
         required: ["kind", "amountPerPeriod", "interval"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "create_payroll",
+      description: "Set up a recurring payment to 2-10 people on the same schedule (payroll). Use when the user wants multiple recipients paid automatically on a schedule; for a single recipient use create_strategy(kind:'payment') instead. You MUST have all required fields before calling.",
+      parameters: {
+        type: "object",
+        properties: {
+          recipients: {
+            type: "array",
+            description: "2 to 10 entries",
+            items: {
+              type: "object",
+              properties: {
+                to: { type: "string", description: "username or wallet address" },
+                amount: { type: "string", description: "USDC amount for this recipient, per run" },
+              },
+              required: ["to", "amount"],
+            },
+          },
+          memo: { type: "string" },
+          interval: {
+            type: "string",
+            enum: ["daily", "weekly", "monthly"],
+          },
+          periods: {
+            type: "integer",
+            description: "number of runs; omit for open-ended (until funds run out)",
+          },
+          funding: {
+            type: "string",
+            description: "total USDC to deposit now; must be >= one run's total across all recipients",
+          },
+        },
+        required: ["recipients", "interval", "funding"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "savings_deposit",
+      description: "Deposit USDC from the wallet into the savings vault, right now. Use when the user wants to save or put aside money immediately.",
+      parameters: {
+        type: "object",
+        properties: {
+          amount: { type: "string", description: "USDC amount to deposit" },
+        },
+        required: ["amount"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "savings_withdraw",
+      description: "Withdraw USDC, EURC, or cirBTC from the savings vault back into the wallet, right now.",
+      parameters: {
+        type: "object",
+        properties: {
+          token: { type: "string", enum: ["USDC", "EURC", "cirBTC"] },
+          amount: { type: "string" },
+        },
+        required: ["token", "amount"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "savings_sweep_setup",
+      description: "Turn on auto-sweep for the savings vault: keep a minimum USDC balance in the wallet, sweep everything above it into savings on a schedule, no manual deposit needed. Ask for the max swept per run and the cadence; the threshold to keep defaults to 0 if not given.",
+      parameters: {
+        type: "object",
+        properties: {
+          threshold: { type: "string", description: "USDC to always keep in the wallet, e.g. '100'; defaults to 0" },
+          capPerRun: { type: "string", description: "max USDC swept per run" },
+          interval: {
+            type: "string",
+            enum: ["daily", "weekly", "monthly"],
+          },
+        },
+        required: ["capPerRun", "interval"],
       },
     },
   },
@@ -405,7 +517,7 @@ Transaction history rules:
 - If the user asks where they spent money or wants a breakdown → group transactions by recipient address/slug and show totals per recipient (e.g. "alex $15.00, 0x12…34 $10.00"). Still no per-transaction detail unless explicitly asked.
 - Only list individual transactions if the user explicitly asks for a transaction list or history.
 
-Send rules: always use the exact recipient name/address as stated, never substitute. If recipient or amount is unclear, ask to clarify. Only call send_payment when both recipient and amount are clear.
+Send rules: always use the exact recipient name/address as stated, never substitute. If recipient or amount is unclear, ask to clarify. Only call send_payment when both recipient and amount are clear. When the user names 2 or more recipients for an immediate send (not a schedule), use send_batch_payment instead, one transaction pays everyone.
 
 Invoice questions: when the user asks about their invoices (unpaid ones, total owed to them, what they invoiced this month or on some date, etc.), call get_invoices and answer concisely from the data. Aggregate when asked (for example total of all UNPAID). Do not list every invoice unless the user asks for a list.
 
@@ -413,17 +525,23 @@ Invoice rules: when the user wants to BE paid or to invoice money, you need the 
 
 When the user asks if someone paid them (e.g. "did alex pay me?"): first call resolve_slug to get their address, then call get_transaction_history, then check if that address appears in received transactions. Confirm clearly: "Yes, alex sent you $X on [date]" or "No, I don't see any payments from alex."
 
-"Savings" means ONLY the savings vault at /dashboard/savings (see below); it is separate from the spendable wallet balance. When the user wants to save, put money aside, deposit into savings, or wants a percent split across assets landing in savings ("положи 50 в сбережения", "put 50 into savings", "keep 30% of my money in bitcoin" meaning save it, "10 usdc monthly 50% btc 50% eurc"), guide them to /dashboard/savings: Deposit/Withdraw for manual funding, and an auto-sweep rule (keeps a threshold in the wallet, sweeps the rest in on a schedule) for automation. Do NOT call create_strategy for any of this, and do NOT invent a percent-allocation automation, that mechanism (Kind.Portfolio) is retired, there is no chat action to set it up.
+"Savings" means ONLY the savings vault at /dashboard/savings; it is separate from the spendable wallet balance. When the user wants to save, put money aside, deposit into or withdraw from savings ("положи 50 в сбережения", "put 50 into savings", "withdraw 20 usdc from savings"), call savings_deposit or savings_withdraw directly, right now, no need to send them to the page. When they want automation, "keep a minimum in my wallet and sweep the rest into savings", call savings_sweep_setup. Do NOT invent a percent-allocation automation for savings ("keep 30% of my money in bitcoin" meaning save it, "10 usdc monthly 50% btc 50% eurc"): that mechanism (Kind.Portfolio) is retired, there is no way to split a savings deposit across assets by percent, tell the user plainly and offer savings_deposit (USDC only) or a plain single-asset DCA (create_strategy, kind "swap") as the closest available options.
 
-Strategies (automation): users can set up recurring USDC payments (pay someone a fixed amount on a schedule) or DCA auto-buys (buy EURC or cirBTC with USDC on a schedule). If the user asks for target allocation / percent-split / rebalancing automation instead of a single-asset DCA, that used to exist (Kind.Portfolio) but is retired, tell them plainly it's not available and point them to the savings vault (manual deposit or auto-sweep) or a plain single-asset DCA (create_strategy, kind "swap") as the closest available options, do not attempt to fake it by calling create_strategy with unsupported fields.
+Strategies (automation): users can set up recurring USDC payments (pay someone a fixed amount on a schedule, one recipient via create_strategy or several via create_payroll) or DCA auto-buys (buy EURC or cirBTC with USDC on a schedule, create_strategy kind "swap"). If the user asks for target allocation / percent-split / rebalancing automation, that used to exist (Kind.Portfolio) but is retired, tell them plainly it's not available.
 
-Strategy questions: when the user asks about their strategies (is my DCA running, how much is left, what automations do I have), call get_strategies and answer concisely from the data. If it returns an old target-allocation plan from before Portfolio was retired, describe it factually (it's still running/manageable from /dashboard/savings if the code kept a legacy manage path, otherwise say so) but never suggest creating a new one.
+Strategy questions: when the user asks about their strategies (is my DCA running, how much is left, what automations do I have), call get_strategies and answer concisely from the data. If it returns an old target-allocation plan from before Portfolio was retired, describe it factually but never suggest creating a new one.
 
-Savings vault: when the user asks how much they have saved or what is in the vault, call get_savings and answer concisely from the data.
+Savings vault: when the user asks how much they have saved, what is in the vault, or whether auto-sweep is on, call get_savings and answer concisely from the data.
 
 Swaps (one-off): users can swap (convert) between USDC and EURC or cirBTC right now, in either direction, separate from a recurring DCA. To do one you need the action (buy = USDC to token, sell = token to USDC), which token (EURC or cirBTC), and the amount (always the token they pay WITH: USDC when buying, the token when selling). As soon as you have all three, you MUST call the swap tool in that same turn, do not just say you will; calling it shows the confirmation card. It takes one PIN and the result lands in their wallet. If someone asks to do this repeatedly on a schedule, that is a DCA strategy (create_strategy), not a one-off swap.
 
-Strategy setup: to create one you need the kind (recurring payment or auto-buy), amount per run, how often (daily/weekly/monthly), the recipient (for payments) or which token to buy (for auto-buy), and the total to deposit (funding). If the user gives a number of runs but not a total, compute funding = amount per run x runs. If you cannot determine the total, ask for it. As soon as you have everything, you MUST call create_strategy in that same turn, do not just say you will. To pause or cancel a recurring payment, guide the user to /pay (Recurring mode); for an auto-buy, guide them to /dashboard/swap (Recurring mode).`,
+Strategy setup: to create one you need the kind (recurring payment or auto-buy), amount per run, how often (daily/weekly/monthly), the recipient (for payments) or which token to buy (for auto-buy), and the total to deposit (funding). If the user gives a number of runs but not a total, compute funding = amount per run x runs. If you cannot determine the total, ask for it. As soon as you have everything, you MUST call create_strategy in that same turn, do not just say you will. To pause or cancel a recurring payment, guide the user to /pay (Recurring mode); for an auto-buy, guide them to /dashboard/swap (Recurring mode).
+
+Payroll setup (create_payroll): same as strategy setup but for 2-10 recipients on the same schedule, one shared funding pool. Sum each recipient's amount per run to compute one run's total, and make sure funding covers at least that.
+
+Batch send (send_batch_payment): an immediate one-off payment to 2 or more people at once, right now, not a schedule. Every recipient needs an amount. If the user wants this repeated on a schedule, that's create_payroll instead.
+
+Savings actions: savings_deposit needs an amount (USDC only, deposit() only accepts native USDC). savings_withdraw needs a token (USDC, EURC, or cirBTC) and amount. savings_sweep_setup needs at least the max per run (capPerRun) and the cadence; the wallet-balance floor (threshold) defaults to 0 if not given, ask if it's unclear whether the user wants one. All three call their tool directly in the same turn once the fields are known, do not just describe them.`,
     },
     // Cap context to the most recent messages so long chats can't drown the model
     // in stale history (the client also caps, this is defense in depth).
@@ -491,6 +609,49 @@ Strategy setup: to create one you need the kind (recurring payment or auto-buy),
               amount,
               resolvedAddress,
             },
+          });
+        }
+
+        if (call.function.name === "send_batch_payment") {
+          const raw = Array.isArray(args.recipients) ? args.recipients : [];
+          const memo = String(args.memo ?? "").trim();
+          const fail = (content: string) => toolResults.push({ role: "tool", tool_call_id: call.id, content });
+
+          if (raw.length < 2 || raw.length > 20) {
+            fail("recipients needs 2 to 20 entries, ask the user for more or fewer.");
+            continue;
+          }
+
+          const legs: { to: string; amount: string; resolvedAddress: string }[] = [];
+          let failed = false;
+          for (const leg of raw as { to?: unknown; amount?: unknown }[]) {
+            const to = String(leg?.to ?? "").trim();
+            const amount = String(leg?.amount ?? "").trim();
+            if (!to || !/^\d+(\.\d+)?$/.test(amount) || parseFloat(amount) <= 0) {
+              fail(`Missing or invalid recipient/amount for "${to || "?"}", ask the user to clarify.`);
+              failed = true;
+              break;
+            }
+            let resolvedAddress: string | null;
+            try {
+              resolvedAddress = /^0x[a-fA-F0-9]{40}$/.test(to) ? to : await resolveSlug(to);
+            } catch {
+              fail(`Couldn't verify "${to}" right now due to a network issue. Ask the user to try again in a moment.`);
+              failed = true;
+              break;
+            }
+            if (!resolvedAddress) {
+              fail(`Recipient "${to}" not found, ask the user to double-check.`);
+              failed = true;
+              break;
+            }
+            legs.push({ to, amount, resolvedAddress });
+          }
+          if (failed) continue;
+
+          return NextResponse.json({
+            text: msg.content ?? "",
+            pendingAction: { type: "send_batch_payment", recipients: legs, memo },
           });
         }
 
@@ -573,6 +734,127 @@ Strategy setup: to create one you need the kind (recurring payment or auto-buy),
               periodsTotal,
               funding,
             },
+          });
+        }
+
+        if (call.function.name === "create_payroll") {
+          const raw = Array.isArray(args.recipients) ? args.recipients : [];
+          const memo = String(args.memo ?? "").trim();
+          const intervalKey = String(args.interval ?? "").toLowerCase();
+          const intervalSeconds = INTERVAL_SECONDS[intervalKey];
+          const periodsTotal = Number.isInteger(args.periods) ? Number(args.periods) : 0;
+          const funding = String(args.funding ?? "");
+          const fail = (content: string) => toolResults.push({ role: "tool", tool_call_id: call.id, content });
+
+          if (raw.length < 2 || raw.length > 10) {
+            fail("recipients needs 2 to 10 entries for payroll, ask the user for more or fewer.");
+            continue;
+          }
+          if (!intervalSeconds) {
+            fail("interval missing or invalid, ask if it should run daily, weekly or monthly.");
+            continue;
+          }
+
+          const legs: { to: string; amount: string; resolvedAddress: string }[] = [];
+          let failed = false;
+          let totalPerRun = 0;
+          for (const leg of raw as { to?: unknown; amount?: unknown }[]) {
+            const to = String(leg?.to ?? "").trim();
+            const amount = String(leg?.amount ?? "").trim();
+            if (!to || !/^\d+(\.\d+)?$/.test(amount) || parseFloat(amount) <= 0) {
+              fail(`Missing or invalid recipient/amount for "${to || "?"}", ask the user to clarify.`);
+              failed = true;
+              break;
+            }
+            let resolvedAddress: string | null;
+            try {
+              resolvedAddress = /^0x[a-fA-F0-9]{40}$/.test(to) ? to : await resolveSlug(to);
+            } catch {
+              fail(`Couldn't verify "${to}" right now due to a network issue. Ask the user to try again in a moment.`);
+              failed = true;
+              break;
+            }
+            if (!resolvedAddress) {
+              fail(`Recipient "${to}" not found, ask the user to double-check.`);
+              failed = true;
+              break;
+            }
+            legs.push({ to, amount, resolvedAddress });
+            totalPerRun += parseFloat(amount);
+          }
+          if (failed) continue;
+
+          if (!/^\d+(\.\d+)?$/.test(funding) || parseFloat(funding) < totalPerRun) {
+            fail(`funding missing or less than one run's total (${totalPerRun}). Ask for the total to deposit, or compute it from runs x total-per-run.`);
+            continue;
+          }
+
+          return NextResponse.json({
+            text: msg.content ?? "",
+            pendingAction: {
+              type: "create_payroll",
+              recipients: legs,
+              memo,
+              interval: intervalKey,
+              intervalSeconds,
+              periodsTotal,
+              funding,
+            },
+          });
+        }
+
+        if (call.function.name === "savings_deposit") {
+          const amount = String(args.amount ?? "");
+          if (!/^\d+(\.\d+)?$/.test(amount) || parseFloat(amount) <= 0) {
+            toolResults.push({ role: "tool", tool_call_id: call.id, content: "amount missing or invalid, ask how much USDC to deposit into savings." });
+            continue;
+          }
+          return NextResponse.json({
+            text: msg.content ?? "",
+            pendingAction: { type: "savings_deposit", amount },
+          });
+        }
+
+        if (call.function.name === "savings_withdraw") {
+          const tokenArg = String(args.token ?? "").toUpperCase();
+          const token = tokenArg === "EURC" ? "EURC" : tokenArg === "CIRBTC" ? "cirBTC" : tokenArg === "USDC" ? "USDC" : null;
+          const amount = String(args.amount ?? "");
+          if (!token) {
+            toolResults.push({ role: "tool", tool_call_id: call.id, content: "token missing or invalid, ask which token to withdraw (USDC, EURC, or cirBTC)." });
+            continue;
+          }
+          if (!/^\d+(\.\d+)?$/.test(amount) || parseFloat(amount) <= 0) {
+            toolResults.push({ role: "tool", tool_call_id: call.id, content: "amount missing or invalid, ask how much to withdraw." });
+            continue;
+          }
+          return NextResponse.json({
+            text: msg.content ?? "",
+            pendingAction: { type: "savings_withdraw", token, amount },
+          });
+        }
+
+        if (call.function.name === "savings_sweep_setup") {
+          const threshold = String(args.threshold ?? "0");
+          const capPerRun = String(args.capPerRun ?? "");
+          const intervalKey = String(args.interval ?? "").toLowerCase();
+          const intervalSeconds = INTERVAL_SECONDS[intervalKey];
+          const fail = (content: string) => toolResults.push({ role: "tool", tool_call_id: call.id, content });
+
+          if (!/^\d+(\.\d+)?$/.test(threshold) || parseFloat(threshold) < 0) {
+            fail("threshold invalid, ask how much USDC to always keep in the wallet.");
+            continue;
+          }
+          if (!/^\d+(\.\d+)?$/.test(capPerRun) || parseFloat(capPerRun) <= 0) {
+            fail("capPerRun missing or invalid, ask for the max USDC swept per run.");
+            continue;
+          }
+          if (!intervalSeconds) {
+            fail("interval missing or invalid, ask if it should run daily, weekly or monthly.");
+            continue;
+          }
+          return NextResponse.json({
+            text: msg.content ?? "",
+            pendingAction: { type: "savings_sweep_setup", threshold, capPerRun, interval: intervalKey, intervalSeconds },
           });
         }
 
