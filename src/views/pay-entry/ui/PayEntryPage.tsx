@@ -125,6 +125,20 @@ export default function PayEntryPage() {
   const singleResolve = useResolveRecipient(value);
   const recurringResolve = useResolveRecipient(recipient);
 
+  // Once-batch allows removing rows down to 1 (minRows=1 on RecipientRows below), which
+  // left a single row stuck in the multi-recipient shell with a permanently disabled
+  // delete button. Collapsing back to the plain single-recipient view once only one
+  // address remains, carrying its "to" value over, is the actual expected behavior.
+  function handleOnceRowsChange(rows: RecipientRow[]) {
+    if (rows.length === 1) {
+      setValue(rows[0].to);
+      setOnceMulti(false);
+      setOnceRows(emptyRows());
+      return;
+    }
+    setOnceRows(rows);
+  }
+
   useEffect(() => {
     const s = loadSession();
     if (!s) { router.replace("/signup"); return; }
@@ -310,7 +324,7 @@ export default function PayEntryPage() {
                     <p className="text-text-secondary/50 text-xs">One PIN, everyone gets paid right now.</p>
                   </div>
                 </div>
-                <RecipientRows rows={onceRows} onChange={setOnceRows} minRows={1} maxRows={20} knownAddresses={knownAddresses} />
+                <RecipientRows rows={onceRows} onChange={handleOnceRowsChange} minRows={1} maxRows={20} knownAddresses={knownAddresses} />
                 <Field label="Memo (optional)" htmlFor="once-memo">
                   <input
                     id="once-memo"
