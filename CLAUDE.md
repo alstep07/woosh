@@ -144,11 +144,15 @@ NEXT_PUBLIC_BASE_URL=
 # Smart Contracts
 NEXT_PUBLIC_SLUG_REGISTRY_ADDRESS=      # WooshSlugRegistry on Arc
 NEXT_PUBLIC_INVOICE_REGISTRY_ADDRESS=   # WooshInvoiceRegistry on Arc (payment requests)
-NEXT_PUBLIC_STRATEGY_REGISTRY_ADDRESS=  # WooshStrategyRegistry on Arc (strategies)
-NEXT_PUBLIC_CIRBTC_ADDRESS=             # cirBTC token (DCA target); EURC has a built-in default
+NEXT_PUBLIC_STRATEGY_REGISTRY_ADDRESS=  # WooshStrategyRegistry on Arc (strategies, batch pay)
+NEXT_PUBLIC_SAVINGS_VAULT_ADDRESS=      # WooshSavingsVault on Arc (savings vault, V3.2)
+NEXT_PUBLIC_BATCH_PAY_ADDRESS=          # WooshBatchPay on Arc (one-off batch send, V3.2)
+NEXT_PUBLIC_EURC_ADDRESS=               # EURC token; falls back to the known testnet address if unset
+NEXT_PUBLIC_CIRBTC_ADDRESS=             # cirBTC token (DCA target), no built-in default
 
 # Strategies executor (V3.0, server only, autonomous, no PIN)
 CIRCLE_ENTITY_SECRET=                # DCW entity secret (generate + register in Console)
+CIRCLE_KIT_KEY=                      # Circle App Kit / Stablecoin Service key (secondary swap-rail fallback)
 EXECUTOR_WALLET_ID=                  # DCW executor wallet id (from /api/admin/provision-executor)
 EXECUTOR_ADDRESS=                    # executor address; set via WooshStrategyRegistry.setExecutor
 CRON_SECRET=                         # shared secret the cron + admin routes check
