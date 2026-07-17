@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createStrategyCreateChallenge, getUserWallets } from "@/shared/lib/circle";
+import { createPortfolioCreateChallenge, createStrategyCreateChallenge, getUserWallets } from "@/shared/lib/circle";
 import { resolveSlug } from "@/entities/slug/lib/resolveSlug";
+import { BPS_DENOM } from "@/entities/strategy/lib/allocation";
+import { tokenBySymbol } from "@/shared/lib/tokens";
 
 function isAuthError(err: unknown): boolean {
   const status = (err as { response?: { status?: number } })?.response?.status;
@@ -34,21 +36,28 @@ export async function POST(req: NextRequest) {
       intervalSeconds,
       periodsTotal,
       funding,
+      allocation,   // portfolio: [{ symbol: "USDC" | "EURC" | "cirBTC", bps: number }]
+      mode,         // portfolio: "deposit" | "sweep"
+      sweepThreshold, // portfolio sweep: human decimal USDC
     } = await req.json();
 
-    if (!userToken || !salt || !amountPerPeriod || !funding) {
+    if (!userToken || !salt || !amountPerPeriod) {
       return NextResponse.json({ error: "Missing fields" }, { status: 400 });
     }
     if (!/^\d+$/.test(String(salt))) {
       return NextResponse.json({ error: "Invalid salt" }, { status: 400 });
     }
-    if (kind !== "payment" && kind !== "swap") {
-      return NextResponse.json({ error: "kind must be 'payment' or 'swap'" }, { status: 400 });
+    if (kind !== "payment" && kind !== "swap" && kind !== "portfolio") {
+      return NextResponse.json({ error: "kind must be 'payment', 'swap' or 'portfolio'" }, { status: 400 });
+    }
+    const isSweep = kind === "portfolio" && mode === "sweep";
+    if (!isSweep && !funding) {
+      return NextResponse.json({ error: "Missing fields" }, { status: 400 });
     }
     if (!/^\d+(\.\d+)?$/.test(String(amountPerPeriod)) || parseFloat(amountPerPeriod) <= 0) {
       return NextResponse.json({ error: "Invalid amountPerPeriod" }, { status: 400 });
     }
-    if (parseFloat(funding) < parseFloat(amountPerPeriod)) {
+    if (!isSweep && parseFloat(funding) < parseFloat(amountPerPeriod)) {
       return NextResponse.json({ error: "funding must be >= amountPerPeriod" }, { status: 400 });
     }
     const interval = Number(intervalSeconds);
@@ -58,6 +67,71 @@ export async function POST(req: NextRequest) {
     const periods = Number(periodsTotal ?? 0);
     if (!Number.isInteger(periods) || periods < 0) {
       return NextResponse.json({ error: "Invalid periodsTotal" }, { status: 400 });
+    }
+
+    // Portfolio: validate allocation, map symbols to addresses, build the challenge.
+    if (kind === "portfolio") {
+      if (mode !== "deposit" && mode !== "sweep") {
+        return NextResponse.json({ error: "mode must be 'deposit' or 'sweep'" }, { status: 400 });
+      }
+      const legs = Array.isArray(allocation) ? allocation : [];
+      if (legs.length < 2 || legs.length > 5) {
+        return NextResponse.json({ error: "allocation needs 2 to 5 legs" }, { status: 400 });
+      }
+      const tokens: string[] = [];
+      const bps: number[] = [];
+      let sum = 0;
+      let hasSwapLeg = false;
+      for (const leg of legs) {
+        const b = Number(leg?.bps);
+        if (!Number.isInteger(b) || b <= 0) {
+          return NextResponse.json({ error: "Each leg needs a positive integer bps" }, { status: 400 });
+        }
+        const sym = String(leg?.symbol ?? "").trim();
+        if (sym === "USDC") {
+          tokens.push("");
+        } else {
+          const t = tokenBySymbol(sym);
+          if (!t?.address) {
+            return NextResponse.json({ error: `Unsupported allocation token "${sym}"` }, { status: 400 });
+          }
+          tokens.push(t.address);
+          hasSwapLeg = true;
+        }
+        bps.push(b);
+        sum += b;
+      }
+      if (sum !== BPS_DENOM) {
+        return NextResponse.json({ error: "Allocation must sum to 100%" }, { status: 400 });
+      }
+      if (!hasSwapLeg) {
+        return NextResponse.json({ error: "Allocation needs at least one non-USDC leg" }, { status: 400 });
+      }
+      const threshold = String(sweepThreshold ?? "0");
+      if (isSweep && (!/^\d+(\.\d+)?$/.test(threshold) || parseFloat(threshold) < 0)) {
+        return NextResponse.json({ error: "Invalid sweepThreshold" }, { status: 400 });
+      }
+
+      const wallets = await getUserWallets(userToken);
+      const wallet = wallets[0];
+      if (!wallet) {
+        return NextResponse.json({ error: "No Woosh wallet found. Sign up first." }, { status: 404 });
+      }
+      const result = await createPortfolioCreateChallenge(
+        userToken,
+        wallet.id,
+        registry,
+        String(salt),
+        tokens,
+        bps,
+        isSweep ? 1 : 0,
+        String(amountPerPeriod),
+        isSweep ? threshold : "0",
+        interval,
+        periods,
+        isSweep ? null : String(funding)
+      );
+      return NextResponse.json({ ...result, walletId: wallet.id });
     }
 
     // Resolve the per-kind required address.

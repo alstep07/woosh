@@ -39,7 +39,7 @@ export function EmailStep({
         Sign in with email
       </h1>
       <p className="text-text-secondary text-sm mb-8">
-        We&apos;ll send you a one-time code. No password needed.
+        We&apos;ll send you a one-time code.
       </p>
       <form onSubmit={onSubmit} noValidate className="space-y-4">
         <Input

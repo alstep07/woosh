@@ -91,7 +91,7 @@ export default function TransactionList({
           <button
             onClick={onRefresh}
             disabled={isRefreshing}
-            className="text-blue-primary/60 hover:text-blue-primary transition-colors disabled:opacity-20"
+            className="p-1.5 -m-1.5 rounded-full text-blue-primary/60 hover:text-blue-primary hover:bg-blue-primary/10 transition-colors disabled:opacity-20"
             title="Refresh"
           >
             <svg
@@ -110,7 +110,7 @@ export default function TransactionList({
       {isLoading ? (
         <div className="divide-y divide-border/40">
           {Array.from({ length: skeletonCount }).map((_, i) => (
-            <div key={i} className="flex items-center justify-between px-1 py-2.5">
+            <div key={i} className="flex items-center justify-between px-1 py-3">
               <div className="h-4 w-44 bg-border rounded animate-pulse" />
               <div className="h-4 w-10 bg-border rounded animate-pulse" />
             </div>
@@ -129,7 +129,7 @@ export default function TransactionList({
       ) : (
         <div className="divide-y divide-border/40">
           {pendingEntries?.map((entry, i) => (
-            <div key={`pending-${i}`} className="flex items-center justify-between px-1 py-2.5">
+            <div key={`pending-${i}`} className="flex items-center justify-between px-1 py-3">
               <div>
                 <p className="text-xs text-text-secondary/50">
                   Sent to{" "}
@@ -155,7 +155,7 @@ export default function TransactionList({
               href={`${arcTestnet.blockExplorers.default.url}/tx/${tx.hash}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center justify-between px-1 py-2.5 hover:opacity-70 transition-opacity"
+              className="flex items-center justify-between px-1 py-3 rounded-input hover:bg-white/[0.03] transition-colors"
             >
               <div className="flex items-center gap-2 min-w-0">
                 <TxIcon tx={tx} />

@@ -148,7 +148,7 @@ export default function ParallaxLanding() {
           <div className="head" data-speed="22" data-speed-x="-13">
             <p className="eyebrow rise">01 / Wallet</p>
             <h2 className="rise d1">Start with an <span className="grad">email.</span></h2>
-            <p className="sub rise d2">Type a code, skip the seed phrase. Your self-custodial USDC wallet goes live in one tap.</p>
+            <p className="sub rise d2">Type a code. Your USDC wallet goes live in one tap.</p>
           </div>
           <div className="stage otp-flow" data-speed="-42" data-speed-x="18">
             <div className="email-pill rise d2">you@example.com<span className="cursor" /></div>
@@ -164,34 +164,37 @@ export default function ParallaxLanding() {
           </div>
         </section>
 
-        {/* 02 Transfers */}
+        {/* 02 Payments */}
         <section className="scene" id="plx-s-transfer">
           <div className="head" data-speed="22" data-speed-x="13">
-            <p className="eyebrow rise">02 / Transfers</p>
-            <h2 className="rise d1">A name or a link. <span className="grad">That&apos;s it.</span></h2>
-            <p className="sub rise d2">Send and receive USDC instantly on Arc. Fees are paid in USDC, no gas token to chase.</p>
+            <p className="eyebrow rise">02 / Payments</p>
+            <h2 className="rise d1">Once, or on repeat. <span className="grad">You decide.</span></h2>
+            <p className="sub rise d2">Pay one person right now, or set up recurring payments and payroll that run themselves. No PIN, no missed dates.</p>
           </div>
-          <div className="stage xfer-wrap rise d2" data-speed="-46" data-speed-x="-20">
-            <svg className="svg-stage" viewBox="0 0 560 180" fill="none">
-              <path id="plx-wire" d="M70,90 C200,20 360,160 490,90" stroke="rgba(14,165,233,0.18)" strokeWidth="1.5" strokeDasharray="3 8" />
-              <circle cx="70" cy="90" r="26" fill="#0c1628" stroke="rgba(14,165,233,0.5)" strokeWidth="1.5" />
-              <circle cx="70" cy="90" r="5" fill="#0ea5e9" />
-              <circle cx="70" cy="90" r="26" stroke="#0ea5e9" strokeWidth="1.5" opacity="0.6">
-                <animate attributeName="r" values="26;58;26" dur="2.6s" repeatCount="indefinite" />
-                <animate attributeName="opacity" values="0.5;0;0.5" dur="2.6s" repeatCount="indefinite" />
-              </circle>
-              <circle cx="490" cy="90" r="26" fill="#0c1628" stroke="rgba(34,211,238,0.5)" strokeWidth="1.5" />
-              <circle cx="490" cy="90" r="5" fill="#22d3ee" />
-              <circle cx="490" cy="90" r="26" stroke="#22d3ee" strokeWidth="1.5" opacity="0.6">
-                <animate attributeName="r" values="26;58;26" dur="2.6s" begin="1.3s" repeatCount="indefinite" />
-                <animate attributeName="opacity" values="0.5;0;0.5" dur="2.6s" begin="1.3s" repeatCount="indefinite" />
-              </circle>
-              <circle r="3.5" fill="#22d3ee"><animateMotion dur="2.2s" repeatCount="indefinite"><mpath href="#plx-wire" /></animateMotion></circle>
-              <circle r="3" fill="#0ea5e9"><animateMotion dur="2.2s" begin="1.1s" repeatCount="indefinite"><mpath href="#plx-wire" /></animateMotion></circle>
-            </svg>
-            <div className="xfer-labels">
-              <div className="xlbl" style={{ left: "12.5%", top: "80%" }}><b>You</b><span>0x1a2b…9f4c</span></div>
-              <div className="xlbl" style={{ left: "87.5%", top: "80%" }}><b>@alex</b><span>+$20.00</span></div>
+          <div className="stage strat-stack rise d2" data-speed="-46" data-speed-x="-20">
+            {/* Recurring — the same payment, every period, paid on time */}
+            <div className="scard">
+              <div className="scard-head">
+                <span className="scard-ic blue">↻</span>
+                <span className="t">Rent · Recurring</span>
+                <span className="s">$200 / mo</span>
+              </div>
+              <div className="srow"><span className="d">Apr 1</span><span className="m">Sent <b>$200</b> to @landlord</span><span className="tick">✓</span></div>
+              <div className="srow"><span className="d">May 1</span><span className="m">Sent <b>$200</b> to @landlord</span><span className="tick">✓</span></div>
+              <div className="srow"><span className="d">Jun 1</span><span className="m">Sent <b>$200</b> to @landlord</span><span className="tick">✓</span></div>
+              <div className="srow pending"><span className="d">Jul 1</span><span className="m">Scheduled</span><span className="wait">○</span></div>
+            </div>
+            {/* Payroll — several people, same schedule, one run */}
+            <div className="scard">
+              <div className="scard-head">
+                <span className="scard-ic amber">⇉</span>
+                <span className="t">Payroll · 3 people</span>
+                <span className="s">Biweekly</span>
+              </div>
+              <div className="srow"><span className="d">@mia</span><span className="m">Sent <b>$900</b></span><span className="tick">✓</span></div>
+              <div className="srow"><span className="d">@leo</span><span className="m">Sent <b>$900</b></span><span className="tick">✓</span></div>
+              <div className="srow"><span className="d">@zoe</span><span className="m">Sent <b>$650</b></span><span className="tick">✓</span></div>
+              <div className="scard-total"><span className="lbl">Paid this run</span><span className="val grad">$2,450</span></div>
             </div>
           </div>
         </section>
@@ -217,37 +220,24 @@ export default function ParallaxLanding() {
           </div>
         </section>
 
-        {/* 04 Strategies */}
+        {/* 04 Savings */}
         <section className="scene" id="plx-s-strategy">
           <div className="head" data-speed="22" data-speed-x="13">
-            <p className="eyebrow rise">04 / Strategies</p>
-            <h2 className="rise d1">Set a rule. <span className="grad">It runs itself.</span></h2>
-            <p className="sub rise d2">Recurring payments that never miss, or DCA that quietly stacks an asset week after week. On schedule, no PIN, fully automated.</p>
+            <p className="eyebrow rise">04 / Savings</p>
+            <h2 className="rise d1">Set money aside. <span className="grad">Still yours.</span></h2>
+            <p className="sub rise d2">A vault for USDC, EURC, and cirBTC, separate from spending, yours to move anytime. Yield on idle balances is coming soon.</p>
           </div>
-          <div className="stage strat-stack rise d2" data-speed="-40" data-speed-x="-18">
-            {/* Recurring — the same payment, every period, paid on time */}
+          <div className="stage rise d2" data-speed="-40" data-speed-x="-18">
             <div className="scard">
               <div className="scard-head">
-                <span className="scard-ic blue">↻</span>
-                <span className="t">Rent · Recurring</span>
-                <span className="s">$200 / mo</span>
+                <span className="scard-ic blue">◈</span>
+                <span className="t">Savings vault</span>
+                <span className="s">USDC · EURC · cirBTC</span>
               </div>
-              <div className="srow"><span className="d">Apr 1</span><span className="m">Sent <b>$200</b> to @landlord</span><span className="tick">✓</span></div>
-              <div className="srow"><span className="d">May 1</span><span className="m">Sent <b>$200</b> to @landlord</span><span className="tick">✓</span></div>
-              <div className="srow"><span className="d">Jun 1</span><span className="m">Sent <b>$200</b> to @landlord</span><span className="tick">✓</span></div>
-              <div className="srow pending"><span className="d">Jul 1</span><span className="m">Scheduled</span><span className="wait">○</span></div>
-            </div>
-            {/* DCA — fixed $50 weekly, buying more or less cirBTC as price moves (averaging) */}
-            <div className="scard">
-              <div className="scard-head">
-                <span className="scard-ic amber">₿</span>
-                <span className="t">DCA · cirBTC</span>
-                <span className="s">$50 / wk</span>
-              </div>
-              <div className="srow"><span className="d">Wk 1</span><span className="m"><b>$50</b> <span className="plus">→ +0.00012</span> cirBTC</span><span className="tick">✓</span></div>
-              <div className="srow"><span className="d">Wk 2</span><span className="m"><b>$50</b> <span className="plus">→ +0.00015</span> cirBTC</span><span className="tick">✓</span></div>
-              <div className="srow"><span className="d">Wk 3</span><span className="m"><b>$50</b> <span className="plus">→ +0.00011</span> cirBTC</span><span className="tick">✓</span></div>
-              <div className="scard-total"><span className="lbl">Accumulated</span><span className="val grad">0.00038 cirBTC</span></div>
+              <div className="srow"><span className="d">Wk 1</span><span className="m">Deposited <b>$50</b></span><span className="tick">✓</span></div>
+              <div className="srow"><span className="d">Wk 2</span><span className="m">Deposited <b>$80</b></span><span className="tick">✓</span></div>
+              <div className="srow"><span className="d">Wk 3</span><span className="m">Withdrew <b>$20</b></span><span className="tick">✓</span></div>
+              <div className="scard-total"><span className="lbl">Vault balance</span><span className="val grad">$194.12</span></div>
             </div>
           </div>
         </section>
@@ -281,7 +271,7 @@ export default function ParallaxLanding() {
             <button className="btn-g" style={{ padding: "13px 22px", fontSize: 15 }} onClick={go(appHref)}>Explore the app</button>
           </div>
           <p className="sub rise d3" style={{ fontFamily: "var(--font-mono)", fontSize: 12, letterSpacing: "0.06em", marginTop: 30, opacity: 0.7 }}>
-            Powered by Arc
+            Built on Arc
           </p>
           <div className="plx-cta-footer"><Footer /></div>
         </section>

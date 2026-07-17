@@ -8,3 +8,5 @@ libs = ["lib"]
 # are both available on Blockscout's compiler list. See memory: invoice-registry-reverify-tomorrow.
 solc = "0.8.30"
 evm_version = "cancun"
+optimizer = true
+optimizer_runs = 200

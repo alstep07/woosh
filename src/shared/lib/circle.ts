@@ -6,7 +6,7 @@ import {
   initiateUserControlledWalletsClient,
   Blockchain,
 } from "@circle-fin/user-controlled-wallets";
-import { parseUnits } from "viem";
+import { parseUnits, formatUnits } from "viem";
 
 function getClient() {
   const key = process.env.CIRCLE_API_KEY;
@@ -255,6 +255,81 @@ export async function createStrategyCreateChallenge(
   return { challengeId: res.data!.challengeId! };
 }
 
+/**
+ * Challenge to create a Portfolio strategy via WooshStrategyRegistry.createPortfolio.
+ * Deposit mode: `funding` is the custodied budget (payable). Sweep mode: no value;
+ * `amountPerPeriod` is the per-period pull CAP and `sweepThreshold` the floor the
+ * owner's balance is never pulled below.
+ */
+export async function createPortfolioCreateChallenge(
+  userToken: string,
+  walletId: string,
+  registryAddress: `0x${string}`,
+  salt: string,
+  tokens: string[],
+  bps: number[],
+  mode: 0 | 1,
+  amountPerPeriod: string,
+  sweepThreshold: string,
+  intervalSeconds: number,
+  periodsTotal: number,
+  funding: string | null
+) {
+  if (!/^\d+(\.\d+)?$/.test(amountPerPeriod) || parseFloat(amountPerPeriod) <= 0) {
+    throw new Error(`Invalid amountPerPeriod: ${amountPerPeriod}`);
+  }
+  if (mode === 0 && (!funding || parseFloat(funding) < parseFloat(amountPerPeriod))) {
+    throw new Error("Funding must be >= amountPerPeriod");
+  }
+  const client = getClient();
+  const res = await client.createUserTransactionContractExecutionChallenge({
+    userToken,
+    walletId,
+    contractAddress: registryAddress,
+    abiFunctionSignature:
+      "createPortfolio(uint256,address[],uint16[],uint8,uint256,uint256,uint64,uint32)",
+    abiParameters: [
+      salt,
+      tokens.map((t) => t || ZERO_ADDRESS),
+      bps.map(String),
+      String(mode),
+      parseUnits(amountPerPeriod, 18).toString(),
+      parseUnits(sweepThreshold || "0", 18).toString(),
+      String(intervalSeconds),
+      String(periodsTotal),
+    ],
+    ...(mode === 0 && funding ? { amount: funding } : {}),
+    fee: { type: "level", config: { feeLevel: "MEDIUM" } },
+    idempotencyKey: crypto.randomUUID(),
+  });
+  return { challengeId: res.data!.challengeId! };
+}
+
+/**
+ * Challenge for the ONE-TIME allowance a Sweep portfolio needs: approve(registry, max)
+ * on the USDC ERC-20 precompile so the registry can pull the owner's excess. Revocable
+ * any time by approving 0. The registry bounds every pull on-chain (threshold + cap).
+ */
+export async function createSweepApproveChallenge(
+  userToken: string,
+  walletId: string,
+  registryAddress: `0x${string}`
+) {
+  const MAX_UINT256 =
+    "115792089237316195423570985008687907853269984665640564039457584007913129639935";
+  const client = getClient();
+  const res = await client.createUserTransactionContractExecutionChallenge({
+    userToken,
+    walletId,
+    contractAddress: "0x3600000000000000000000000000000000000000",
+    abiFunctionSignature: "approve(address,uint256)",
+    abiParameters: [registryAddress, MAX_UINT256],
+    fee: { type: "level", config: { feeLevel: "MEDIUM" } },
+    idempotencyKey: crypto.randomUUID(),
+  });
+  return { challengeId: res.data!.challengeId! };
+}
+
 /** Challenge to top up a strategy via WooshStrategyRegistry.fund(id). */
 export async function createStrategyFundChallenge(
   userToken: string,
@@ -298,6 +373,122 @@ export async function createStrategyActionChallenge(
     contractAddress: registryAddress,
     abiFunctionSignature: `${action}(bytes32)`,
     abiParameters: [id],
+    fee: { type: "level", config: { feeLevel: "MEDIUM" } },
+    idempotencyKey: crypto.randomUUID(),
+  });
+  return { challengeId: res.data!.challengeId! };
+}
+
+/**
+ * Challenge to deposit native USDC into WooshSavingsVault via deposit(). The vault is
+ * separate from the spendable wallet balance; `amount` is the native value moved in
+ * (msg.value), same human-decimal convention as the strategy challenges above.
+ */
+export async function createSavingsDepositChallenge(
+  userToken: string,
+  walletId: string,
+  vaultAddress: `0x${string}`,
+  amount: string
+) {
+  if (!/^\d+(\.\d+)?$/.test(amount) || parseFloat(amount) <= 0) {
+    throw new Error(`Invalid amount: ${amount}`);
+  }
+  const client = getClient();
+  const res = await client.createUserTransactionContractExecutionChallenge({
+    userToken,
+    walletId,
+    contractAddress: vaultAddress,
+    abiFunctionSignature: "deposit()",
+    abiParameters: [],
+    amount,
+    fee: { type: "level", config: { feeLevel: "MEDIUM" } },
+    idempotencyKey: crypto.randomUUID(),
+  });
+  return { challengeId: res.data!.challengeId! };
+}
+
+/**
+ * Challenge to take funds back out of WooshSavingsVault via withdraw(token, amount).
+ * Owner-only on-chain, any amount, any time. `amountBaseUnits` must already be in the
+ * token's own base units (18-dec native USDC as address(0), 6-dec EURC, 8-dec cirBTC);
+ * callers resolve token address and decimals server-side before calling this.
+ */
+export async function createSavingsWithdrawChallenge(
+  userToken: string,
+  walletId: string,
+  vaultAddress: `0x${string}`,
+  token: `0x${string}`,
+  amountBaseUnits: string
+) {
+  const client = getClient();
+  const res = await client.createUserTransactionContractExecutionChallenge({
+    userToken,
+    walletId,
+    contractAddress: vaultAddress,
+    abiFunctionSignature: "withdraw(address,uint256)",
+    abiParameters: [token, amountBaseUnits],
+    fee: { type: "level", config: { feeLevel: "MEDIUM" } },
+    idempotencyKey: crypto.randomUUID(),
+  });
+  return { challengeId: res.data!.challengeId! };
+}
+
+/**
+ * Challenge for a one-off batch send via WooshBatchPay.pay(recipients, amounts, memo).
+ * Stateless: msg.value must equal the exact sum of `amountsWei` (caller's job to add
+ * them up so Circle doesn't silently under/over-fund the call).
+ */
+export async function createBatchPayChallenge(
+  userToken: string,
+  walletId: string,
+  batchPayAddress: `0x${string}`,
+  recipients: string[],
+  amountsWei: string[],
+  memo: string,
+  totalWei: string
+) {
+  const client = getClient();
+  const res = await client.createUserTransactionContractExecutionChallenge({
+    userToken,
+    walletId,
+    contractAddress: batchPayAddress,
+    abiFunctionSignature: "pay(address[],uint256[],string)",
+    abiParameters: [recipients, amountsWei, memo],
+    amount: formatUnits(BigInt(totalWei), 18), // Circle wants the human-decimal native value
+    fee: { type: "level", config: { feeLevel: "MEDIUM" } },
+    idempotencyKey: crypto.randomUUID(),
+  });
+  return { challengeId: res.data!.challengeId! };
+}
+
+/**
+ * Challenge to create a recurring BATCH payment (payroll) via
+ * WooshStrategyRegistry.createBatchPayment. Every period forwards every leg,
+ * all-or-nothing; `funding` (human decimal) is the initial custodied budget.
+ */
+export async function createBatchPaymentChallenge(
+  userToken: string,
+  walletId: string,
+  registryAddress: `0x${string}`,
+  salt: string,
+  recipients: string[],
+  amountsWei: string[],
+  memo: string,
+  intervalSeconds: number,
+  periodsTotal: number,
+  funding: string
+) {
+  if (!/^\d+(\.\d+)?$/.test(funding) || parseFloat(funding) <= 0) {
+    throw new Error(`Invalid funding: ${funding}`);
+  }
+  const client = getClient();
+  const res = await client.createUserTransactionContractExecutionChallenge({
+    userToken,
+    walletId,
+    contractAddress: registryAddress,
+    abiFunctionSignature: "createBatchPayment(uint256,address[],uint256[],string,uint64,uint32)",
+    abiParameters: [salt, recipients, amountsWei, memo, String(intervalSeconds), String(periodsTotal)],
+    amount: funding,
     fee: { type: "level", config: { feeLevel: "MEDIUM" } },
     idempotencyKey: crypto.randomUUID(),
   });

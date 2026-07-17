@@ -26,6 +26,8 @@ registerToolExamples("create_strategy", [
   "buy 10 usdc of cirBTC every week",
   "pay alex 50 usdc monthly",
   "auto-buy EURC with 5 usdc daily",
+  "keep 50% usdc, 30% bitcoin, 20% euro",
+  "invest everything above 100 usdc weekly",
 ]);
 
 registerToolExamples("get_strategies", [

@@ -1,6 +1,6 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { formatUnits } from "viem";
 import { arcPublicClient } from "@/shared/lib/arc";
 import { USDC, EURC, CIRBTC, type SupportedToken } from "@/shared/lib/tokens";
@@ -27,18 +27,17 @@ const ERC20_ABI = [
   },
 ] as const;
 
+/** Throws on RPC failure rather than returning 0n — a failed read must never be
+ *  mistaken for a real zero balance (that previously made whichever token's read
+ *  happened to fail on a given poll silently vanish from the list). */
 async function readErc20(token: SupportedToken, account: `0x${string}`): Promise<bigint> {
   if (!token.address) return 0n;
-  try {
-    return (await arcPublicClient.readContract({
-      address: token.address,
-      abi: ERC20_ABI,
-      functionName: "balanceOf",
-      args: [account],
-    })) as bigint;
-  } catch {
-    return 0n;
-  }
+  return (await arcPublicClient.readContract({
+    address: token.address,
+    abi: ERC20_ABI,
+    functionName: "balanceOf",
+    args: [account],
+  })) as bigint;
 }
 
 /**
@@ -65,7 +64,8 @@ export function useTokenBalances(account?: `0x${string}`) {
   return useQuery<Holdings, Error>({
     queryKey: ["token-balances", account],
     enabled: !!account,
-    retry: 0,
+    retry: 1,
+    placeholderData: keepPreviousData, // a failed poll keeps the last good balances, not a blank/partial view
     refetchInterval: 30_000,
     queryFn: async () => {
       const [usdcRaw, eurcRaw, cirbtcRaw, prices] = await Promise.all([

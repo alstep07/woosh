@@ -22,8 +22,9 @@ integration (UCW, CCTP, StableFX, USYC). "No second token ever" is the killer fe
 | V2a | ✅ | Woosh Agent chat (Claude via OpenRouter, 4 tools) |
 | V2b | ✅ | Direct payment execution from chat (PIN inline) |
 | V2.2 | ✅ | Payment requests / invoices, onchain via `WooshInvoiceRegistry` (`/i/[id]` links, "My invoices" list, chat tools) |
-| V3.0 | ✅ | Automated strategies, onchain via `WooshStrategyRegistry`: recurring USDC payments + DCA auto-buys (EURC/cirBTC). DCW executor (no PIN), Vercel Cron, swaps via Synthra SynRoute API. `/dashboard/strategies`, chat tools. Manual swap at `/dashboard/swap`. |
-| V3.1+ | 🔄 | Next candidates: MCP server (repackage chat tools), multi-token dashboard balances, bridge/off-ramp |
+| V3.0 | ✅ | Automated strategies, onchain via `WooshStrategyRegistry`: recurring USDC payments + DCA auto-buys (EURC/cirBTC). DCW executor (no PIN), Vercel Cron, swaps via Synthra SynRoute API. Managed from Send (`/pay`) and Swap (`/dashboard/swap`), chat tools. |
+| V3.1 | 🔄 | Portfolio strategies (hackathon DeFi track): target percent allocation across USDC/EURC/cirBTC. `Kind.Portfolio` is now frozen (no new creation in UI, existing plans still manageable from `/dashboard/savings`) in favor of the V3.2 savings vault. |
+| V3.2 | 🔄 | Product split: Send (`/pay`, once/batch/recurring/payroll payments), Swap (`/dashboard/swap`, once/recurring DCA), Savings (`/dashboard/savings`, `WooshSavingsVault` deposit/withdraw). The standalone Automations page is gone, recurring lists moved onto Send/Swap. `WooshBatchPay` for one-off batch sends, `createBatchPayment`/memo/`deliverToVault` added to `WooshStrategyRegistry` (registry v2). See `memory/savings-vault-roadmap.md` for the phased plan. |
 
 ---
 
@@ -60,6 +61,19 @@ executor only pays gas to trigger). DCA swaps are semi-custodial for one period 
 and delivers the output straight to the owner. Cron is scheduler-agnostic
 (`/api/cron/execute-strategies`, `CRON_SECRET`); free Vercel Cron tick = daily granularity
 (finer needs an external pinger).
+
+**Portfolio strategies (V3.1)**, `Kind.Portfolio` with weighted legs (bps sum 10000,
+USDC leg = `address(0)`). Deposit mode: `releaseForPortfolio` sends the USDC leg straight
+from the contract to the owner; only the swap share touches the executor. Sweep mode:
+`sweepForPortfolio(id, amount6)` pulls via `transferFrom` on the USDC precompile (needs a
+one-time `approve(registry, max)`, extra PIN at setup — see `/api/wallet/approve-sweep`);
+threshold and per-period cap are enforced ONCHAIN, and only the non-USDC share is ever
+pulled. The precompile fully supports approve/transferFrom on native balance (verified via
+eth_simulateV1 + fork test; it is a proxy contract, and its `transferFrom` blocklist-checks
+the CALLER, so contract callers are by design). Cron quotes every leg before moving funds
+(all-or-skip) and refunds failed legs by EXACT amount, never by balance scan. Sweep
+strategies hold no contract balance: `fund()` rejects them, resume skips the balance check,
+UI hides Fund/balance.
 
 **Swap rail (Synthra SynRoute)**, all swaps on Arc testnet go through `trading-api.synthra.org`.
 Circle App Kit / Stablecoin Service has no routes on testnet. Implementation in
@@ -130,11 +144,15 @@ NEXT_PUBLIC_BASE_URL=
 # Smart Contracts
 NEXT_PUBLIC_SLUG_REGISTRY_ADDRESS=      # WooshSlugRegistry on Arc
 NEXT_PUBLIC_INVOICE_REGISTRY_ADDRESS=   # WooshInvoiceRegistry on Arc (payment requests)
-NEXT_PUBLIC_STRATEGY_REGISTRY_ADDRESS=  # WooshStrategyRegistry on Arc (strategies)
-NEXT_PUBLIC_CIRBTC_ADDRESS=             # cirBTC token (DCA target); EURC has a built-in default
+NEXT_PUBLIC_STRATEGY_REGISTRY_ADDRESS=  # WooshStrategyRegistry on Arc (strategies, batch pay)
+NEXT_PUBLIC_SAVINGS_VAULT_ADDRESS=      # WooshSavingsVault on Arc (savings vault, V3.2)
+NEXT_PUBLIC_BATCH_PAY_ADDRESS=          # WooshBatchPay on Arc (one-off batch send, V3.2)
+NEXT_PUBLIC_EURC_ADDRESS=               # EURC token; falls back to the known testnet address if unset
+NEXT_PUBLIC_CIRBTC_ADDRESS=             # cirBTC token (DCA target), no built-in default
 
 # Strategies executor (V3.0, server only, autonomous, no PIN)
 CIRCLE_ENTITY_SECRET=                # DCW entity secret (generate + register in Console)
+CIRCLE_KIT_KEY=                      # Circle App Kit / Stablecoin Service key (secondary swap-rail fallback)
 EXECUTOR_WALLET_ID=                  # DCW executor wallet id (from /api/admin/provision-executor)
 EXECUTOR_ADDRESS=                    # executor address; set via WooshStrategyRegistry.setExecutor
 CRON_SECRET=                         # shared secret the cron + admin routes check

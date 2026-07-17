@@ -5,6 +5,7 @@ import { resolveSlug } from "@/entities/slug/lib/resolveSlug";
 import { getMyInvoices } from "@/entities/invoice/lib/readInvoice";
 import { getMyStrategies } from "@/entities/strategy/lib/readStrategy";
 import { strategySummary, statusBadge } from "@/entities/strategy/lib/format";
+import { getVaultHoldings } from "@/entities/savings/lib/readVault";
 import { EURC, CIRBTC, tokenByAddress } from "@/shared/lib/tokens";
 import { env } from "@/shared/config/env";
 import { erc20Abi, formatUnits } from "viem";
@@ -180,16 +181,24 @@ const TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
   {
     type: "function",
     function: {
+      name: "get_savings",
+      description: "Get the user's savings vault balances (USDC, EURC, cirBTC held in the vault, separate from their spendable wallet balance) and their auto-sweep rule if one is set. Use for 'how much do I have saved?', 'what's in my vault?', 'is auto-save on?'.",
+      parameters: { type: "object", properties: {}, required: [] },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "create_strategy",
       description:
-        "Set up an automated strategy: a recurring USDC payment, or a DCA auto-buy of another token with USDC. It runs onchain on schedule with NO PIN each time after a one-time setup the user confirms. You MUST have all required fields before calling; if any is missing, ask first, do not guess. For 'funding' (total to deposit): if the user gives a number of runs, you may compute funding = amountPerPeriod x runs; otherwise ask how much to deposit.",
+        "Set up an automated strategy: a recurring USDC payment, a DCA auto-buy of another token with USDC, or target allocation automation (legacy portfolio: keep a target percent allocation across USDC/EURC/cirBTC, e.g. '50% USDC, 30% bitcoin, 20% euro'). This is NOT the savings vault, do not use it when the user just wants to save or deposit money, guide them to /dashboard/savings for that instead. Runs onchain on its schedule after a one-time setup the user confirms with their PIN. You MUST have all required fields before calling; if any is missing, ask first, do not guess. For 'funding' (total to deposit): if the user gives a number of runs, you may compute funding = amountPerPeriod x runs; otherwise ask how much to deposit. Portfolios in 'sweep' mode need NO funding (they allocate the wallet balance above sweepThreshold each run).",
       parameters: {
         type: "object",
         properties: {
           kind: {
             type: "string",
-            enum: ["payment", "swap"],
-            description: "'payment' for a recurring payment to someone, 'swap' for a DCA auto-buy of a token",
+            enum: ["payment", "swap", "portfolio"],
+            description: "'payment' = recurring payment to someone, 'swap' = DCA auto-buy of one token, 'portfolio' = target allocation automation (legacy, keep a percent allocation across tokens); do not use 'portfolio' when the user just wants to save money, that is the savings vault, not this tool",
           },
           recipient: {
             type: "string",
@@ -200,9 +209,27 @@ const TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
             enum: ["EURC", "cirBTC"],
             description: "swap only: which token to buy with USDC. 'bitcoin'/'BTC' means cirBTC, 'euro'/'EUR' means EURC.",
           },
+          allocation: {
+            type: "object",
+            description: "portfolio only: target percent per token, integers summing to 100, e.g. {\"USDC\": 50, \"cirBTC\": 30, \"EURC\": 20}. bitcoin/BTC means cirBTC, euro/EUR means EURC.",
+            properties: {
+              USDC: { type: "integer" },
+              EURC: { type: "integer" },
+              cirBTC: { type: "integer" },
+            },
+          },
+          mode: {
+            type: "string",
+            enum: ["deposit", "sweep"],
+            description: "portfolio only: 'deposit' allocates a fixed amount per run from a deposited budget; 'sweep' allocates whatever the wallet holds above sweepThreshold (no deposit needed)",
+          },
+          sweepThreshold: {
+            type: "string",
+            description: "portfolio sweep only: USDC amount to always keep in the wallet, e.g. '100'",
+          },
           amountPerPeriod: {
             type: "string",
-            description: "USDC spent/sent each run, e.g. '10'",
+            description: "USDC spent/sent each run (for portfolio sweep: the max per run), e.g. '10'",
           },
           interval: {
             type: "string",
@@ -215,10 +242,10 @@ const TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
           },
           funding: {
             type: "string",
-            description: "total USDC to deposit now; must be >= amountPerPeriod",
+            description: "total USDC to deposit now; must be >= amountPerPeriod. NOT needed for portfolio sweep mode.",
           },
         },
-        required: ["kind", "amountPerPeriod", "interval", "funding"],
+        required: ["kind", "amountPerPeriod", "interval"],
       },
     },
   },
@@ -305,16 +332,39 @@ async function getStrategiesSummary(address: string): Promise<string> {
   try {
     const list = (await getMyStrategies(address as `0x${string}`)).slice(0, 40);
     if (list.length === 0) return "No strategies set up yet.";
+    const legSymbol = (token: `0x${string}` | null) =>
+      token === null ? "USDC" : tokenByAddress(token)?.symbol ?? "token";
     return list
       .map((s) => {
         const symbol = s.kind === "swap" ? tokenByAddress(s.tokenOut)?.symbol : undefined;
-        return `${statusBadge(s.status).text.toUpperCase()}: ${strategySummary(s, symbol)}, ${s.balance} USDC left${
+        const isSweep = s.kind === "portfolio" && s.portfolio?.mode === "sweep";
+        const budget = isSweep
+          ? `keeps ${s.portfolio?.sweepThreshold ?? "0"} USDC in the wallet`
+          : `${s.balance} USDC left`;
+        return `${statusBadge(s.status).text.toUpperCase()}: ${strategySummary(s, symbol, legSymbol)}, ${budget}${
           s.periodsTotal > 0 ? ` (${s.periodsDone}/${s.periodsTotal} runs)` : ` (${s.periodsDone} runs done)`
         }`;
       })
       .join("\n");
   } catch {
     return "Could not load strategies.";
+  }
+}
+
+async function getSavingsSummary(address: string): Promise<string> {
+  try {
+    const vault = await getVaultHoldings(address as `0x${string}`);
+    const lines: string[] = [];
+    if (parseFloat(vault.usdc) > 0) lines.push(`${vault.usdc} USDC`);
+    if (parseFloat(vault.eurc) > 0) lines.push(`${vault.eurc} EURC`);
+    if (parseFloat(vault.cirbtc) > 0) lines.push(`${vault.cirbtc} cirBTC`);
+    const balanceLine = lines.length ? `Vault holds ${lines.join(", ")}.` : "The vault is empty, nothing saved yet.";
+    const ruleLine = vault.sweepRule.enabled
+      ? `Auto-save is on: sweeps excess over ${vault.sweepRule.threshold} USDC in the wallet, up to ${vault.sweepRule.capPerRun} USDC per run.`
+      : "Auto-save is off.";
+    return `${balanceLine} ${ruleLine}`;
+  } catch {
+    return "Could not load savings vault.";
   }
 }
 
@@ -381,13 +431,19 @@ Invoice rules: when the user wants to BE paid or to invoice money, you need the 
 
 When the user asks if someone paid them (e.g. "did alex pay me?"): first call resolve_slug to get their address, then call get_transaction_history, then check if that address appears in received transactions. Confirm clearly: "Yes, alex sent you $X on [date]" or "No, I don't see any payments from alex."
 
-Strategies (automation): users can set up recurring USDC payments (pay someone a fixed amount on a schedule) or DCA auto-buys (buy EURC or cirBTC with USDC on a schedule). How it works, explain plainly if asked: the strategy's budget is deposited into an onchain vault during a one-time setup the user confirms with their PIN; after that it runs automatically onchain on schedule with NO PIN each time. The user can pause or cancel anytime and gets the remaining balance back. Cadence options are daily, weekly, monthly.
+"Savings" means ONLY the savings vault at /dashboard/savings (see below); it is separate from the spendable wallet balance. When the user wants to save, put money aside, or deposit into savings ("положи 50 в сбережения", "put 50 into savings", "keep 30% of my money in bitcoin" meaning save it), guide them to /dashboard/savings to deposit, do NOT call create_strategy for this. There is no chat action to deposit or withdraw from the vault yet.
+
+Strategies (automation): users can set up recurring USDC payments (pay someone a fixed amount on a schedule), DCA auto-buys (buy EURC or cirBTC with USDC on a schedule), or target allocation automation (kind "portfolio" in tool calls; keep a target percent allocation across USDC, EURC and cirBTC). This is a legacy feature, existing setups keep running but do NOT describe it to the user as "savings" and do not steer new users toward it when they say they want to save money, point them to the savings vault instead; only use it if the user explicitly asks for scheduled rebalancing or percent-allocation automation. How it works, explain plainly if asked: the strategy's budget is deposited into an onchain vault during a one-time setup the user confirms with their PIN, then it runs on schedule. The user can pause or cancel anytime and gets the remaining balance back. Cadence options are daily, weekly, monthly.
+
+Target allocation automation, two funding modes. "deposit" allocates a fixed USDC amount per run from a deposited budget (needs funding). "sweep" allocates whatever the wallet holds ABOVE a threshold the user sets, straight from their wallet, no deposit; it needs a one-time extra approval (a second PIN at setup) and a max-per-run cap (amountPerPeriod). For sweep, ask for: the allocation percents, the threshold to keep, the max per run, and the cadence. The USDC share just stays as USDC.
 
 Strategy questions: when the user asks about their strategies (is my DCA running, how much is left, what automations do I have), call get_strategies and answer concisely from the data.
 
+Savings vault: when the user asks how much they have saved or what is in the vault, call get_savings and answer concisely from the data.
+
 Swaps (one-off): users can swap (convert) between USDC and EURC or cirBTC right now, in either direction, separate from a recurring DCA. To do one you need the action (buy = USDC to token, sell = token to USDC), which token (EURC or cirBTC), and the amount (always the token they pay WITH: USDC when buying, the token when selling). As soon as you have all three, you MUST call the swap tool in that same turn, do not just say you will; calling it shows the confirmation card. It takes one PIN and the result lands in their wallet. If someone asks to do this repeatedly on a schedule, that is a DCA strategy (create_strategy), not a one-off swap.
 
-Strategy setup: to create one you need the kind (recurring payment or auto-buy), amount per run, how often (daily/weekly/monthly), the recipient (for payments) or which token to buy (for auto-buy), and the total to deposit (funding). If the user gives a number of runs but not a total, compute funding = amount per run x runs. If you cannot determine the total, ask for it. As soon as you have everything, you MUST call create_strategy in that same turn, do not just say you will. To pause or cancel a specific strategy, guide the user to the Strategies page at /dashboard/strategies.`,
+Strategy setup: to create one you need the kind (recurring payment, auto-buy, or target allocation), amount per run, how often (daily/weekly/monthly), the recipient (for payments) or which token to buy (for auto-buy) or the allocation (for target allocation), and the total to deposit (funding, not needed for sweep mode). If the user gives a number of runs but not a total, compute funding = amount per run x runs. If you cannot determine the total, ask for it. As soon as you have everything, you MUST call create_strategy in that same turn, do not just say you will. To pause or cancel a recurring payment, guide the user to /pay (Recurring mode); for an auto-buy, guide them to /dashboard/swap (Recurring mode); for target allocation, guide them to /dashboard/savings.`,
     },
     // Cap context to the most recent messages so long chats can't drown the model
     // in stale history (the client also caps, this is defense in depth).
@@ -426,7 +482,17 @@ Strategy setup: to create one you need the kind (recurring payment or auto-buy),
         if (call.function.name === "send_payment") {
           const to = args.to as string;
           const amount = args.amount as string;
-          const resolvedAddress = await resolveSlug(to);
+          let resolvedAddress: `0x${string}` | null;
+          try {
+            resolvedAddress = await resolveSlug(to);
+          } catch {
+            toolResults.push({
+              role: "tool",
+              tool_call_id: call.id,
+              content: `Couldn't verify "${to}" right now due to a network issue. Ask the user to try again in a moment.`,
+            });
+            continue;
+          }
 
           if (!resolvedAddress) {
             toolResults.push({
@@ -449,34 +515,95 @@ Strategy setup: to create one you need the kind (recurring payment or auto-buy),
         }
 
         if (call.function.name === "create_strategy") {
-          const kind = args.kind === "swap" ? "swap" : "payment";
+          const kind =
+            args.kind === "swap" ? "swap" : args.kind === "portfolio" ? "portfolio" : "payment";
           const amountPerPeriod = String(args.amountPerPeriod ?? "");
           const funding = String(args.funding ?? "");
           const intervalKey = String(args.interval ?? "").toLowerCase();
           const intervalSeconds = INTERVAL_SECONDS[intervalKey];
           const periodsTotal = Number.isInteger(args.periods) ? Number(args.periods) : 0;
+          const mode = args.mode === "sweep" ? "sweep" : "deposit";
+          const isSweep = kind === "portfolio" && mode === "sweep";
 
           const fail = (content: string) => {
             toolResults.push({ role: "tool", tool_call_id: call.id, content });
           };
 
           if (!/^\d+(\.\d+)?$/.test(amountPerPeriod) || parseFloat(amountPerPeriod) <= 0) {
-            fail("amountPerPeriod missing or invalid, ask how much per run.");
+            fail(
+              isSweep
+                ? "amountPerPeriod missing, ask for the max USDC to allocate per run (a safety cap)."
+                : "amountPerPeriod missing or invalid, ask how much per run."
+            );
             continue;
           }
           if (!intervalSeconds) {
             fail("interval missing or invalid, ask if it should run daily, weekly or monthly.");
             continue;
           }
-          if (!/^\d+(\.\d+)?$/.test(funding) || parseFloat(funding) < parseFloat(amountPerPeriod)) {
+          if (!isSweep && (!/^\d+(\.\d+)?$/.test(funding) || parseFloat(funding) < parseFloat(amountPerPeriod))) {
             fail("funding missing or less than one run. Ask for the total to deposit, or compute it from runs x amount.");
             continue;
+          }
+
+          if (kind === "portfolio") {
+            const raw = (args.allocation ?? {}) as Record<string, unknown>;
+            const legs: { symbol: string; bps: number }[] = [];
+            let sum = 0;
+            for (const [k, v] of Object.entries(raw)) {
+              const sym = k === "USDC" ? "USDC" : normalizeTokenSymbol(k);
+              const p = Number(v);
+              if (!sym || !Number.isInteger(p) || p < 0) continue;
+              if (p === 0) continue;
+              if (sym === "cirBTC" && !CIRBTC.address) {
+                fail("cirBTC is not available right now, offer USDC/EURC only.");
+                sum = -1;
+                break;
+              }
+              legs.push({ symbol: sym, bps: p * 100 });
+              sum += p;
+            }
+            if (sum === -1) continue;
+            if (sum !== 100) {
+              fail(`Allocation percents sum to ${sum}, they must sum to exactly 100. Ask the user to adjust.`);
+              continue;
+            }
+            if (!legs.some((l) => l.symbol !== "USDC")) {
+              fail("The allocation is 100% USDC, which needs no strategy. Ask what share should go to EURC or cirBTC.");
+              continue;
+            }
+            const sweepThreshold = String(args.sweepThreshold ?? "0");
+            if (isSweep && !/^\d+(\.\d+)?$/.test(sweepThreshold)) {
+              fail("sweepThreshold invalid, ask how much USDC to always keep in the wallet.");
+              continue;
+            }
+            return NextResponse.json({
+              text: msg.content ?? "",
+              pendingAction: {
+                type: "create_strategy",
+                kind,
+                allocation: legs,
+                mode,
+                sweepThreshold: isSweep ? sweepThreshold : "0",
+                amountPerPeriod,
+                interval: intervalKey,
+                intervalSeconds,
+                periodsTotal,
+                funding: isSweep ? undefined : funding,
+              },
+            });
           }
 
           if (kind === "payment") {
             const to = String(args.recipient ?? "").trim();
             if (!to) { fail("recipient missing, ask who to pay."); continue; }
-            const resolvedAddress = /^0x[a-fA-F0-9]{40}$/.test(to) ? to : await resolveSlug(to);
+            let resolvedAddress: string | null;
+            try {
+              resolvedAddress = /^0x[a-fA-F0-9]{40}$/.test(to) ? to : await resolveSlug(to);
+            } catch {
+              fail(`Couldn't verify "${to}" right now due to a network issue. Ask the user to try again in a moment.`);
+              continue;
+            }
             if (!resolvedAddress) { fail(`Recipient "${to}" not found, ask the user to double-check.`); continue; }
             return NextResponse.json({
               text: msg.content ?? "",
@@ -545,14 +672,20 @@ Strategy setup: to create one you need the kind (recurring payment or auto-buy),
           );
         } else if (call.function.name === "resolve_slug") {
           const slug = args.slug as string;
-          const resolved = await resolveSlug(slug);
-          result = resolved
-            ? `"${slug}" resolves to address ${resolved}`
-            : `Username "${slug}" not found`;
+          try {
+            const resolved = await resolveSlug(slug);
+            result = resolved
+              ? `"${slug}" resolves to address ${resolved}`
+              : `Username "${slug}" not found`;
+          } catch {
+            result = `Couldn't verify "${slug}" right now due to a network issue, ask the user to try again in a moment.`;
+          }
         } else if (call.function.name === "get_invoices") {
           result = await getInvoicesSummary(walletAddress);
         } else if (call.function.name === "get_strategies") {
           result = await getStrategiesSummary(walletAddress);
+        } else if (call.function.name === "get_savings") {
+          result = await getSavingsSummary(walletAddress);
         } else if (call.function.name === "create_payment_request") {
           const amount = String(args.amount ?? "");
           const memo = String(args.memo ?? "").trim();
