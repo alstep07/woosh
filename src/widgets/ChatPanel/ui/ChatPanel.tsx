@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import ReactMarkdown from "react-markdown";
 import type { W3SSdk } from "@circle-fin/w3s-pw-web-sdk";
+import { erc20Abi } from "viem";
 import "@/features/payments/chat-tools"; // registers examples
 import { getAllExamples } from "@/features/chat/model/registry";
 import { env } from "@/shared/config/env";
@@ -11,9 +12,13 @@ import { getW3SSdk, setLoginHandler } from "@/shared/lib/w3s";
 import { getCachedTokens, setCachedTokens, clearCachedTokens } from "@/shared/lib/session";
 import { computeInvoiceId, newNonce } from "@/entities/invoice/lib/computeInvoiceId";
 import { buildRequestLink } from "@/entities/invoice/lib/buildRequestLink";
+import { arcPublicClient } from "@/shared/lib/arc";
+import { USDC_ERC20_ADDRESS } from "@/shared/lib/tokens";
 
 const EXAMPLES = getAllExamples();
 const CHAT_STORAGE_KEY = "woosh_chat_history";
+/** Allowance at or above this is treated as "already approved" (mirrors SweepRuleModal). */
+const SWEEP_ALLOWANCE_FLOOR = 2n ** 128n;
 
 // Compact a link for display: drop the protocol and middle-ellipsize the long tail.
 function shortenLink(url: string): string {
@@ -21,8 +26,11 @@ function shortenLink(url: string): string {
   return s.length > 34 ? `${s.slice(0, 24)}…${s.slice(-8)}` : s;
 }
 
+type BatchLeg = { to: string; amount: string; resolvedAddress: string };
+
 type PendingAction =
   | { type: "send_payment"; to: string; amount: string; resolvedAddress?: string }
+  | { type: "send_batch_payment"; recipients: BatchLeg[]; memo: string }
   | { type: "create_request"; amount: string; memo: string }
   | { type: "swap"; tokenIn: string; tokenOut: string; amount: string }
   | {
@@ -40,7 +48,19 @@ type PendingAction =
       intervalSeconds: number;
       periodsTotal: number;
       funding?: string;
-    };
+    }
+  | {
+      type: "create_payroll";
+      recipients: BatchLeg[];
+      memo: string;
+      interval: string;
+      intervalSeconds: number;
+      periodsTotal: number;
+      funding: string;
+    }
+  | { type: "savings_deposit"; amount: string }
+  | { type: "savings_withdraw"; token: string; amount: string }
+  | { type: "savings_sweep_setup"; threshold: string; capPerRun: string; interval: string; intervalSeconds: number };
 
 type ChatMessage = {
   id: string;
@@ -267,6 +287,264 @@ export default function ChatPanel({ name, walletAddress, userEmail, onPaymentSuc
     }
   }
 
+  async function executeBatchPay(
+    msgId: string,
+    pa: Extract<PendingAction, { type: "send_batch_payment" }>,
+    userToken: string,
+    encryptionKey: string,
+    sdk: W3SSdk
+  ): Promise<"ok" | "auth_error" | "error"> {
+    updateMsgStatus(msgId, "sending");
+    try {
+      const res = await fetch("/api/wallet/batch-pay", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userToken,
+          legs: pa.recipients.map((r) => ({ to: r.to, amount: r.amount })),
+          memo: pa.memo,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        if (res.status === 401 || res.status === 403) return "auth_error";
+        throw new Error(data.error ?? "Batch payment failed");
+      }
+
+      sdk.setAuthentication({ userToken, encryptionKey });
+      const explorerUrl = walletAddress ? `${env.arcExplorerUrl}/address/${walletAddress}` : undefined;
+      sdk.execute(data.challengeId, (err) => {
+        if (err) {
+          updateMsgStatus(msgId, "send_error", "Batch payment failed. Please try again.");
+          return;
+        }
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === msgId
+              ? { ...m, actionStatus: "paid", ...(explorerUrl ? { txExplorerUrl: explorerUrl } : {}) }
+              : m
+          )
+        );
+        invalidateAfterAction(["token-balances", "usdc-balance", "tx-history"]);
+      });
+      return "ok";
+    } catch (err) {
+      updateMsgStatus(msgId, "send_error", err instanceof Error ? err.message : "Batch payment failed.");
+      return "error";
+    }
+  }
+
+  async function executeCreatePayroll(
+    msgId: string,
+    pa: Extract<PendingAction, { type: "create_payroll" }>,
+    salt: string,
+    userToken: string,
+    encryptionKey: string,
+    sdk: W3SSdk
+  ): Promise<"ok" | "auth_error" | "error"> {
+    updateMsgStatus(msgId, "sending");
+    try {
+      const res = await fetch("/api/wallet/create-batch-payment", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userToken,
+          salt,
+          legs: pa.recipients.map((r) => ({ to: r.to, amount: r.amount })),
+          memo: pa.memo,
+          intervalSeconds: pa.intervalSeconds,
+          periodsTotal: pa.periodsTotal,
+          funding: pa.funding,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        if (res.status === 401 || res.status === 403) return "auth_error";
+        throw new Error(data.error ?? "Failed to create payroll");
+      }
+
+      sdk.setAuthentication({ userToken, encryptionKey });
+      sdk.execute(data.challengeId, (err) => {
+        if (err) {
+          updateMsgStatus(msgId, "send_error", "Couldn't set up payroll. Please try again.");
+          return;
+        }
+        updateMsgStatus(msgId, "strategy_done");
+        invalidateAfterAction(["strategies", "token-balances", "usdc-balance"]);
+      });
+      return "ok";
+    } catch (err) {
+      updateMsgStatus(msgId, "send_error", err instanceof Error ? err.message : "Failed to create payroll.");
+      return "error";
+    }
+  }
+
+  async function executeSavingsDeposit(
+    msgId: string,
+    pa: Extract<PendingAction, { type: "savings_deposit" }>,
+    userToken: string,
+    encryptionKey: string,
+    sdk: W3SSdk
+  ): Promise<"ok" | "auth_error" | "error"> {
+    updateMsgStatus(msgId, "sending");
+    try {
+      const res = await fetch("/api/wallet/savings-deposit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userToken, amount: pa.amount }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        if (res.status === 401 || res.status === 403) return "auth_error";
+        throw new Error(data.error ?? "Deposit failed");
+      }
+
+      sdk.setAuthentication({ userToken, encryptionKey });
+      const explorerUrl = walletAddress ? `${env.arcExplorerUrl}/address/${walletAddress}` : undefined;
+      sdk.execute(data.challengeId, (err) => {
+        if (err) {
+          updateMsgStatus(msgId, "send_error", "Deposit failed. Please try again.");
+          return;
+        }
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === msgId
+              ? { ...m, actionStatus: "paid", ...(explorerUrl ? { txExplorerUrl: explorerUrl } : {}) }
+              : m
+          )
+        );
+        invalidateAfterAction(["vault-balances", "token-balances", "usdc-balance"]);
+      });
+      return "ok";
+    } catch (err) {
+      updateMsgStatus(msgId, "send_error", err instanceof Error ? err.message : "Deposit failed.");
+      return "error";
+    }
+  }
+
+  async function executeSavingsWithdraw(
+    msgId: string,
+    pa: Extract<PendingAction, { type: "savings_withdraw" }>,
+    userToken: string,
+    encryptionKey: string,
+    sdk: W3SSdk
+  ): Promise<"ok" | "auth_error" | "error"> {
+    updateMsgStatus(msgId, "sending");
+    try {
+      const res = await fetch("/api/wallet/savings-withdraw", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userToken, token: pa.token, amount: pa.amount }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        if (res.status === 401 || res.status === 403) return "auth_error";
+        throw new Error(data.error ?? "Withdrawal failed");
+      }
+
+      sdk.setAuthentication({ userToken, encryptionKey });
+      const explorerUrl = walletAddress ? `${env.arcExplorerUrl}/address/${walletAddress}` : undefined;
+      sdk.execute(data.challengeId, (err) => {
+        if (err) {
+          updateMsgStatus(msgId, "send_error", "Withdrawal failed. Please try again.");
+          return;
+        }
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === msgId
+              ? { ...m, actionStatus: "paid", ...(explorerUrl ? { txExplorerUrl: explorerUrl } : {}) }
+              : m
+          )
+        );
+        invalidateAfterAction(["vault-balances", "token-balances", "usdc-balance"]);
+      });
+      return "ok";
+    } catch (err) {
+      updateMsgStatus(msgId, "send_error", err instanceof Error ? err.message : "Withdrawal failed.");
+      return "error";
+    }
+  }
+
+  async function executeSavingsSweepSetup(
+    msgId: string,
+    pa: Extract<PendingAction, { type: "savings_sweep_setup" }>,
+    userToken: string,
+    encryptionKey: string,
+    sdk: W3SSdk
+  ): Promise<"ok" | "auth_error" | "error"> {
+    updateMsgStatus(msgId, "sending");
+    try {
+      // A one-time USDC-precompile allowance is needed before the executor can pull
+      // anything; skip it when the vault already has a big enough allowance, same
+      // check SweepRuleModal does before offering the button.
+      let stage: "approve" | "setup" = "setup";
+      if (env.savingsVaultAddress && walletAddress) {
+        try {
+          const allowance = await arcPublicClient.readContract({
+            address: USDC_ERC20_ADDRESS,
+            abi: erc20Abi,
+            functionName: "allowance",
+            args: [walletAddress as `0x${string}`, env.savingsVaultAddress],
+          });
+          if (allowance < SWEEP_ALLOWANCE_FLOOR) stage = "approve";
+        } catch {
+          stage = "approve";
+        }
+      }
+
+      if (stage === "approve") {
+        const approveRes = await fetch("/api/wallet/savings-sweep-approve", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userToken }),
+        });
+        const approveData = await approveRes.json();
+        if (!approveRes.ok) {
+          if (approveRes.status === 401 || approveRes.status === 403) return "auth_error";
+          throw new Error(approveData.error ?? "Failed to prepare the approval");
+        }
+        const approved = await new Promise<boolean>((resolve) => {
+          sdk.setAuthentication({ userToken, encryptionKey });
+          sdk.execute(approveData.challengeId, (err) => resolve(!err));
+        });
+        if (!approved) {
+          updateMsgStatus(msgId, "send_error", "The approval was not confirmed. Please try again.");
+          return "error";
+        }
+      }
+
+      const res = await fetch("/api/wallet/savings-sweep-setup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userToken,
+          threshold: pa.threshold,
+          capPerRun: pa.capPerRun,
+          intervalSeconds: pa.intervalSeconds,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        if (res.status === 401 || res.status === 403) return "auth_error";
+        throw new Error(data.error ?? "Failed to set up auto-sweep");
+      }
+
+      sdk.setAuthentication({ userToken, encryptionKey });
+      sdk.execute(data.challengeId, (err) => {
+        if (err) {
+          updateMsgStatus(msgId, "send_error", "Couldn't turn on auto-sweep. Please try again.");
+          return;
+        }
+        updateMsgStatus(msgId, "strategy_done");
+        invalidateAfterAction(["vault-balances"]);
+      });
+      return "ok";
+    } catch (err) {
+      updateMsgStatus(msgId, "send_error", err instanceof Error ? err.message : "Failed to set up auto-sweep.");
+      return "error";
+    }
+  }
+
   async function executeCreateRequest(
     msgId: string,
     salt: string,
@@ -455,13 +733,13 @@ export default function ChatPanel({ name, walletAddress, userEmail, onPaymentSuc
     // If Circle not configured — fall back to a relevant page
     if (!env.circleAppId) {
       window.location.href =
-        pa.type === "send_payment"
-          ? `/pay/${pa.to}?amount=${pa.amount}`
-          : pa.type === "create_strategy"
-          ? (pa.kind === "portfolio" ? `/dashboard/savings` : pa.kind === "swap" ? `/dashboard/swap` : `/pay`)
-          : pa.type === "swap"
-          ? `/dashboard/swap`
-          : `/dashboard/invoices`;
+        pa.type === "send_payment" ? `/pay/${pa.to}?amount=${pa.amount}`
+        : pa.type === "send_batch_payment" ? `/pay`
+        : pa.type === "create_strategy" ? (pa.kind === "portfolio" ? `/dashboard/savings` : pa.kind === "swap" ? `/dashboard/swap` : `/pay`)
+        : pa.type === "create_payroll" ? `/pay`
+        : pa.type === "savings_deposit" || pa.type === "savings_withdraw" || pa.type === "savings_sweep_setup" ? `/dashboard/savings`
+        : pa.type === "swap" ? `/dashboard/swap`
+        : `/dashboard/invoices`;
       return;
     }
     if (pa.type === "send_payment" && !pa.resolvedAddress) return;
@@ -475,12 +753,22 @@ export default function ChatPanel({ name, walletAddress, userEmail, onPaymentSuc
 
     // Build the executor for this action once, so the cached-token and OTP paths
     // (and a possible retry) all run the same thing with the same parameters.
-    const salt = pa.type === "create_request" || pa.type === "create_strategy" ? newNonce() : "";
+    const salt = pa.type === "create_request" || pa.type === "create_strategy" || pa.type === "create_payroll" ? newNonce() : "";
     const run = (userToken: string, encryptionKey: string, sdk: W3SSdk) =>
       pa.type === "send_payment"
         ? executePay(msg.id, pa.resolvedAddress!, pa.amount, userToken, encryptionKey, sdk)
+        : pa.type === "send_batch_payment"
+        ? executeBatchPay(msg.id, pa, userToken, encryptionKey, sdk)
         : pa.type === "create_strategy"
         ? executeCreateStrategy(msg.id, pa, salt, userToken, encryptionKey, sdk)
+        : pa.type === "create_payroll"
+        ? executeCreatePayroll(msg.id, pa, salt, userToken, encryptionKey, sdk)
+        : pa.type === "savings_deposit"
+        ? executeSavingsDeposit(msg.id, pa, userToken, encryptionKey, sdk)
+        : pa.type === "savings_withdraw"
+        ? executeSavingsWithdraw(msg.id, pa, userToken, encryptionKey, sdk)
+        : pa.type === "savings_sweep_setup"
+        ? executeSavingsSweepSetup(msg.id, pa, userToken, encryptionKey, sdk)
         : pa.type === "swap"
         ? executeSwapAction(msg.id, pa, userToken, encryptionKey, sdk)
         : executeCreateRequest(msg.id, salt, pa.amount, pa.memo, userToken, encryptionKey, sdk);
@@ -619,13 +907,23 @@ export default function ChatPanel({ name, walletAddress, userEmail, onPaymentSuc
           assistantText = `I'll create an invoice for $${Number(pa.amount).toFixed(2)}${pa.memo ? ` for ${pa.memo}` : ""}.`;
         } else if (pa.type === "send_payment") {
           assistantText = `I'll send $${Number(pa.amount).toFixed(2)} to ${pa.to}.`;
+        } else if (pa.type === "send_batch_payment") {
+          assistantText = `I'll send to ${pa.recipients.length} people.`;
         } else if (pa.type === "swap") {
           assistantText = `I'll swap ${pa.amount} ${pa.tokenIn} for ${pa.tokenOut}.`;
-        } else {
+        } else if (pa.type === "create_strategy") {
           const what = pa.kind === "payment"
             ? `pay ${pa.amountPerPeriod} USDC to ${pa.recipient} ${pa.interval}`
             : `buy ${pa.tokenSymbol} with ${pa.amountPerPeriod} USDC ${pa.interval}`;
           assistantText = `I'll set up a strategy to ${what}.`;
+        } else if (pa.type === "create_payroll") {
+          assistantText = `I'll set up payroll for ${pa.recipients.length} people, ${pa.interval}.`;
+        } else if (pa.type === "savings_deposit") {
+          assistantText = `I'll deposit ${pa.amount} USDC into savings.`;
+        } else if (pa.type === "savings_withdraw") {
+          assistantText = `I'll withdraw ${pa.amount} ${pa.token} from savings.`;
+        } else {
+          assistantText = `I'll turn on auto-sweep: up to ${pa.capPerRun} USDC ${pa.interval}.`;
         }
       }
       assistantText = assistantText || "";
@@ -773,6 +1071,64 @@ export default function ChatPanel({ name, walletAddress, userEmail, onPaymentSuc
                         </p>
                         <p className="text-xs text-text-secondary/40 mb-2">One PIN to fund, executor delivers the output straight back</p>
                       </>
+                    ) : msg.pendingAction.type === "send_batch_payment" ? (
+                      <>
+                        <p className="text-xs text-text-secondary mb-1">
+                          Send to {msg.pendingAction.recipients.length} people, one PIN?
+                        </p>
+                        <div className="text-xs text-text-secondary/70 mb-2 space-y-0.5">
+                          {msg.pendingAction.recipients.map((r, i) => (
+                            <p key={i}>
+                              <span className="text-text-primary font-medium">{r.amount} USDC</span> to {r.to}
+                            </p>
+                          ))}
+                        </div>
+                      </>
+                    ) : msg.pendingAction.type === "create_payroll" ? (
+                      <>
+                        <p className="text-xs text-text-secondary mb-1">
+                          Set up payroll for {msg.pendingAction.recipients.length} people, {msg.pendingAction.interval}?
+                        </p>
+                        <div className="text-xs text-text-secondary/70 mb-1 space-y-0.5">
+                          {msg.pendingAction.recipients.map((r, i) => (
+                            <p key={i}>
+                              <span className="text-text-primary font-medium">{r.amount} USDC</span> to {r.to}
+                            </p>
+                          ))}
+                        </div>
+                        <p className="text-xs text-text-secondary/40 mb-2">
+                          Deposit {msg.pendingAction.funding} USDC · {msg.pendingAction.periodsTotal > 0 ? `${msg.pendingAction.periodsTotal} runs` : "until funds run out"} · needs your PIN once
+                        </p>
+                      </>
+                    ) : msg.pendingAction.type === "savings_deposit" ? (
+                      <>
+                        <p className="text-xs text-text-secondary mb-1">
+                          Deposit{" "}
+                          <span className="text-text-primary font-medium">{msg.pendingAction.amount} USDC</span>{" "}
+                          into savings?
+                        </p>
+                        <p className="text-xs text-text-secondary/40 mb-2">Moves out of your spendable balance · needs your PIN</p>
+                      </>
+                    ) : msg.pendingAction.type === "savings_withdraw" ? (
+                      <>
+                        <p className="text-xs text-text-secondary mb-1">
+                          Withdraw{" "}
+                          <span className="text-text-primary font-medium">{msg.pendingAction.amount} {msg.pendingAction.token}</span>{" "}
+                          from savings?
+                        </p>
+                        <p className="text-xs text-text-secondary/40 mb-2">Back into your spendable balance · needs your PIN</p>
+                      </>
+                    ) : msg.pendingAction.type === "savings_sweep_setup" ? (
+                      <>
+                        <p className="text-xs text-text-secondary mb-1">
+                          Turn on auto-sweep: keep{" "}
+                          <span className="text-text-primary font-medium">{msg.pendingAction.threshold} USDC</span> in your wallet,
+                          sweep up to{" "}
+                          <span className="text-text-primary font-medium">{msg.pendingAction.capPerRun} USDC</span>{" "}
+                          into savings {msg.pendingAction.interval}?
+                        </p>
+                        <p className="text-xs text-text-secondary/40 mb-2">Needs your PIN twice at setup (a one-time allowance, then the rule)</p>
+                      </>
                     ) : (
                       <>
                         <p className="text-xs text-text-secondary mb-1">
@@ -845,12 +1201,12 @@ export default function ChatPanel({ name, walletAddress, userEmail, onPaymentSuc
                         <path d="M5 8l2 2 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                       </svg>
                       <span>
-                        {msg.pendingAction.type === "create_strategy" && msg.pendingAction.kind === "portfolio"
-                          ? "Savings is live, it runs automatically."
+                        {msg.pendingAction.type === "savings_sweep_setup"
+                          ? "Auto-sweep is on, it runs automatically."
                           : "It's live, it runs automatically."}{" "}
                         <a
                           href={
-                            msg.pendingAction.type === "create_strategy" && msg.pendingAction.kind === "portfolio"
+                            msg.pendingAction.type === "savings_sweep_setup"
                               ? "/dashboard/savings"
                               : msg.pendingAction.type === "create_strategy" && msg.pendingAction.kind === "swap"
                               ? "/dashboard/swap"

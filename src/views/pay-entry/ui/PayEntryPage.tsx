@@ -23,6 +23,7 @@ import { RecipientStatusIcon } from "@/shared/ui/RecipientStatusIcon";
 import { getSession as loadSession } from "@/shared/lib/session";
 import { useMyStrategies } from "@/entities/strategy/hooks/useMyStrategies";
 import { useTransactionHistory } from "@/entities/payment/hooks/useTransactionHistory";
+import { useSlugMap } from "@/entities/slug/hooks/useSlugMap";
 import { INTERVAL_PRESETS } from "@/entities/strategy/lib/format";
 import { newStrategySalt } from "@/entities/strategy/lib/computeStrategyId";
 import { AMOUNT_RE, isValidAmount } from "@/shared/lib/amount";
@@ -115,6 +116,17 @@ export default function PayEntryPage() {
   const strategies = allStrategies.filter((s) => s.kind === "payment");
   const active = strategies.filter((s) => s.status === "active" || s.status === "paused" || s.status === "depleted");
   const closed = strategies.filter((s) => s.status === "completed" || s.status === "cancelled");
+
+  // Recurring payments list shows @slug instead of a truncated address when the
+  // recipient has one registered, same treatment as TransactionList.
+  const { map: recipientSlugMap } = useSlugMap(
+    strategies.map((s) => s.recipient).filter((r): r is `0x${string}` => r !== null)
+  );
+  function recipientLabel(addr: string | null): string {
+    if (addr === null) return "Payroll";
+    const slug = recipientSlugMap[addr.toLowerCase()];
+    return slug ? `@${slug}` : short(addr);
+  }
 
   // Addresses already paid before, for the recipient inputs' status icons (checkmark
   // vs first-time warning). Best-effort: undefined while tx history is still loading
@@ -504,20 +516,26 @@ export default function PayEntryPage() {
                 <div className="h-3 w-full bg-border/60 rounded animate-pulse" />
                 <div className="h-3 w-2/3 bg-border/60 rounded animate-pulse" />
               </div>
-            ) : strategiesError ? (
-              <EmptyState
-                glyph="!"
-                primary="Couldn't load your recurring payments."
-                secondary="There was a problem reading from the network. Try again in a moment."
-                className="rounded-card border border-white/[0.05] p-6 text-center min-h-[220px] flex flex-col items-center justify-center"
-              />
-            ) : active.length === 0 && closed.length === 0 ? (
-              <EmptyState
-                glyph="↻"
-                primary="No recurring payments yet."
-                secondary="Set one up on the left, a fixed amount to one person or a payroll to several, on a schedule."
-                className="rounded-card border border-white/[0.05] p-6 text-center min-h-[220px] flex flex-col items-center justify-center"
-              />
+            ) : /* A background poll can fail (429, transient timeout) after we already
+                   have a cached strategies list. strategiesError must not hide real
+                   data we're still holding, only show the error state when there's
+                   truly nothing cached to show. */
+            active.length === 0 && closed.length === 0 ? (
+              strategiesError ? (
+                <EmptyState
+                  glyph="!"
+                  primary="Couldn't load your recurring payments."
+                  secondary="There was a problem reading from the network. Try again in a moment."
+                  className="rounded-card border border-white/[0.05] p-6 text-center min-h-[220px] flex flex-col items-center justify-center"
+                />
+              ) : (
+                <EmptyState
+                  glyph="↻"
+                  primary="No recurring payments yet."
+                  secondary="Set one up on the left, a fixed amount to one person or a payroll to several, on a schedule."
+                  className="rounded-card border border-white/[0.05] p-6 text-center min-h-[220px] flex flex-col items-center justify-center"
+                />
+              )
             ) : (
               <div>
                 {active.length > 0 && (
@@ -530,7 +548,7 @@ export default function PayEntryPage() {
                       <RecurringCard
                         key={s.id}
                         s={s}
-                        target={s.recipient === null ? "Payroll" : short(s.recipient)}
+                        target={recipientLabel(s.recipient)}
                         accent="text-blue-primary"
                         onAction={(action) => setPendingStrategy({ strategy: s, action })}
                       />
@@ -547,7 +565,7 @@ export default function PayEntryPage() {
                         <RecurringPastRow
                           key={s.id}
                           s={s}
-                          target={s.recipient === null ? "Payroll" : short(s.recipient)}
+                          target={recipientLabel(s.recipient)}
                           accent="text-blue-primary"
                         />
                       ))}

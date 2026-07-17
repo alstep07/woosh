@@ -116,17 +116,13 @@ export default function TransactionList({
             </div>
           ))}
         </div>
-      ) : isError ? (
-        <div className="glass-card rounded-card px-3 py-2.5 text-text-secondary text-xs">
-          Could not load transactions.
-        </div>
-      ) : !txs || txs.length === 0 ? (
-        <div className="glass-card rounded-card px-3 py-4 text-center">
-          <p className="text-text-secondary text-xs">
-            No payments yet. Share your link to get started.
-          </p>
-        </div>
-      ) : (
+      ) : /* A background refetch (15s poll) can fail (429, transient timeout) after we
+             already have good cached data via keepPreviousData. isError must NOT take
+             priority over data we're still holding, or every transient hiccup flashes
+             "Could not load" / "No payments yet" over real transactions that never
+             actually went away. Only fall through to the error/empty branches when
+             there's truly nothing cached to show. */
+      (txs && txs.length > 0) || (pendingEntries && pendingEntries.length > 0) ? (
         <div className="divide-y divide-border/40">
           {pendingEntries?.map((entry, i) => (
             <div key={`pending-${i}`} className="flex items-center justify-between px-1 py-3">
@@ -149,7 +145,7 @@ export default function TransactionList({
               </div>
             </div>
           ))}
-          {txs.map((tx) => (
+          {txs?.map((tx) => (
             <a
               key={tx.hash}
               href={`${arcTestnet.blockExplorers.default.url}/tx/${tx.hash}`}
@@ -203,6 +199,16 @@ export default function TransactionList({
               </span>
             </a>
           ))}
+        </div>
+      ) : isError ? (
+        <div className="glass-card rounded-card px-3 py-2.5 text-text-secondary text-xs">
+          Could not load transactions.
+        </div>
+      ) : (
+        <div className="glass-card rounded-card px-3 py-4 text-center">
+          <p className="text-text-secondary text-xs">
+            No payments yet. Share your link to get started.
+          </p>
         </div>
       )}
     </div>

@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/execute-strategies",
       "schedule": "0 9 * * *"
+    },
+    {
+      "path": "/api/cron/execute-sweeps",
+      "schedule": "15 9 * * *"
     }
   ]
 }

@@ -434,6 +434,54 @@ export async function createSavingsWithdrawChallenge(
 }
 
 /**
+ * Challenge to set (or replace) the owner's savings auto-sweep rule via
+ * WooshSavingsVault.setSweepRule(threshold, capPerRun, intervalSeconds). This only sets
+ * the on-chain bounds; the executor still needs a separate one-time USDC-precompile
+ * allowance before it can actually pull anything (see createSweepApproveChallenge,
+ * called with the vault address as spender).
+ */
+export async function createSavingsSweepSetupChallenge(
+  userToken: string,
+  walletId: string,
+  vaultAddress: `0x${string}`,
+  thresholdWei: string,
+  capPerRunWei: string,
+  intervalSeconds: number
+) {
+  const client = getClient();
+  const res = await client.createUserTransactionContractExecutionChallenge({
+    userToken,
+    walletId,
+    contractAddress: vaultAddress,
+    abiFunctionSignature: "setSweepRule(uint256,uint256,uint64)",
+    abiParameters: [thresholdWei, capPerRunWei, String(intervalSeconds)],
+    fee: { type: "level", config: { feeLevel: "MEDIUM" } },
+    idempotencyKey: crypto.randomUUID(),
+  });
+  return { challengeId: res.data!.challengeId! };
+}
+
+/** Challenge to turn off the owner's auto-sweep rule via disableSweepRule(). The vault
+ *  balance already swept in is untouched, only future automatic pulls stop. */
+export async function createSavingsSweepDisableChallenge(
+  userToken: string,
+  walletId: string,
+  vaultAddress: `0x${string}`
+) {
+  const client = getClient();
+  const res = await client.createUserTransactionContractExecutionChallenge({
+    userToken,
+    walletId,
+    contractAddress: vaultAddress,
+    abiFunctionSignature: "disableSweepRule()",
+    abiParameters: [],
+    fee: { type: "level", config: { feeLevel: "MEDIUM" } },
+    idempotencyKey: crypto.randomUUID(),
+  });
+  return { challengeId: res.data!.challengeId! };
+}
+
+/**
  * Challenge for a one-off batch send via WooshBatchPay.pay(recipients, amounts, memo).
  * Stateless: msg.value must equal the exact sum of `amountsWei` (caller's job to add
  * them up so Circle doesn't silently under/over-fund the call).

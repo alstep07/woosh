@@ -34,16 +34,24 @@ export function BalanceSummary({ balance, isLoading, isError, holdings, totalUsd
 
       {isLoading ? (
         <div className="h-9 w-32 bg-border rounded animate-pulse" />
-      ) : isError ? (
-        <p className="text-3xl font-bold text-text-secondary/40">—</p>
-      ) : showTotal ? (
+      ) : /* A background poll can fail (429, transient timeout) after we already have a
+             good cached balance. isError must not hide real numbers we're still
+             holding, only show "—" when there's truly nothing cached yet. */
+      showTotal ? (
         <p className="font-mono text-3xl font-semibold text-text-primary tracking-tight">
           ${fmtUsd(totalUsd)}
           <span className="font-sans text-base font-medium text-text-secondary/50 ml-1.5">USDC</span>
         </p>
+      ) : balance !== undefined ? (
+        <p className="font-mono text-3xl font-semibold text-text-primary tracking-tight">
+          {balance}
+          <span className="font-sans text-base font-medium text-text-secondary/50 ml-1.5">USDC</span>
+        </p>
+      ) : isError ? (
+        <p className="text-3xl font-bold text-text-secondary/40">—</p>
       ) : (
         <p className="font-mono text-3xl font-semibold text-text-primary tracking-tight">
-          {balance ?? "$0.00"}
+          $0.00
           <span className="font-sans text-base font-medium text-text-secondary/50 ml-1.5">USDC</span>
         </p>
       )}

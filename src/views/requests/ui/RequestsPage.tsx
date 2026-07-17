@@ -182,6 +182,20 @@ export default function RequestsPage() {
               </div>
             ))}
           </div>
+        ) : /* A background poll can fail (429, transient timeout) after we already have
+               cached invoices. isError must not hide a real list we're still holding,
+               only show the error state when there's truly nothing cached to show. */
+        invoices.length > 0 ? (
+          <div className="grid gap-4 sm:grid-cols-2">
+            {invoices.map((inv) => (
+              <InvoiceCard
+                key={inv.id}
+                inv={inv}
+                copied={copied === inv.id}
+                onCopy={() => copyLink(inv.id)}
+              />
+            ))}
+          </div>
         ) : isError ? (
           <EmptyState
             glyph="!"
@@ -189,7 +203,7 @@ export default function RequestsPage() {
             secondary="There was a problem reading from the network. Try again in a moment."
             className="glass-card rounded-card p-6 text-center min-h-[220px] flex flex-col items-center justify-center"
           />
-        ) : isEmpty ? (
+        ) : (
           <EmptyState
             glyph="⎘"
             primary="No invoices yet."
@@ -201,17 +215,6 @@ export default function RequestsPage() {
             }
             className="glass-card rounded-card p-6 text-center min-h-[220px] flex flex-col items-center justify-center"
           />
-        ) : (
-          <div className="grid gap-4 sm:grid-cols-2">
-            {invoices.map((inv) => (
-              <InvoiceCard
-                key={inv.id}
-                inv={inv}
-                copied={copied === inv.id}
-                onCopy={() => copyLink(inv.id)}
-              />
-            ))}
-          </div>
         )}
       </div>
       <Footer />
