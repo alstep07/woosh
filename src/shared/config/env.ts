@@ -1,4 +1,4 @@
-export const APP_VERSION = "3.0";
+export const APP_VERSION = "3.2";
 
 export const env = {
   circleAppId: process.env.NEXT_PUBLIC_CIRCLE_APP_ID ?? "",
