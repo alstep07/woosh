@@ -14,7 +14,7 @@ interface Props {
 }
 
 /**
- * "How often" pills + runs/deposit fields shared by every recurring form (Send's
+ * "How often" pills + runs/deposit fields shared by every recurring form (Payments'
  * recurring payment/payroll, Swap's recurring auto-buy). Extracted from
  * CreateStrategyModal so the three forms don't re-declare the same interval grid and
  * suggested-funding button.

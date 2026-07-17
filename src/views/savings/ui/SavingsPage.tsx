@@ -150,7 +150,9 @@ function PlanCard({
   return (
     <div className="rounded-card border border-white/[0.06] bg-white/[0.02] p-4">
       <div className="flex items-center justify-between gap-3 mb-1.5">
-        <span className="text-xs font-semibold uppercase tracking-widest text-text-secondary/35">Plan</span>
+        <span className="text-xs font-semibold uppercase tracking-widest text-text-secondary/35">
+          {intervalLabel(s.intervalSeconds)}
+        </span>
         <span className={`text-xs font-mono ${
           overdue || isDepleted ? "text-amber-400" : "text-text-secondary/45"
         }`}>{runLabel}</span>
@@ -279,16 +281,19 @@ export default function SavingsPage() {
 
         {/* Plan */}
         {loading ? (
-          <div className="glass-card rounded-card p-4 mb-6">
-            <div className="h-4 w-40 bg-border rounded animate-pulse mb-3" />
+          // Same min-height as the empty/error states below, so finishing a load never
+          // visibly resizes the card.
+          <div className="rounded-card border border-white/[0.05] p-6 min-h-[220px] mb-6 space-y-3">
+            <div className="h-4 w-40 bg-border rounded animate-pulse" />
             <div className="h-3 w-full bg-border/60 rounded animate-pulse" />
+            <div className="h-3 w-2/3 bg-border/60 rounded animate-pulse" />
           </div>
         ) : strategiesError ? (
           <EmptyState
             glyph="!"
             primary="Couldn't load your savings plan."
             secondary="There was a problem reading from the network. Try again in a moment."
-            className="glass-card rounded-card p-6 text-center mb-6"
+            className="rounded-card border border-white/[0.05] p-6 text-center mb-6 min-h-[220px] flex flex-col items-center justify-center"
           />
         ) : active.length > 0 ? (
           <div className="space-y-3 mb-6">
@@ -306,7 +311,7 @@ export default function SavingsPage() {
                 Set up savings
               </Button>
             }
-            className="glass-card rounded-card p-6 text-center mb-6"
+            className="rounded-card border border-white/[0.05] p-6 text-center mb-6 min-h-[220px] flex flex-col items-center justify-center"
           />
         )}
 

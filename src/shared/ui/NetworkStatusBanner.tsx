@@ -36,7 +36,10 @@ export function NetworkStatusBanner() {
     <div
       role="status"
       aria-live="polite"
-      className="fixed bottom-4 right-4 z-50 pointer-events-none select-none"
+      // bottom-20 (not bottom-4): the footer sits at the bottom of every page, and a
+      // fixed bottom-right element at a small offset renders on top of its links
+      // (Explorer/Faucet/GitHub, "Built on Arc"), not just past the end of the page.
+      className="fixed bottom-20 right-4 z-50 pointer-events-none select-none"
     >
       <div className="flex items-center gap-2 rounded-input border border-border bg-navy/85 backdrop-blur-md px-3.5 py-2 shadow-lg">
         <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-400/80 animate-pulse" aria-hidden="true" />

@@ -6,6 +6,8 @@ import AppHeader from "@/widgets/AppHeader/ui/AppHeader";
 import Footer from "@/widgets/Footer/ui/Footer";
 import { Button } from "@/shared/ui/Button";
 import { PageHeader } from "@/shared/ui/PageHeader";
+import { EmptyState } from "@/shared/ui/EmptyState";
+import { RefreshButton } from "@/shared/ui/RefreshButton";
 import CreateInvoiceModal from "@/widgets/CreateInvoiceModal/ui/CreateInvoiceModal";
 import { getSession as loadSession } from "@/shared/lib/session";
 import { useMyInvoices } from "@/entities/invoice/hooks/useMyInvoices";
@@ -103,14 +105,21 @@ export default function RequestsPage() {
   const [session, setSession] = useState<Session | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
-  const { invoices, loading, refetch } = useMyInvoices(session?.walletAddress);
+  const { invoices, loading, isError, refetch } = useMyInvoices(session?.walletAddress);
 
   useEffect(() => {
     const s = loadSession();
     if (!s) { router.replace("/signup"); return; }
     setSession(s);
   }, [router]);
+
+  async function handleRefresh() {
+    setIsRefreshing(true);
+    await refetch();
+    setIsRefreshing(false);
+  }
 
   async function copyLink(id: `0x${string}`) {
     await navigator.clipboard.writeText(buildRequestLink(id));
@@ -126,22 +135,39 @@ export default function RequestsPage() {
     );
   }
 
+  const isEmpty = !loading && !isError && invoices.length === 0;
+
   return (
     <main className="min-h-screen bg-navy flex flex-col">
       <AppHeader />
+      {/* Content width: Invoices is a grid-style list page (an unordered, multi-column
+          card grid, not a chronological single-column list), so it keeps the wider
+          max-w-4xl. Savings and Payments' recurring lists are single-column and use
+          max-w-2xl / the two-column list-and-tool layout instead, see PayEntryPage.tsx
+          and SavingsPage.tsx for the rest of the width rule. */}
       <div className="flex-1 px-4 sm:px-6 lg:px-8 py-8 max-w-4xl mx-auto w-full">
         <PageHeader
           title="My invoices"
           className="mb-6"
           action={
-            <Button size="sm" onClick={() => setCreateOpen(true)}>
-              Create invoice
-            </Button>
+            <div className="flex items-center gap-3">
+              <RefreshButton onRefresh={handleRefresh} isRefreshing={isRefreshing} />
+              {/* Hide the "Create invoice" CTA once we know the list is empty:
+                  EmptyState renders its own "Create your first invoice" button below,
+                  and showing both at once duplicates the action on screen. */}
+              {!isEmpty && (
+                <Button size="sm" onClick={() => setCreateOpen(true)}>
+                  Create invoice
+                </Button>
+              )}
+            </div>
           }
         />
 
         {loading ? (
-          <div className="grid gap-4 sm:grid-cols-2">
+          // min-h matches the empty/error card below so finishing a load never
+          // visibly resizes the section.
+          <div className="grid gap-4 sm:grid-cols-2 min-h-[220px]">
             {[0, 1, 2, 3].map((i) => (
               <div key={i} className="glass-card rounded-card p-5 space-y-3">
                 <div className="h-3 w-16 bg-border rounded animate-pulse" />
@@ -157,21 +183,25 @@ export default function RequestsPage() {
               </div>
             ))}
           </div>
-        ) : invoices.length === 0 ? (
-          <div className="glass-card rounded-card py-12 px-6 text-center">
-            <div className="mx-auto mb-3 h-12 w-12 rounded-full bg-blue-primary/10 text-blue-primary grid place-items-center">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h4m4 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-            </div>
-            <p className="text-text-primary font-semibold">No invoices yet</p>
-            <p className="text-text-secondary/60 text-sm mt-1 mb-5 max-w-xs mx-auto">
-              Create an invoice and share the link to get paid in USDC.
-            </p>
-            <Button size="sm" onClick={() => setCreateOpen(true)}>
-              Create your first invoice
-            </Button>
-          </div>
+        ) : isError ? (
+          <EmptyState
+            glyph="!"
+            primary="Couldn't load your invoices."
+            secondary="There was a problem reading from the network. Try again in a moment."
+            className="glass-card rounded-card p-6 text-center min-h-[220px] flex flex-col items-center justify-center"
+          />
+        ) : isEmpty ? (
+          <EmptyState
+            glyph="⎘"
+            primary="No invoices yet."
+            secondary="Create an invoice and share the link to get paid in USDC."
+            cta={
+              <Button size="sm" onClick={() => setCreateOpen(true)}>
+                Create your first invoice
+              </Button>
+            }
+            className="glass-card rounded-card p-6 text-center min-h-[220px] flex flex-col items-center justify-center"
+          />
         ) : (
           <div className="grid gap-4 sm:grid-cols-2">
             {invoices.map((inv) => (

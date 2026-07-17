@@ -2,6 +2,14 @@
 
 import { FIELD_CLS } from "@/shared/ui/Field";
 
+// FIELD_CLS starts with "w-full" (it's designed for standalone full-width fields).
+// Appending flex-1/w-24 on TOP of that put two competing width utilities on the same
+// element; Tailwind's generated stylesheet order let w-full win for BOTH inputs, so
+// the amount field (protected by shrink-0) rendered at ~100% width and the recipient
+// field (no shrink protection, min-w-0) collapsed to near-zero, unusable. Stripping
+// "w-full" here removes the conflict instead of trying to out-specificity it.
+const FIELD_CLS_FLEX = FIELD_CLS.replace(/^w-full\s+/, "");
+
 export type RecipientRow = { to: string; amount: string };
 
 interface Props {
@@ -12,16 +20,17 @@ interface Props {
   disabled?: boolean;
 }
 
-function glyphFor(v: string): string {
-  const c = v.trim().replace(/^@/, "").charAt(0);
-  return c ? c.toUpperCase() : "?";
-}
-
 /**
  * Editable list of (recipient, amount) rows for batch send / payroll forms. Each row
- * gets a glyph avatar derived from the recipient text, an inline remove button (hidden
- * below `minRows`), and a dashed "Add recipient" affordance below the list rather than a
- * bare "+" link, so it reads as a real list-building control.
+ * gets a static index badge (1, 2, 3…), an inline remove button (hidden below
+ * `minRows`), and a dashed "Add recipient" affordance below the list rather than a bare
+ * "+" link, so it reads as a real list-building control.
+ *
+ * The index badge used to be a dynamic glyph derived from whatever was typed in the
+ * recipient field (first letter, live). That read as a second, broken input: users
+ * would try typing directly into the circle, nothing happened, and the letter it did
+ * show appeared to change "randomly" as they typed in the real field next to it. A
+ * plain, static row number can't be mistaken for a control.
  */
 export function RecipientRows({ rows, onChange, minRows = 2, maxRows = 20, disabled }: Props) {
   function update(i: number, patch: Partial<RecipientRow>) {
@@ -44,7 +53,7 @@ export function RecipientRows({ rows, onChange, minRows = 2, maxRows = 20, disab
             aria-hidden
             className="shrink-0 h-9 w-9 rounded-full grid place-items-center text-xs font-bold bg-blue-primary/10 text-blue-primary"
           >
-            {glyphFor(row.to)}
+            {i + 1}
           </span>
           <input
             type="text"
@@ -52,7 +61,7 @@ export function RecipientRows({ rows, onChange, minRows = 2, maxRows = 20, disab
             onChange={(e) => update(i, { to: e.target.value })}
             placeholder="username or 0x…"
             disabled={disabled}
-            className={`${FIELD_CLS} flex-1 min-w-0`}
+            className={`${FIELD_CLS_FLEX} flex-1 min-w-0`}
           />
           <input
             type="number"
@@ -61,7 +70,7 @@ export function RecipientRows({ rows, onChange, minRows = 2, maxRows = 20, disab
             onChange={(e) => update(i, { amount: e.target.value })}
             placeholder="0.00"
             disabled={disabled}
-            className={`${FIELD_CLS} w-24 shrink-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none`}
+            className={`${FIELD_CLS_FLEX} w-24 shrink-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none`}
           />
           <button
             type="button"

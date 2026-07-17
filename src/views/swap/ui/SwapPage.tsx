@@ -643,9 +643,12 @@ export default function SwapPage() {
               <RefreshButton onRefresh={handleRefresh} isRefreshing={isRefreshing} />
             </div>
             {strategiesLoading ? (
-              <div className="glass-card rounded-card p-4">
-                <div className="h-4 w-40 bg-border rounded animate-pulse mb-3" />
+              // Same min-height and border treatment as the empty/error states below,
+              // so finishing a load never visibly resizes the card.
+              <div className="rounded-card border border-white/[0.05] p-6 min-h-[220px] space-y-3">
+                <div className="h-4 w-40 bg-border rounded animate-pulse" />
                 <div className="h-3 w-full bg-border/60 rounded animate-pulse" />
+                <div className="h-3 w-2/3 bg-border/60 rounded animate-pulse" />
               </div>
             ) : strategiesError ? (
               <EmptyState

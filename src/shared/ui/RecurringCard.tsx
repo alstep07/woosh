@@ -17,7 +17,7 @@ interface Props {
 /**
  * One recurring payment / auto-buy card. Same visual language as Savings' PlanCard
  * (rounded-card, faint border, status dot-free header row, progress bar, ActionPill row)
- * so Send, Swap and Savings recurring lists read as one system rather than three
+ * so Payments, Swap and Savings recurring lists read as one system rather than three
  * different list styles bolted together.
  */
 export function RecurringCard({ s, target, accent, onAction }: Props) {

@@ -50,8 +50,8 @@ function fmtWei(wei: bigint): string {
   return wei > 0n ? formatUnits(wei, 18).replace(/(\.\d*?)0+$/, "$1").replace(/\.$/, "") : "0";
 }
 
-function rowsValid(rows: RecipientRow[]): boolean {
-  return rows.length >= 2 && rows.every((r) => r.to.trim() && isValidAmount(r.amount));
+function rowsValid(rows: RecipientRow[], min = 2): boolean {
+  return rows.length >= min && rows.every((r) => r.to.trim() && isValidAmount(r.amount));
 }
 
 /**
@@ -139,7 +139,7 @@ export default function PayEntryPage() {
   }
 
   function startOnceBatch() {
-    if (!rowsValid(onceRows)) {
+    if (!rowsValid(onceRows, 1)) {
       setOnceError("Enter every recipient and a valid amount");
       return;
     }
@@ -289,7 +289,7 @@ export default function PayEntryPage() {
                     <p className="text-text-secondary/50 text-xs">One PIN, everyone gets paid right now.</p>
                   </div>
                 </div>
-                <RecipientRows rows={onceRows} onChange={setOnceRows} maxRows={20} />
+                <RecipientRows rows={onceRows} onChange={setOnceRows} minRows={1} maxRows={20} />
                 <Field label="Memo (optional)" htmlFor="once-memo">
                   <input
                     id="once-memo"
@@ -307,13 +307,9 @@ export default function PayEntryPage() {
                   </span>
                 </div>
                 {onceError && <p className="text-sm text-red-400">{onceError}</p>}
-                <Button onClick={startOnceBatch}>Send to {onceRows.length} people</Button>
-                <button
-                  onClick={() => { setOnceMulti(false); setOnceError(null); }}
-                  className="w-full text-center text-xs text-text-secondary/40 hover:text-text-secondary transition-colors"
-                >
-                  Just one recipient instead
-                </button>
+                <Button onClick={startOnceBatch}>
+                  {onceRows.length > 1 ? `Send to ${onceRows.length} people` : "Send"}
+                </Button>
               </div>
             )}
             </div>
@@ -448,9 +444,12 @@ export default function PayEntryPage() {
               <RefreshButton onRefresh={handleRefresh} isRefreshing={isRefreshing} />
             </div>
             {strategiesLoading ? (
-              <div className="glass-card rounded-card p-4">
-                <div className="h-4 w-40 bg-border rounded animate-pulse mb-3" />
+              // Same min-height and border treatment as the empty/error states below,
+              // so finishing a load never visibly resizes the card.
+              <div className="rounded-card border border-white/[0.05] p-6 min-h-[220px] space-y-3">
+                <div className="h-4 w-40 bg-border rounded animate-pulse" />
                 <div className="h-3 w-full bg-border/60 rounded animate-pulse" />
+                <div className="h-3 w-2/3 bg-border/60 rounded animate-pulse" />
               </div>
             ) : strategiesError ? (
               <EmptyState
