@@ -30,7 +30,23 @@ export default async function Page({ params, searchParams }: Props) {
     );
   }
 
-  // Plain link (optionally with a non-binding ?amount= prefill).
-  const address = await resolveSlug(params.slug);
-  return <PayPage address={address} slug={params.slug} initialAmount={searchParams?.amount} />;
+  // Plain link (optionally with a non-binding ?amount= prefill). resolveSlug throws on
+  // an RPC failure rather than returning null, so a transient network hiccup can be
+  // told apart from "this slug really isn't registered" instead of showing the same
+  // dead-end "Invalid payment link" for both.
+  let address: `0x${string}` | null = null;
+  let resolveError = false;
+  try {
+    address = await resolveSlug(params.slug);
+  } catch {
+    resolveError = true;
+  }
+  return (
+    <PayPage
+      address={address}
+      slug={params.slug}
+      initialAmount={searchParams?.amount}
+      resolveError={resolveError}
+    />
+  );
 }

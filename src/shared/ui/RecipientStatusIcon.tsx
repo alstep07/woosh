@@ -9,9 +9,11 @@ interface Props {
 
 /**
  * Live feedback icon next to a recipient input: a spinner while the slug/address is
- * resolving, a green check once resolved and we've paid this address before, or an
- * amber warning if resolved but this would be the first payment to it (native <title>
- * gives the "first time" explanation on hover, no separate tooltip component needed).
+ * resolving, a green check once resolved and we've paid this address before, an amber
+ * warning if resolved but this would be the first payment to it (native <title> gives
+ * the "first time" explanation on hover, no separate tooltip component needed), or a
+ * red mark if the resolve itself failed (RPC hiccup, not "this recipient doesn't
+ * exist"), distinguishing a network problem from an actually-invalid recipient.
  * Renders nothing for idle/invalid, the input's own error text already covers that.
  */
 export function RecipientStatusIcon({ status, resolvedAddress, knownAddresses, className = "" }: Props) {
@@ -22,6 +24,19 @@ export function RecipientStatusIcon({ status, resolvedAddress, knownAddresses, c
         role="status"
         aria-label="Checking recipient…"
       />
+    );
+  }
+
+  if (status === "error") {
+    return (
+      <span
+        className={`inline-block h-3.5 w-3.5 shrink-0 rounded-full grid place-items-center text-[10px] font-bold text-red-400 bg-red-400/10 ${className}`}
+        role="img"
+        aria-label="Couldn't verify this recipient, network issue"
+        title="Couldn't verify this recipient right now. Network issue, not necessarily invalid."
+      >
+        !
+      </span>
     );
   }
 

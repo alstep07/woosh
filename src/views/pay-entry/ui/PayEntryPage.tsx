@@ -154,7 +154,14 @@ export default function PayEntryPage() {
     const query = isAddress ? raw : raw.toLowerCase();
 
     setChecking(true);
-    const resolved = await resolveSlug(query);
+    let resolved: `0x${string}` | null;
+    try {
+      resolved = await resolveSlug(query);
+    } catch {
+      setChecking(false);
+      setSingleError("Couldn't verify that right now. Check your connection and try again.");
+      return;
+    }
     setChecking(false);
 
     if (!resolved) {

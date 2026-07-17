@@ -482,7 +482,17 @@ Strategy setup: to create one you need the kind (recurring payment, auto-buy, or
         if (call.function.name === "send_payment") {
           const to = args.to as string;
           const amount = args.amount as string;
-          const resolvedAddress = await resolveSlug(to);
+          let resolvedAddress: `0x${string}` | null;
+          try {
+            resolvedAddress = await resolveSlug(to);
+          } catch {
+            toolResults.push({
+              role: "tool",
+              tool_call_id: call.id,
+              content: `Couldn't verify "${to}" right now due to a network issue. Ask the user to try again in a moment.`,
+            });
+            continue;
+          }
 
           if (!resolvedAddress) {
             toolResults.push({
@@ -587,7 +597,13 @@ Strategy setup: to create one you need the kind (recurring payment, auto-buy, or
           if (kind === "payment") {
             const to = String(args.recipient ?? "").trim();
             if (!to) { fail("recipient missing, ask who to pay."); continue; }
-            const resolvedAddress = /^0x[a-fA-F0-9]{40}$/.test(to) ? to : await resolveSlug(to);
+            let resolvedAddress: string | null;
+            try {
+              resolvedAddress = /^0x[a-fA-F0-9]{40}$/.test(to) ? to : await resolveSlug(to);
+            } catch {
+              fail(`Couldn't verify "${to}" right now due to a network issue. Ask the user to try again in a moment.`);
+              continue;
+            }
             if (!resolvedAddress) { fail(`Recipient "${to}" not found, ask the user to double-check.`); continue; }
             return NextResponse.json({
               text: msg.content ?? "",
@@ -656,10 +672,14 @@ Strategy setup: to create one you need the kind (recurring payment, auto-buy, or
           );
         } else if (call.function.name === "resolve_slug") {
           const slug = args.slug as string;
-          const resolved = await resolveSlug(slug);
-          result = resolved
-            ? `"${slug}" resolves to address ${resolved}`
-            : `Username "${slug}" not found`;
+          try {
+            const resolved = await resolveSlug(slug);
+            result = resolved
+              ? `"${slug}" resolves to address ${resolved}`
+              : `Username "${slug}" not found`;
+          } catch {
+            result = `Couldn't verify "${slug}" right now due to a network issue, ask the user to try again in a moment.`;
+          }
         } else if (call.function.name === "get_invoices") {
           result = await getInvoicesSummary(walletAddress);
         } else if (call.function.name === "get_strategies") {

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { resolveSlug } from "@/entities/slug/lib/resolveSlug";
 
-export type RecipientResolveStatus = "idle" | "loading" | "valid" | "invalid";
+export type RecipientResolveStatus = "idle" | "loading" | "valid" | "invalid" | "error";
 
 /**
  * Debounced live resolution of a recipient input (slug or 0x address) to a wallet
@@ -34,15 +34,21 @@ export function useResolveRecipient(raw: string): {
       abortRef.current = controller;
       setStatus("loading");
 
-      const resolved = await resolveSlug(/^0x/i.test(input) ? input : input.toLowerCase());
-      if (controller.signal.aborted) return;
+      try {
+        const resolved = await resolveSlug(/^0x/i.test(input) ? input : input.toLowerCase());
+        if (controller.signal.aborted) return;
 
-      if (resolved) {
-        setResolvedAddress(resolved);
-        setStatus("valid");
-      } else {
+        if (resolved) {
+          setResolvedAddress(resolved);
+          setStatus("valid");
+        } else {
+          setResolvedAddress(null);
+          setStatus("invalid");
+        }
+      } catch {
+        if (controller.signal.aborted) return;
         setResolvedAddress(null);
-        setStatus("invalid");
+        setStatus("error");
       }
     }, 400);
 

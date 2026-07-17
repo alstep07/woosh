@@ -10,9 +10,11 @@ interface Props {
   memo?: string;
   alreadyPaid?: boolean;
   recipientSlug?: string;
+  /** resolveSlug's RPC read itself failed (not "this slug isn't registered"). */
+  resolveError?: boolean;
 }
 
-export function PayPage({ slug, address, initialAmount, requestId, memo, alreadyPaid, recipientSlug }: Props) {
+export function PayPage({ slug, address, initialAmount, requestId, memo, alreadyPaid, recipientSlug, resolveError }: Props) {
   if (!address) {
     return (
       <main className="min-h-screen bg-navy flex flex-col">
@@ -20,10 +22,12 @@ export function PayPage({ slug, address, initialAmount, requestId, memo, already
         <div className="flex-1 flex items-center justify-center px-6">
           <div className="text-center">
             <h1 className="text-2xl font-bold text-text-primary mb-2">
-              Invalid payment link
+              {resolveError ? "Couldn't load this link" : "Invalid payment link"}
             </h1>
             <p className="text-text-secondary text-sm">
-              Check the link and try again.
+              {resolveError
+                ? "There was a network problem checking this link. Try again in a moment."
+                : "Check the link and try again."}
             </p>
           </div>
         </div>
