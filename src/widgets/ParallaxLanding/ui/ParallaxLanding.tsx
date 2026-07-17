@@ -281,7 +281,7 @@ export default function ParallaxLanding() {
             <button className="btn-g" style={{ padding: "13px 22px", fontSize: 15 }} onClick={go(appHref)}>Explore the app</button>
           </div>
           <p className="sub rise d3" style={{ fontFamily: "var(--font-mono)", fontSize: 12, letterSpacing: "0.06em", marginTop: 30, opacity: 0.7 }}>
-            Powered by Arc
+            Built on Arc
           </p>
           <div className="plx-cta-footer"><Footer /></div>
         </section>
