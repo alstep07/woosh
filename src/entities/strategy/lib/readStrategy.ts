@@ -44,28 +44,29 @@ function decode(id: `0x${string}`, raw: RawStrategy, portfolio: PortfolioConfig 
   };
 }
 
-/** Portfolio extras for a portfolio-kind strategy. null on RPC failure or other kinds. */
+/** Portfolio extras for a portfolio-kind strategy. null only when the strategy
+ *  genuinely has no legs (tokens.length === 0); THROWS on RPC failure so callers
+ *  can tell "not a portfolio" apart from "couldn't read the legs right now". Silently
+ *  swallowing RPC errors into null here made a transient failure of this one extra
+ *  per-strategy call permanently indistinguishable from "no allocation," which the UI
+ *  showed as an eternal "Loading allocation…" that was never actually going to load. */
 export async function getPortfolioConfig(id: `0x${string}`): Promise<PortfolioConfig | null> {
   if (!env.strategyRegistryAddress) return null;
-  try {
-    const [tokens, bps, mode, sweepThreshold] = (await arcPublicClient.readContract({
-      address: env.strategyRegistryAddress,
-      abi: STRATEGY_REGISTRY_ABI,
-      functionName: "getPortfolio",
-      args: [id],
-    })) as [readonly `0x${string}`[], readonly number[], number, bigint];
-    if (tokens.length === 0) return null;
-    return {
-      legs: tokens.map((t, i) => ({
-        token: t.toLowerCase() === ZERO ? null : t,
-        bps: Number(bps[i]),
-      })),
-      mode: mode === 1 ? "sweep" : "deposit",
-      sweepThreshold: formatUnits(sweepThreshold, 18),
-    };
-  } catch {
-    return null;
-  }
+  const [tokens, bps, mode, sweepThreshold] = (await arcPublicClient.readContract({
+    address: env.strategyRegistryAddress,
+    abi: STRATEGY_REGISTRY_ABI,
+    functionName: "getPortfolio",
+    args: [id],
+  })) as [readonly `0x${string}`[], readonly number[], number, bigint];
+  if (tokens.length === 0) return null;
+  return {
+    legs: tokens.map((t, i) => ({
+      token: t.toLowerCase() === ZERO ? null : t,
+      bps: Number(bps[i]),
+    })),
+    mode: mode === 1 ? "sweep" : "deposit",
+    sweepThreshold: formatUnits(sweepThreshold, 18),
+  };
 }
 
 /** Read one strategy from the contract. null if not found / not configured / RPC error. */

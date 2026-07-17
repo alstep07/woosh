@@ -504,20 +504,26 @@ export default function PayEntryPage() {
                 <div className="h-3 w-full bg-border/60 rounded animate-pulse" />
                 <div className="h-3 w-2/3 bg-border/60 rounded animate-pulse" />
               </div>
-            ) : strategiesError ? (
-              <EmptyState
-                glyph="!"
-                primary="Couldn't load your recurring payments."
-                secondary="There was a problem reading from the network. Try again in a moment."
-                className="rounded-card border border-white/[0.05] p-6 text-center min-h-[220px] flex flex-col items-center justify-center"
-              />
-            ) : active.length === 0 && closed.length === 0 ? (
-              <EmptyState
-                glyph="↻"
-                primary="No recurring payments yet."
-                secondary="Set one up on the left, a fixed amount to one person or a payroll to several, on a schedule."
-                className="rounded-card border border-white/[0.05] p-6 text-center min-h-[220px] flex flex-col items-center justify-center"
-              />
+            ) : /* A background poll can fail (429, transient timeout) after we already
+                   have a cached strategies list. strategiesError must not hide real
+                   data we're still holding, only show the error state when there's
+                   truly nothing cached to show. */
+            active.length === 0 && closed.length === 0 ? (
+              strategiesError ? (
+                <EmptyState
+                  glyph="!"
+                  primary="Couldn't load your recurring payments."
+                  secondary="There was a problem reading from the network. Try again in a moment."
+                  className="rounded-card border border-white/[0.05] p-6 text-center min-h-[220px] flex flex-col items-center justify-center"
+                />
+              ) : (
+                <EmptyState
+                  glyph="↻"
+                  primary="No recurring payments yet."
+                  secondary="Set one up on the left, a fixed amount to one person or a payroll to several, on a schedule."
+                  className="rounded-card border border-white/[0.05] p-6 text-center min-h-[220px] flex flex-col items-center justify-center"
+                />
+              )
             ) : (
               <div>
                 {active.length > 0 && (

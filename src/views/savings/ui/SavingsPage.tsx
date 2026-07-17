@@ -61,7 +61,10 @@ function VaultCard({
 
       {isLoading ? (
         <div className="h-11 w-40 bg-border rounded animate-pulse mb-5" />
-      ) : isError ? (
+      ) : /* A background poll can fail (429, transient timeout) after we already have a
+             good cached vault. isError must not hide a real balance we're still
+             holding, only show "—" when there's truly nothing cached yet. */
+      !vault && isError ? (
         <p className="text-4xl font-bold text-text-secondary/40 mb-5">—</p>
       ) : !hasAnything ? (
         <div className="mb-6">
