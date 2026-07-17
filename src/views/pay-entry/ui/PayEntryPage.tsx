@@ -18,8 +18,11 @@ import { RecurringCard, RecurringPastRow } from "@/shared/ui/RecurringCard";
 import { ConfirmActionModal } from "@/features/auth/ui/ConfirmActionModal";
 import StrategyActionModal, { type StrategyAction } from "@/widgets/CreateStrategyModal/ui/StrategyActionModal";
 import { resolveSlug } from "@/entities/slug/lib/resolveSlug";
+import { useResolveRecipient } from "@/entities/slug/hooks/useResolveRecipient";
+import { RecipientStatusIcon } from "@/shared/ui/RecipientStatusIcon";
 import { getSession as loadSession } from "@/shared/lib/session";
 import { useMyStrategies } from "@/entities/strategy/hooks/useMyStrategies";
+import { useTransactionHistory } from "@/entities/payment/hooks/useTransactionHistory";
 import { INTERVAL_PRESETS } from "@/entities/strategy/lib/format";
 import { newStrategySalt } from "@/entities/strategy/lib/computeStrategyId";
 import { AMOUNT_RE, isValidAmount } from "@/shared/lib/amount";
@@ -112,6 +115,15 @@ export default function PayEntryPage() {
   const strategies = allStrategies.filter((s) => s.kind === "payment");
   const active = strategies.filter((s) => s.status === "active" || s.status === "paused" || s.status === "depleted");
   const closed = strategies.filter((s) => s.status === "completed" || s.status === "cancelled");
+
+  // Addresses already paid before, for the recipient inputs' status icons (checkmark
+  // vs first-time warning). Best-effort: undefined while tx history is still loading
+  // just means the icon holds off on the known/new distinction until it resolves.
+  const { data: txs } = useTransactionHistory(session?.walletAddress);
+  const knownAddresses = txs?.map((tx) => tx.counterparty);
+
+  const singleResolve = useResolveRecipient(value);
+  const recurringResolve = useResolveRecipient(recipient);
 
   useEffect(() => {
     const s = loadSession();
@@ -266,6 +278,15 @@ export default function PayEntryPage() {
                   placeholder="username or 0x…"
                   error={singleError}
                   autoFocus
+                  rightSlot={
+                    singleResolve.status !== "idle" ? (
+                      <RecipientStatusIcon
+                        status={singleResolve.status}
+                        resolvedAddress={singleResolve.resolvedAddress}
+                        knownAddresses={knownAddresses}
+                      />
+                    ) : undefined
+                  }
                 />
                 <button
                   type="button"
@@ -289,7 +310,7 @@ export default function PayEntryPage() {
                     <p className="text-text-secondary/50 text-xs">One PIN, everyone gets paid right now.</p>
                   </div>
                 </div>
-                <RecipientRows rows={onceRows} onChange={setOnceRows} minRows={1} maxRows={20} />
+                <RecipientRows rows={onceRows} onChange={setOnceRows} minRows={1} maxRows={20} knownAddresses={knownAddresses} />
                 <Field label="Memo (optional)" htmlFor="once-memo">
                   <input
                     id="once-memo"
@@ -327,14 +348,25 @@ export default function PayEntryPage() {
                   </p>
                 </div>
                 <Field label="Pay to" htmlFor="recurring-recipient">
-                  <input
-                    id="recurring-recipient"
-                    type="text"
-                    value={recipient}
-                    onChange={(e) => { setRecipient(e.target.value); setRecurringError(null); }}
-                    placeholder="username or 0x address"
-                    className={FIELD_CLS}
-                  />
+                  <div className="relative">
+                    <input
+                      id="recurring-recipient"
+                      type="text"
+                      value={recipient}
+                      onChange={(e) => { setRecipient(e.target.value); setRecurringError(null); }}
+                      placeholder="username or 0x address"
+                      className={`${FIELD_CLS} ${recurringResolve.status !== "idle" ? "pr-9" : ""}`}
+                    />
+                    {recurringResolve.status !== "idle" && (
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2">
+                        <RecipientStatusIcon
+                          status={recurringResolve.status}
+                          resolvedAddress={recurringResolve.resolvedAddress}
+                          knownAddresses={knownAddresses}
+                        />
+                      </span>
+                    )}
+                  </div>
                 </Field>
                 <button
                   type="button"
@@ -392,7 +424,7 @@ export default function PayEntryPage() {
                     Pay 2 to 10 people the same amounts, on the same schedule, automatically.
                   </p>
                 </div>
-                <RecipientRows rows={payrollRows} onChange={setPayrollRows} maxRows={10} />
+                <RecipientRows rows={payrollRows} onChange={setPayrollRows} maxRows={10} knownAddresses={knownAddresses} />
                 <Field label="Memo (optional)" htmlFor="payroll-memo">
                   <input
                     id="payroll-memo"
