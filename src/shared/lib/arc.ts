@@ -25,7 +25,11 @@ export const arcTestnet = defineChain({
 
 export const arcPublicClient = createPublicClient({
   chain: arcTestnet,
-  transport: http(env.arcRpcUrl, { timeout: 5_000 }),
+  // viem's http transport retries 3x by default; react-query hooks retry on top of
+  // that (see Providers.tsx), so the two layers were compounding into ~4x the raw
+  // calls on every rate-limited request, right when the RPC needed less load, not
+  // more. One retry here is enough to smooth over a single dropped request.
+  transport: http(env.arcRpcUrl, { timeout: 5_000, retryCount: 1 }),
 });
 
 /** Arc testnet faucet — POST {address} to claim USDC */

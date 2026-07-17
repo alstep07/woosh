@@ -86,9 +86,15 @@ export async function getStrategy(id: `0x${string}`): Promise<OnchainStrategy | 
   }
 }
 
-/** The owner's strategies, read straight from the chain (newest first). Throws on RPC
- *  failure (caller's react-query surfaces isError) rather than swallowing it as an
- *  empty list, which used to render as a false "no strategies" empty state. */
+/** The owner's strategies, read straight from the chain (newest first). One
+ *  `getStrategiesBatch` call instead of N individual `getStrategy` reads (the previous
+ *  Promise.all-of-getStrategy fan-out was the single biggest source of RPC call volume
+ *  in the app: every 15s poll, on every page mounting this hook, issued one RPC round
+ *  trip per strategy the owner has). Portfolio-kind entries still need one extra
+ *  `getPortfolio` call each (separate mapping on the contract), but that's a small
+ *  minority of strategies for most owners.
+ *  Throws on RPC failure (caller's react-query surfaces isError) rather than swallowing
+ *  it as an empty list, which used to render as a false "no strategies" empty state. */
 export async function getMyStrategies(owner: `0x${string}`): Promise<OnchainStrategy[]> {
   if (!env.strategyRegistryAddress) return [];
   const ids = (await arcPublicClient.readContract({
@@ -97,7 +103,22 @@ export async function getMyStrategies(owner: `0x${string}`): Promise<OnchainStra
     functionName: "getStrategyIds",
     args: [owner],
   })) as readonly `0x${string}`[];
+  if (ids.length === 0) return [];
 
-  const strategies = await Promise.all([...ids].reverse().map((id) => getStrategy(id)));
-  return strategies.filter((x): x is OnchainStrategy => x !== null);
+  const orderedIds = [...ids].reverse();
+  const raws = (await arcPublicClient.readContract({
+    address: env.strategyRegistryAddress,
+    abi: STRATEGY_REGISTRY_ABI,
+    functionName: "getStrategiesBatch",
+    args: [orderedIds],
+  })) as readonly RawStrategy[];
+
+  const decoded = await Promise.all(
+    raws.map(async (raw, i) => {
+      if (raw.owner.toLowerCase() === ZERO) return null;
+      const portfolio = raw.kind === 2 ? await getPortfolioConfig(orderedIds[i]) : null;
+      return decode(orderedIds[i], raw, portfolio);
+    })
+  );
+  return decoded.filter((x): x is OnchainStrategy => x !== null);
 }
