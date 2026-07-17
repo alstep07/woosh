@@ -316,6 +316,10 @@ input[type="number"]::-webkit-inner-spin-button {
 }
 .plx .grad { background: var(--plx-grad); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
 
+.plx .benefits { margin-top: 20px; display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+.plx .benefits li { display: flex; align-items: baseline; gap: 8px; font-size: 14px; color: var(--plx-tp); text-align: left; }
+.plx .benefits .tick { flex: none; color: var(--plx-green); }
+
 /* Entrances are a clean, in-place fade — no slide from the bottom/side. The stagger
    (d1/d2/d3) keeps it alive without anything drifting into position. */
 .plx .rise { opacity: 0; transition: opacity 0.55s var(--plx-ease); }
@@ -362,8 +366,6 @@ input[type="number"]::-webkit-inner-spin-button {
   .plx .scroll-cue svg { width: 36px; height: 36px; }
 }
 @keyframes plxBob { 0%, 100% { transform: translateY(0); opacity: 0.5; } 50% { transform: translateY(5px); opacity: 1; } }
-
-.plx .svg-stage { width: min(560px, 92vw); height: auto; display: block; }
 
 .plx .otp-flow { display: flex; flex-direction: column; align-items: center; gap: 14px; }
 .plx .email-pill {
@@ -457,9 +459,9 @@ input[type="number"]::-webkit-inner-spin-button {
 @keyframes plxRunWireV { 0% { top: 0; opacity: 0; } 15% { opacity: 1; } 85% { opacity: 1; } 100% { top: 100%; opacity: 0; } }
 .plx .fsplit { display: flex; flex-direction: column; gap: 8px; }
 
-/* Strategies scene — two "ledger" cards showing the rule executing over time:
-   recurring sends the same amount each period; DCA accumulates cirBTC week by week
-   (note the differing cirBTC per fixed $50 — that's the averaging). */
+/* Payments scene — two "ledger" cards showing the rule executing over time:
+   recurring sends the same amount each period; payroll pays several people the
+   same run. Reused generically wherever a scene needs a running list of entries. */
 .plx .scard {
   width: min(360px, 92vw);
   background: var(--plx-glass-fill);
@@ -515,24 +517,24 @@ input[type="number"]::-webkit-inner-spin-button {
 }
 
 /* Mobile: this scene's two stacked cards overflow 100vh — compact it so it fits.
-   Scoped to #plx-s-strategy so no other scene is affected. */
+   Scoped to #plx-s-transfer (now the Payments scene) so no other scene is affected. */
 @media (max-width: 640px) {
-  #plx-s-strategy { padding-top: 92px; padding-bottom: 40px; }
-  #plx-s-strategy h2 { font-size: clamp(1.7rem, 7vw, 2.2rem); }
-  #plx-s-strategy .sub { margin-top: 12px; font-size: 14px; }
-  #plx-s-strategy .stage { margin-top: clamp(20px, 4vh, 40px); }
+  #plx-s-transfer { padding-top: 92px; padding-bottom: 40px; }
+  #plx-s-transfer h2 { font-size: clamp(1.7rem, 7vw, 2.2rem); }
+  #plx-s-transfer .sub { margin-top: 12px; font-size: 14px; }
+  #plx-s-transfer .stage { margin-top: clamp(20px, 4vh, 40px); }
 
-  #plx-s-strategy .scard { padding: 12px 14px; }
-  #plx-s-strategy .scard-ic { width: 26px; height: 26px; font-size: 13px; }
-  #plx-s-strategy .scard-head .t { font-size: 13px; }
-  #plx-s-strategy .srow { padding: 6px 0; font-size: 12px; gap: 8px; }
-  #plx-s-strategy .srow .d { width: 40px; font-size: 10px; }
-  #plx-s-strategy .scard-total { margin-top: 8px; padding-top: 10px; }
-  #plx-s-strategy .scard-total .val { font-size: 16px; }
+  #plx-s-transfer .scard { padding: 12px 14px; }
+  #plx-s-transfer .scard-ic { width: 26px; height: 26px; font-size: 13px; }
+  #plx-s-transfer .scard-head .t { font-size: 13px; }
+  #plx-s-transfer .srow { padding: 6px 0; font-size: 12px; gap: 8px; }
+  #plx-s-transfer .srow .d { width: 40px; font-size: 10px; }
+  #plx-s-transfer .scard-total { margin-top: 8px; padding-top: 10px; }
+  #plx-s-transfer .scard-total .val { font-size: 16px; }
 
   /* Trim one historical row from each card to save vertical space. */
-  #plx-s-strategy .scard:nth-child(1) .srow:nth-child(2),
-  #plx-s-strategy .scard:nth-child(2) .srow:nth-child(2) { display: none; }
+  #plx-s-transfer .scard:nth-child(1) .srow:nth-child(2),
+  #plx-s-transfer .scard:nth-child(2) .srow:nth-child(2) { display: none; }
 }
 
 .plx .invoice {
@@ -559,15 +561,8 @@ input[type="number"]::-webkit-inner-spin-button {
 
 .plx .cta h2 { max-width: 18ch; }
 
-.plx .xfer-wrap { position: relative; width: min(560px, 92vw); }
-.plx .xfer-labels { position: absolute; inset: 0; pointer-events: none; }
-.plx .xlbl { position: absolute; display: flex; flex-direction: column; align-items: center; gap: 2px; transform: translateX(-50%); }
-.plx .xlbl b { font-size: 12px; font-weight: 600; }
-.plx .xlbl span { font-family: var(--font-mono); font-size: 10px; color: var(--plx-ts); }
-
-
 @media (max-width: 640px) {
-  /* Strategies: stack the two ledger cards vertically on small screens */
+  /* Payments: stack the two ledger cards vertically on small screens */
   .plx .strat-stack {
     flex-direction: column;
     align-items: center;
