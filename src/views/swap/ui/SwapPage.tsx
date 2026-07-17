@@ -25,6 +25,7 @@ import { INTERVAL_PRESETS } from "@/entities/strategy/lib/format";
 import { newStrategySalt } from "@/entities/strategy/lib/computeStrategyId";
 import { AMOUNT_RE as RECURRING_AMOUNT_RE, isValidAmount } from "@/shared/lib/amount";
 import { SWAP_TARGETS, tokenByAddress } from "@/shared/lib/tokens";
+import { TokenIcon } from "@/shared/ui/TokenIcon";
 import type { OnchainStrategy } from "@/entities/strategy/model/types";
 import type { Session } from "@/entities/user/model/types";
 
@@ -39,12 +40,12 @@ function TokenBadge({ symbol }: { symbol: string }) {
   const isCircBTC = symbol === "cirBTC";
   const isUSDC = symbol === "USDC";
   return (
-    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold tracking-wide ${
+    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold tracking-wide ${
       isCircBTC ? "bg-amber-400/10 text-amber-400" :
       isUSDC ? "bg-blue-primary/10 text-blue-primary" :
       "bg-cyan-400/10 text-cyan-400"
     }`}>
-      <span className="opacity-70">{isCircBTC ? "₿" : isUSDC ? "$" : "€"}</span>
+      <TokenIcon symbol={symbol} size={14} />
       {symbol}
     </span>
   );
@@ -354,11 +355,7 @@ export default function SwapPage() {
                               : "bg-white/[0.04] text-text-secondary/50 border border-transparent hover:text-text-secondary"
                           }`}
                         >
-                          <span className={`w-5 h-5 rounded-full text-xs font-bold flex items-center justify-center ${
-                            isCircBTC ? "bg-amber-400/15 text-amber-400" : "bg-cyan-400/15 text-cyan-400"
-                          }`}>
-                            {isCircBTC ? "₿" : "€"}
-                          </span>
+                          <TokenIcon symbol={t.symbol} size={20} />
                           {t.symbol}
                         </button>
                       );
@@ -570,7 +567,6 @@ export default function SwapPage() {
                     )}
                     {swapTargets.map((t) => {
                       const active = dcaToken === t.address;
-                      const g = t.symbol === "cirBTC" ? "₿" : "€";
                       return (
                         <button
                           key={t.symbol}
@@ -582,9 +578,7 @@ export default function SwapPage() {
                               : "border-border bg-border/30 text-text-secondary hover:text-text-primary"
                           }`}
                         >
-                          <span className={`h-6 w-6 shrink-0 rounded-full grid place-items-center text-xs font-bold ${
-                            t.symbol === "cirBTC" ? "bg-amber-400/15 text-amber-400" : "bg-blue-secondary/15 text-blue-secondary"
-                          }`}>{g}</span>
+                          <TokenIcon symbol={t.symbol} size={24} />
                           <span className="font-semibold">{t.symbol}</span>
                         </button>
                       );

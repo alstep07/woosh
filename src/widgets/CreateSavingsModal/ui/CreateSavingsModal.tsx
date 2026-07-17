@@ -13,6 +13,7 @@ import { useChallengeFlow } from "@/features/auth/model/useChallengeFlow";
 import { computeStrategyId, newStrategySalt } from "@/entities/strategy/lib/computeStrategyId";
 import { INTERVAL_PRESETS } from "@/entities/strategy/lib/format";
 import { SWAP_TARGETS, USDC_ERC20_ADDRESS } from "@/shared/lib/tokens";
+import { TokenIcon } from "@/shared/ui/TokenIcon";
 import { arcPublicClient } from "@/shared/lib/arc";
 import { env } from "@/shared/config/env";
 import type { Session } from "@/entities/user/model/types";
@@ -242,16 +243,9 @@ export default function CreateSavingsModal({ session, onClose, onCreated }: Prop
               </div>
               <div className="space-y-2">
                 {["USDC", ...swapTargets.map((t) => t.symbol)].map((sym) => {
-                  const g = sym === "cirBTC" ? "₿" : sym === "EURC" ? "€" : "$";
-                  const gCls =
-                    sym === "cirBTC"
-                      ? "bg-amber-400/15 text-amber-400"
-                      : sym === "EURC"
-                        ? "bg-blue-secondary/15 text-blue-secondary"
-                        : "bg-green-400/15 text-green-400";
                   return (
                     <div key={sym} className="flex items-center gap-2">
-                      <span className={`h-6 w-6 shrink-0 rounded-full grid place-items-center text-xs font-bold ${gCls}`}>{g}</span>
+                      <TokenIcon symbol={sym} size={24} />
                       <span className="w-16 text-sm font-semibold text-text-primary">{sym}</span>
                       <div className="relative flex-1">
                         <input

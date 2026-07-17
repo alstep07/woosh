@@ -1,9 +1,10 @@
 /**
- * Shared display formatting for token amounts and glyphs. Consolidates the fmtAmount/glyph
- * pairs that used to be copy-pasted in BalanceSummary and SavingsPage (and drifted, e.g. the
+ * Shared display formatting for token amounts. Consolidates the fmtAmount pairs that
+ * used to be copy-pasted in BalanceSummary and SavingsPage (and drifted, e.g. the
  * savings vault copy used toPrecision(2) for tiny values, which renders as scientific
  * notation like "1.2e-7"). Formatting only, never used for math: amounts stay
  * string/bigint everywhere else per the project's no-float-arithmetic-on-money rule.
+ * Token icons live in src/shared/ui/TokenIcon.tsx (official Circle Brand Kit marks).
  */
 
 /**
@@ -18,11 +19,4 @@ export function fmtAmount(amount: string): string {
   if (n > 0 && n < 0.000001) return "<0.000001";
   if (n < 0.0001) return n.toFixed(8).replace(/\.?0+$/, "");
   return n.toLocaleString(undefined, { maximumFractionDigits: n < 1 ? 6 : 2 });
-}
-
-/** Token glyph for balance breakdown rows (wallet + vault), keeps the list scannable. */
-export function tokenGlyph(symbol: string): { ch: string; cls: string } {
-  if (symbol === "cirBTC") return { ch: "₿", cls: "text-amber-400 bg-amber-400/10" };
-  if (symbol === "EURC") return { ch: "€", cls: "text-blue-secondary bg-blue-secondary/10" };
-  return { ch: "$", cls: "text-blue-primary bg-blue-primary/10" }; // USDC
 }

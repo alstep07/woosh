@@ -7,6 +7,7 @@ import Footer from "@/widgets/Footer/ui/Footer";
 import { Button } from "@/shared/ui/Button";
 import { PageHeader } from "@/shared/ui/PageHeader";
 import { EmptyState } from "@/shared/ui/EmptyState";
+import { RefreshButton } from "@/shared/ui/RefreshButton";
 import { ActionPill } from "@/shared/ui/ActionPill";
 import CreateSavingsModal from "@/widgets/CreateSavingsModal/ui/CreateSavingsModal";
 import StrategyActionModal, { type StrategyAction } from "@/widgets/CreateStrategyModal/ui/StrategyActionModal";
@@ -16,7 +17,8 @@ import { useMyStrategies } from "@/entities/strategy/hooks/useMyStrategies";
 import { useVaultBalances } from "@/entities/savings/hooks/useVaultBalances";
 import { statusBadge, formatNextRun, intervalLabel, isOverdue, allocationLabel } from "@/entities/strategy/lib/format";
 import { tokenByAddress } from "@/shared/lib/tokens";
-import { fmtAmount as fmtVaultAmount, tokenGlyph as vaultGlyph } from "@/shared/lib/format";
+import { fmtAmount as fmtVaultAmount } from "@/shared/lib/format";
+import { TokenIcon } from "@/shared/ui/TokenIcon";
 import { env } from "@/shared/config/env";
 import type { OnchainStrategy } from "@/entities/strategy/model/types";
 import type { VaultHoldings } from "@/entities/savings/model/types";
@@ -76,18 +78,13 @@ function VaultCard({
           </p>
           {rows.length > 0 && (
             <div className="mt-5 space-y-3">
-              {rows.map((r) => {
-                const g = vaultGlyph(r.symbol);
-                return (
-                  <div key={r.symbol} className="flex items-center gap-3">
-                    <span className={`shrink-0 h-7 w-7 rounded-full grid place-items-center text-xs font-bold ${g.cls}`}>
-                      {g.ch}
-                    </span>
-                    <span className="text-sm text-text-secondary flex-1">{r.symbol}</span>
-                    <span className="font-mono text-sm text-text-primary tabular-nums">{fmtVaultAmount(r.amount)}</span>
-                  </div>
-                );
-              })}
+              {rows.map((r) => (
+                <div key={r.symbol} className="flex items-center gap-3">
+                  <TokenIcon symbol={r.symbol} size={28} />
+                  <span className="text-sm text-text-secondary flex-1">{r.symbol}</span>
+                  <span className="font-mono text-sm text-text-primary tabular-nums">{fmtVaultAmount(r.amount)}</span>
+                </div>
+              ))}
             </div>
           )}
         </div>
@@ -216,8 +213,9 @@ export default function SavingsPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [pending, setPending] = useState<{ strategy: OnchainStrategy; action: StrategyAction } | null>(null);
   const [savingsAction, setSavingsAction] = useState<SavingsActionMode | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
-  const { strategies: allStrategies, loading, refetch } = useMyStrategies(session?.walletAddress);
+  const { strategies: allStrategies, loading, isError: strategiesError, refetch } = useMyStrategies(session?.walletAddress);
   const strategies = allStrategies.filter((s) => s.kind === "portfolio");
   const vault = useVaultBalances(session?.walletAddress as `0x${string}` | undefined);
 
@@ -226,6 +224,15 @@ export default function SavingsPage() {
     if (!s) { router.replace("/signup"); return; }
     setSession(s);
   }, [router]);
+
+  // One refresh button drives both the vault balance and the plan list: they're two
+  // reads of the same underlying savings state, so a user hitting "refresh" expects
+  // both to update together rather than picking which one they meant.
+  async function handleRefresh() {
+    setIsRefreshing(true);
+    await Promise.all([refetch(), vault.refetch()]);
+    setIsRefreshing(false);
+  }
 
   if (!session) {
     return (
@@ -245,12 +252,17 @@ export default function SavingsPage() {
   return (
     <main className="min-h-screen bg-navy flex flex-col">
       <AppHeader />
+      {/* Content width: Savings is a plain list page (vault card + at most one plan +
+          history), so it stays at the narrower max-w-2xl throughout, same as Invoices.
+          Payments and Swap are list-and-tool pages (a create form plus a recurring
+          list) and widen to a two-column layout at lg+, see PayEntryPage.tsx. */}
       <div className="flex-1 px-4 sm:px-6 lg:px-8 py-8 max-w-2xl mx-auto w-full">
 
         <PageHeader
           title="Savings"
           subtitle="One vault, a target mix of USDC, EURC and cirBTC, topped up on autopilot"
           className="mb-6"
+          action={<RefreshButton onRefresh={handleRefresh} isRefreshing={isRefreshing} />}
         />
 
         {/* Vault: what's actually saved, held in WooshSavingsVault, separate from
@@ -271,6 +283,13 @@ export default function SavingsPage() {
             <div className="h-4 w-40 bg-border rounded animate-pulse mb-3" />
             <div className="h-3 w-full bg-border/60 rounded animate-pulse" />
           </div>
+        ) : strategiesError ? (
+          <EmptyState
+            glyph="!"
+            primary="Couldn't load your savings plan."
+            secondary="There was a problem reading from the network. Try again in a moment."
+            className="glass-card rounded-card p-6 text-center mb-6"
+          />
         ) : active.length > 0 ? (
           <div className="space-y-3 mb-6">
             {active.map((s) => (

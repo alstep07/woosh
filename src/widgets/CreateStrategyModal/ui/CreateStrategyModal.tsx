@@ -13,6 +13,7 @@ import { useChallengeFlow } from "@/features/auth/model/useChallengeFlow";
 import { computeStrategyId, newStrategySalt } from "@/entities/strategy/lib/computeStrategyId";
 import { INTERVAL_PRESETS } from "@/entities/strategy/lib/format";
 import { SWAP_TARGETS } from "@/shared/lib/tokens";
+import { TokenIcon } from "@/shared/ui/TokenIcon";
 import type { Session } from "@/entities/user/model/types";
 
 const AMOUNT_RE = /^\d+(\.\d{1,6})?$/;
@@ -190,7 +191,6 @@ export default function CreateStrategyModal({ session, onClose, onCreated }: Pro
                   )}
                   {swapTargets.map((t) => {
                     const active = tokenOut === t.address;
-                    const g = t.symbol === "cirBTC" ? "₿" : "€";
                     return (
                       <button
                         key={t.symbol}
@@ -202,9 +202,7 @@ export default function CreateStrategyModal({ session, onClose, onCreated }: Pro
                             : "border-border bg-border/30 text-text-secondary hover:text-text-primary"
                         }`}
                       >
-                        <span className={`h-6 w-6 shrink-0 rounded-full grid place-items-center text-xs font-bold ${
-                          t.symbol === "cirBTC" ? "bg-amber-400/15 text-amber-400" : "bg-blue-secondary/15 text-blue-secondary"
-                        }`}>{g}</span>
+                        <TokenIcon symbol={t.symbol} size={24} />
                         <span className="font-semibold">{t.symbol}</span>
                       </button>
                     );

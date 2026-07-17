@@ -1,7 +1,8 @@
 "use client";
 
 import type { TokenHolding } from "@/entities/wallet/hooks/useTokenBalances";
-import { fmtAmount, tokenGlyph } from "@/shared/lib/format";
+import { fmtAmount } from "@/shared/lib/format";
+import { TokenIcon } from "@/shared/ui/TokenIcon";
 
 function fmtUsd(n: number): string {
   return n.toLocaleString(undefined, { maximumFractionDigits: 2 });
@@ -49,21 +50,16 @@ export function BalanceSummary({ balance, isLoading, isError, holdings, totalUsd
 
       {showTotal && (
         <div className="mt-4 space-y-2.5">
-          {tokens.map((t) => {
-            const g = tokenGlyph(t.symbol);
-            return (
-              <div key={t.symbol} className="flex items-center gap-2.5">
-                <span className={`shrink-0 h-6 w-6 rounded-full grid place-items-center text-xs font-bold ${g.cls}`}>
-                  {g.ch}
-                </span>
-                <span className="text-sm text-text-secondary flex-1">{t.symbol}</span>
-                <span className="font-mono text-sm text-text-primary tabular-nums">{fmtAmount(t.amount)}</span>
-                {t.usd != null && (
-                  <span className="font-mono text-xs text-text-secondary/40 tabular-nums w-16 text-right">${fmtUsd(t.usd)}</span>
-                )}
-              </div>
-            );
-          })}
+          {tokens.map((t) => (
+            <div key={t.symbol} className="flex items-center gap-2.5">
+              <TokenIcon symbol={t.symbol} size={24} />
+              <span className="text-sm text-text-secondary flex-1">{t.symbol}</span>
+              <span className="font-mono text-sm text-text-primary tabular-nums">{fmtAmount(t.amount)}</span>
+              {t.usd != null && (
+                <span className="font-mono text-xs text-text-secondary/40 tabular-nums w-16 text-right">${fmtUsd(t.usd)}</span>
+              )}
+            </div>
+          ))}
         </div>
       )}
     </div>
