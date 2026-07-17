@@ -36,16 +36,15 @@ export function NetworkStatusBanner() {
     <div
       role="status"
       aria-live="polite"
-      // bottom-20 (not bottom-4): the footer sits at the bottom of every page, and a
-      // fixed bottom-right element at a small offset renders on top of its links
-      // (Explorer/Faucet/GitHub, "Built on Arc"), not just past the end of the page.
-      className="fixed bottom-20 right-4 z-50 pointer-events-none select-none"
+      // top-right, below the header row (top-20, not top-4): the header itself isn't
+      // fixed, so this only ever sits over empty margin above page content instead of
+      // competing with the footer links or any page's bottom action buttons, both of
+      // which past positions (bottom-4, bottom-20) ended up overlapping.
+      className="fixed top-20 right-4 z-50 pointer-events-none select-none"
     >
-      <div className="flex items-center gap-2 rounded-input border border-border bg-navy/85 backdrop-blur-md px-3.5 py-2 shadow-lg">
+      <div className="flex items-center gap-2 rounded-input border border-border bg-navy/85 backdrop-blur-md px-3 py-1.5 shadow-lg">
         <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-400/80 animate-pulse" aria-hidden="true" />
-        <span className="text-xs text-text-secondary">
-          Some data couldn&apos;t load. Retrying, check your connection.
-        </span>
+        <span className="text-xs text-text-secondary">Connection issue</span>
       </div>
     </div>
   );
