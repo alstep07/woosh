@@ -225,22 +225,19 @@ export default function ParallaxLanding() {
           <div className="head" data-speed="22" data-speed-x="13">
             <p className="eyebrow rise">04 / Savings</p>
             <h2 className="rise d1">Set money aside. <span className="grad">Still yours.</span></h2>
-            <p className="sub rise d2">A vault for USDC, EURC, and cirBTC that sits apart from your spending balance. Deposit and withdraw anytime, no lockup.</p>
-            <ul className="benefits rise d2">
-              <li><span className="tick">✓</span> Separate from spending, one tap to move funds either way</li>
-              <li><span className="tick">✓</span> Holds USDC, EURC, and cirBTC in one vault</li>
-              <li><span className="tick">✓</span> Yield on idle balances, coming soon</li>
-            </ul>
+            <p className="sub rise d2">A vault for USDC, EURC, and cirBTC, separate from spending, yours to move anytime. Yield on idle balances is coming soon.</p>
           </div>
           <div className="stage rise d2" data-speed="-40" data-speed-x="-18">
-            <div className="invoice">
-              <div className="inv-head">
-                <div><div className="lbl">Savings vault</div><div className="num">Always available</div></div>
+            <div className="scard">
+              <div className="scard-head">
+                <span className="scard-ic blue">◈</span>
+                <span className="t">Savings vault</span>
+                <span className="s">USDC · EURC · cirBTC</span>
               </div>
-              <div className="inv-row"><span>USDC</span><span>128.40</span></div>
-              <div className="inv-row"><span>EURC</span><span>40.00</span></div>
-              <div className="inv-row"><span>cirBTC</span><span>0.0021</span></div>
-              <div className="inv-total"><span>Total value</span><span className="amt grad">$194.12</span></div>
+              <div className="srow"><span className="d">Wk 1</span><span className="m">Deposited <b>$50</b></span><span className="tick">✓</span></div>
+              <div className="srow"><span className="d">Wk 2</span><span className="m">Deposited <b>$80</b></span><span className="tick">✓</span></div>
+              <div className="srow"><span className="d">Wk 3</span><span className="m">Withdrew <b>$20</b></span><span className="tick">✓</span></div>
+              <div className="scard-total"><span className="lbl">Vault balance</span><span className="val grad">$194.12</span></div>
             </div>
           </div>
         </section>

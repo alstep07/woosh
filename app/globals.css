@@ -316,10 +316,6 @@ input[type="number"]::-webkit-inner-spin-button {
 }
 .plx .grad { background: var(--plx-grad); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
 
-.plx .benefits { margin-top: 20px; display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
-.plx .benefits li { display: flex; align-items: baseline; gap: 8px; font-size: 14px; color: var(--plx-tp); text-align: left; }
-.plx .benefits .tick { flex: none; color: var(--plx-green); }
-
 /* Entrances are a clean, in-place fade — no slide from the bottom/side. The stagger
    (d1/d2/d3) keeps it alive without anything drifting into position. */
 .plx .rise { opacity: 0; transition: opacity 0.55s var(--plx-ease); }
