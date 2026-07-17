@@ -8,7 +8,9 @@ import AppHeader from "@/widgets/AppHeader/ui/AppHeader";
 import Footer from "@/widgets/Footer/ui/Footer";
 import { Button } from "@/shared/ui/Button";
 import { Modal } from "@/shared/ui/Modal";
+import { PageHeader } from "@/shared/ui/PageHeader";
 import { EmptyState } from "@/shared/ui/EmptyState";
+import { RefreshButton } from "@/shared/ui/RefreshButton";
 import { SegmentedControl } from "@/shared/ui/SegmentedControl";
 import { FIELD_CLS, LABEL_CLS } from "@/shared/ui/Field";
 import { RecurringScheduleFields } from "@/shared/ui/RecurringScheduleFields";
@@ -53,6 +55,7 @@ export default function SwapPage() {
   const queryClient = useQueryClient();
   const [session, setSession] = useState<Session | null>(null);
   const [mode, setMode] = useState<Mode>("once");
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const swapTargets = SWAP_TARGETS.filter((t) => t.address);
   const [token, setToken] = useState<string>(swapTargets[0]?.symbol ?? "EURC");
@@ -76,7 +79,7 @@ export default function SwapPage() {
   const saltRef = useRef<string>("");
   const [pendingStrategy, setPendingStrategy] = useState<{ strategy: OnchainStrategy; action: StrategyAction } | null>(null);
 
-  const { strategies: allStrategies, loading: strategiesLoading, refetch } = useMyStrategies(session?.walletAddress);
+  const { strategies: allStrategies, loading: strategiesLoading, isError: strategiesError, refetch } = useMyStrategies(session?.walletAddress);
   const dcaStrategies = allStrategies.filter((s) => s.kind === "swap");
   const activeDca = dcaStrategies.filter((s) => s.status === "active" || s.status === "paused" || s.status === "depleted");
   const closedDca = dcaStrategies.filter((s) => s.status === "completed" || s.status === "cancelled");
@@ -90,7 +93,7 @@ export default function SwapPage() {
     setSession(s);
   }, [router]);
 
-  const { data: holdings, refetch: refetchBalances } = useTokenBalances(session?.walletAddress);
+  const { data: holdings } = useTokenBalances(session?.walletAddress);
   const balanceNum = useMemo(() => {
     const h = holdings?.tokens.find((t) => t.symbol === tokenIn);
     return h ? parseFloat(h.amount) : 0;
@@ -138,9 +141,10 @@ export default function SwapPage() {
       setQuote({ loading: false });
       const outLabel = data.amountOut ? (data.exact ? data.amountOut : `≈${data.amountOut}`) : "-";
       setResult({ amountOut: outLabel, tokenOut: data.tokenOut ?? tokenOut });
+      // invalidateQueries alone is enough: it refetches the active token-balances query.
+      // The extra refetchBalances() here doubled the RPC round trip after every swap.
       setTimeout(() => {
         void queryClient.invalidateQueries({ queryKey: ["token-balances", session?.walletAddress] });
-        void refetchBalances();
       }, 3_000);
     } catch (err) {
       if ((err as { name?: string }).name === "AbortError") {
@@ -207,6 +211,12 @@ export default function SwapPage() {
     setQuote({ loading: false });
     setFormError(null);
     setFailure(null);
+  }
+
+  async function handleRefresh() {
+    setIsRefreshing(true);
+    await refetch();
+    setIsRefreshing(false);
   }
 
   const amountNum = parseFloat(amount);
@@ -280,31 +290,51 @@ export default function SwapPage() {
         </Modal>
       )}
 
-      <div className="flex-1 flex flex-col sm:items-center sm:justify-start sm:py-10 sm:px-4">
-        <div className="w-full sm:max-w-md">
-
-          {/* Page header */}
-          <div className="px-5 pt-7 pb-5 sm:px-0 sm:mb-4 text-center">
-            <h1 className="text-2xl font-bold text-text-primary tracking-tight">Swap</h1>
-          </div>
-
-          <div className="px-5 sm:px-0 mb-5">
-            <SegmentedControl
-              aria-label="Swap mode"
-              options={[
-                { value: "once" as Mode, label: "Once", glyph: "⇄" },
-                { value: "recurring" as Mode, label: "Recurring", glyph: "↻" },
-              ]}
-              value={mode}
-              onChange={setMode}
+      {/* Content width and header: Swap shares the exact same page skeleton as
+          Payments (AppHeader, container padding, PageHeader row, two-column
+          list-and-tool split at lg+) so navigating between them via the nav bar
+          never shifts the frame — only the max-width breakpoints differ by the
+          documented rule (list-and-tool pages widen to max-w-5xl at lg, see
+          PayEntryPage.tsx). The Once/Recurring toggle lives in PageHeader's action
+          slot as a compact switch, not its own full-width row. */}
+      <div className="flex-1 px-4 sm:px-6 lg:px-8 py-8 mx-auto w-full max-w-2xl lg:max-w-5xl">
+        <div className="lg:grid lg:grid-cols-[3fr_2fr] lg:gap-8 lg:items-start">
+          <div>
+            {/* Refresh lives on the list's own header below, not here: it refreshes the
+                auto-buys list specifically, not the swap/DCA form, so it belongs next to
+                what it targets. The action row is wrapped at a fixed min-height that
+                matches the list header's row exactly, so the two cards' top edges line
+                up across the two columns regardless of font-size differences. */}
+            <PageHeader
+              title="Swap"
+              className="mb-6"
+              action={
+                <div className="min-h-[2.25rem] flex items-center">
+                  <SegmentedControl
+                    size="sm"
+                    aria-label="Swap mode"
+                    options={[
+                      { value: "once" as Mode, label: "Once", glyph: "⇄" },
+                      { value: "recurring" as Mode, label: "Recurring", glyph: "↻" },
+                    ]}
+                    value={mode}
+                    onChange={setMode}
+                  />
+                </div>
+              }
             />
-          </div>
 
-          {/* ── Once — the existing one-off swap card, untouched internals ──── */}
-          {mode === "once" && (
-            <div className="sm:glass-card sm:rounded-card sm:overflow-hidden">
-              <div className="px-4 pb-6 sm:px-6 sm:pt-6">
-                <div className="space-y-2 transition-opacity duration-200">
+            {/* Once and Recurring are stacked in the same grid cell (both always
+                mounted, only one visible) instead of being conditionally rendered:
+                the container's height is the taller of the two, so toggling modes
+                never resizes or jumps the card, it only cross-fades content. */}
+            <div className="glass-card rounded-card overflow-hidden grid grid-cols-1">
+              <div
+                className={`col-start-1 row-start-1 p-5 sm:p-6 transition-opacity duration-150 ${
+                  mode === "once" ? "opacity-100" : "invisible opacity-0 pointer-events-none"
+                }`}
+              >
+                <div className="space-y-2">
                   <div className={`space-y-2 transition-opacity duration-200 ${busy ? "opacity-40 pointer-events-none" : ""}`}>
 
                   {/* Alt-token tabs */}
@@ -347,7 +377,6 @@ export default function SwapPage() {
                       value={amount}
                       onChange={(e) => { setAmount(e.target.value); setFormError(null); setFailure(null); }}
                       placeholder="0"
-                      autoFocus
                       className="w-full bg-transparent text-4xl font-light text-text-primary outline-none placeholder:text-text-secondary/15 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                     />
                     <div className="flex items-center justify-between mt-3">
@@ -518,13 +547,14 @@ export default function SwapPage() {
                   </p>
                 </div>
               </div>
-            </div>
-          )}
 
-          {/* ── Recurring — DCA auto-buy ─────────────────────────────────────── */}
-          {mode === "recurring" && (
-            <div className="glass-card rounded-card p-5 sm:p-6 mb-8 mx-4 sm:mx-0">
-              <div className="space-y-4">
+              {/* ── Recurring — DCA auto-buy ─────────────────────────────────────── */}
+              <div
+                className={`col-start-1 row-start-1 p-5 sm:p-6 transition-opacity duration-150 ${
+                  mode === "recurring" ? "opacity-100" : "invisible opacity-0 pointer-events-none"
+                }`}
+              >
+                <div className="space-y-4">
                 <div>
                   <h2 className="text-base font-semibold text-text-primary mb-1">Auto-buy (DCA)</h2>
                   <p className="text-text-secondary/50 text-xs">
@@ -602,63 +632,77 @@ export default function SwapPage() {
 
                 {dcaError && <p className="text-sm text-red-400">{dcaError}</p>}
                 <Button onClick={startDca}>Create auto-buy</Button>
+                </div>
               </div>
             </div>
-          )}
+          </div>
 
-          {/* ── Auto-buys already running ────────────────────────────────────── */}
-          {mode === "recurring" && (
-            <div className="px-4 sm:px-0">
-              <h2 className="text-sm font-semibold text-text-primary mb-3">Your auto-buys</h2>
-              {strategiesLoading ? (
-                <div className="glass-card rounded-card p-4">
-                  <div className="h-4 w-40 bg-border rounded animate-pulse mb-3" />
-                  <div className="h-3 w-full bg-border/60 rounded animate-pulse" />
-                </div>
-              ) : activeDca.length === 0 && closedDca.length === 0 ? (
-                <EmptyState
-                  glyph="↻"
-                  primary="No auto-buys yet."
-                  secondary="Set one up above, USDC converted into EURC or cirBTC on a schedule."
-                  className="glass-card rounded-card p-6 text-center"
-                />
-              ) : (
-                <div>
-                  {activeDca.length > 0 && (
-                    <div className="space-y-3 mb-6">
-                      {activeDca.map((s) => {
+          {/* ── Auto-buys already running ────────────────────────────────────────
+              Shown regardless of Once/Recurring mode: it reflects auto-buys that
+              already exist, not the form currently in view, so the right column
+              never sits empty while you're on the Once tab. Header row uses the same
+              min-height + mb-6 as the left column's PageHeader row so the two cards'
+              top edges align on a shared baseline. */}
+          <div className="mt-8 lg:mt-0">
+            <div className="mb-6 min-h-[2.25rem] flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-text-primary">Your auto-buys</h2>
+              <RefreshButton onRefresh={handleRefresh} isRefreshing={isRefreshing} />
+            </div>
+            {strategiesLoading ? (
+              <div className="glass-card rounded-card p-4">
+                <div className="h-4 w-40 bg-border rounded animate-pulse mb-3" />
+                <div className="h-3 w-full bg-border/60 rounded animate-pulse" />
+              </div>
+            ) : strategiesError ? (
+              <EmptyState
+                glyph="!"
+                primary="Couldn't load your auto-buys."
+                secondary="There was a problem reading from the network. Try again in a moment."
+                className="rounded-card border border-white/[0.05] p-6 text-center min-h-[220px] flex flex-col items-center justify-center"
+              />
+            ) : activeDca.length === 0 && closedDca.length === 0 ? (
+              <EmptyState
+                glyph="↻"
+                primary="No auto-buys yet."
+                secondary="Set one up on the left, USDC converted into EURC or cirBTC on a schedule."
+                className="rounded-card border border-white/[0.05] p-6 text-center min-h-[220px] flex flex-col items-center justify-center"
+              />
+            ) : (
+              <div>
+                {activeDca.length > 0 && (
+                  <div className="space-y-3 mb-6">
+                    {activeDca.map((s) => {
+                      const symbol = tokenByAddress(s.tokenOut)?.symbol;
+                      const accent = symbol === "cirBTC" ? "text-amber-400" : "text-cyan-400";
+                      return (
+                        <RecurringCard
+                          key={s.id}
+                          s={s}
+                          target={symbol ?? "token"}
+                          accent={accent}
+                          onAction={(action) => setPendingStrategy({ strategy: s, action })}
+                        />
+                      );
+                    })}
+                  </div>
+                )}
+                {closedDca.length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-widest text-text-secondary/30 mb-3 px-1">
+                      Past
+                    </p>
+                    <div className="glass-card rounded-card px-4">
+                      {closedDca.map((s) => {
                         const symbol = tokenByAddress(s.tokenOut)?.symbol;
                         const accent = symbol === "cirBTC" ? "text-amber-400" : "text-cyan-400";
-                        return (
-                          <RecurringCard
-                            key={s.id}
-                            s={s}
-                            target={symbol ?? "token"}
-                            accent={accent}
-                            onAction={(action) => setPendingStrategy({ strategy: s, action })}
-                          />
-                        );
+                        return <RecurringPastRow key={s.id} s={s} target={symbol ?? "token"} accent={accent} />;
                       })}
                     </div>
-                  )}
-                  {closedDca.length > 0 && (
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-widest text-text-secondary/30 mb-3 px-1">
-                        Past
-                      </p>
-                      <div className="glass-card rounded-card px-4">
-                        {closedDca.map((s) => {
-                          const symbol = tokenByAddress(s.tokenOut)?.symbol;
-                          const accent = symbol === "cirBTC" ? "text-amber-400" : "text-cyan-400";
-                          return <RecurringPastRow key={s.id} s={s} target={symbol ?? "token"} accent={accent} />;
-                        })}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 

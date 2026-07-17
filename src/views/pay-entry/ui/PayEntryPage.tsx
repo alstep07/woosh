@@ -9,6 +9,7 @@ import { Button } from "@/shared/ui/Button";
 import { Input } from "@/shared/ui/Input";
 import { PageHeader } from "@/shared/ui/PageHeader";
 import { EmptyState } from "@/shared/ui/EmptyState";
+import { RefreshButton } from "@/shared/ui/RefreshButton";
 import { SegmentedControl } from "@/shared/ui/SegmentedControl";
 import { Field, FIELD_CLS } from "@/shared/ui/Field";
 import { RecipientRows, type RecipientRow } from "@/shared/ui/RecipientRows";
@@ -54,15 +55,24 @@ function rowsValid(rows: RecipientRow[]): boolean {
 }
 
 /**
- * Send hub: one-off payments (single or batch) and recurring payments (single or
+ * Payments hub: one-off payments (single or batch) and recurring payments (single or
  * payroll), plus the list of recurring payments already running. Money you convert
  * lives under Swap; money you set aside lives under Savings. This page owns everything
  * that leaves the wallet to someone else.
+ *
+ * Layout: a list-and-tool page (a create form plus a "what's already running" list),
+ * same shape as Swap. At lg+ it splits into two columns, form left / list right, so the
+ * list isn't hidden below a scroll on wide viewports; below lg it stacks, form first.
+ * The recurring list is shown regardless of Once/Recurring mode (it reflects existing
+ * commitments, not the form you're currently filling), so the right column never sits
+ * empty. Savings and Invoices are plain single-column list pages and stay narrower
+ * (max-w-2xl throughout) — see the width comment below.
  */
 export default function PayEntryPage() {
   const router = useRouter();
   const [session, setSession] = useState<Session | null>(null);
   const [mode, setMode] = useState<Mode>("once");
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Once — single
   const [value, setValue] = useState("");
@@ -98,7 +108,7 @@ export default function PayEntryPage() {
   const saltRef = useRef<string>("");
   const [pendingStrategy, setPendingStrategy] = useState<{ strategy: OnchainStrategy; action: StrategyAction } | null>(null);
 
-  const { strategies: allStrategies, loading: strategiesLoading, refetch } = useMyStrategies(session?.walletAddress);
+  const { strategies: allStrategies, loading: strategiesLoading, isError: strategiesError, refetch } = useMyStrategies(session?.walletAddress);
   const strategies = allStrategies.filter((s) => s.kind === "payment");
   const active = strategies.filter((s) => s.status === "active" || s.status === "paused" || s.status === "depleted");
   const closed = strategies.filter((s) => s.status === "completed" || s.status === "cancelled");
@@ -152,6 +162,12 @@ export default function PayEntryPage() {
     setRecurringConfirm(true);
   }
 
+  async function handleRefresh() {
+    setIsRefreshing(true);
+    await refetch();
+    setIsRefreshing(false);
+  }
+
   function startPayroll() {
     if (!rowsValid(payrollRows)) { setPayrollError("Enter every recipient and a valid amount"); return; }
     const f = payrollFunding.trim();
@@ -193,25 +209,48 @@ export default function PayEntryPage() {
   return (
     <main className="min-h-screen bg-navy flex flex-col">
       <AppHeader />
-      <div className="flex-1 px-4 sm:px-6 lg:px-8 py-8 max-w-2xl mx-auto w-full">
-        <PageHeader title="Send" className="mb-6" />
+      {/* Content width: list-and-tool pages (Payments, Swap) get a wider max-w-5xl
+          container so a two-column split fits at lg+; plain list pages (Savings,
+          Invoices) stay at max-w-2xl. See the class comment on the grid below. */}
+      <div className="flex-1 px-4 sm:px-6 lg:px-8 py-8 mx-auto w-full max-w-2xl lg:max-w-5xl">
+        {/* Two columns at lg+: form left (more room, 3fr), recurring list right (2fr).
+            Below lg this stacks, form first, list second — the form is the primary
+            "why did I come here" action, the list is supporting context. */}
+        <div className="lg:grid lg:grid-cols-[3fr_2fr] lg:gap-8 lg:items-start">
+          <div>
+            {/* Refresh lives on the list's own header below, not here: it refreshes the
+                recurring-payments list specifically, not the create form, so it belongs
+                next to what it targets. The action row is wrapped at a fixed min-height
+                that matches the list header's row exactly, so the two cards' top edges
+                line up across the two columns regardless of font-size differences. */}
+            <PageHeader
+              title="Payments"
+              className="mb-6"
+              action={
+                <div className="min-h-[2.25rem] flex items-center">
+                  <SegmentedControl
+                    size="sm"
+                    aria-label="Payments mode"
+                    options={[
+                      { value: "once" as Mode, label: "Once", glyph: "→" },
+                      { value: "recurring" as Mode, label: "Recurring", glyph: "↻" },
+                    ]}
+                    value={mode}
+                    onChange={setMode}
+                  />
+                </div>
+              }
+            />
 
-        <div className="mb-6">
-          <SegmentedControl
-            aria-label="Send mode"
-            options={[
-              { value: "once" as Mode, label: "Once", glyph: "→" },
-              { value: "recurring" as Mode, label: "Recurring", glyph: "↻" },
-            ]}
-            value={mode}
-            onChange={setMode}
-          />
-        </div>
-
-        {/* ── Once ─────────────────────────────────────────────────────────── */}
-        {mode === "once" && (
-          <div className="glass-card rounded-card p-5 sm:p-6 mb-8">
-            {!onceMulti ? (
+            {/* Once and Recurring are stacked in the same grid cell (both always
+                mounted, only one visible) instead of being conditionally rendered:
+                the container's height is the taller of the two, so toggling modes
+                never resizes or jumps the card, it only cross-fades content. */}
+            <div className="glass-card rounded-card overflow-hidden grid grid-cols-1">
+            <div className={`col-start-1 row-start-1 p-5 sm:p-6 transition-opacity duration-150 ${
+              mode === "once" ? "opacity-100" : "invisible opacity-0 pointer-events-none"
+            }`}>
+                {!onceMulti ? (
               <div className="space-y-4">
                 <div>
                   <h2 className="text-base font-semibold text-text-primary mb-1">Pay someone</h2>
@@ -228,18 +267,19 @@ export default function PayEntryPage() {
                   error={singleError}
                   autoFocus
                 />
-                <Button onClick={handleSingleSubmit} disabled={!value.trim() || checking}>
-                  {checking ? "Checking…" : "Continue"}
-                </Button>
                 <button
+                  type="button"
                   onClick={() => {
                     setOnceMulti(true);
                     setOnceRows(value.trim() ? [{ to: value.trim(), amount: "" }, { to: "", amount: "" }] : emptyRows());
                   }}
-                  className="w-full text-center text-xs text-text-secondary/40 hover:text-blue-primary transition-colors"
+                  className="w-full flex items-center justify-center gap-1.5 rounded-input border border-dashed border-white/[0.14] py-2.5 text-sm font-medium text-text-secondary/50 hover:text-blue-primary hover:border-blue-primary/30 hover:bg-blue-primary/[0.04] transition-colors"
                 >
-                  + Add recipient (pay several people at once)
+                  <span className="text-base leading-none">+</span> Add recipient
                 </button>
+                <Button onClick={handleSingleSubmit} disabled={!value.trim() || checking}>
+                  {checking ? "Checking…" : "Continue"}
+                </Button>
               </div>
             ) : (
               <div className="space-y-4">
@@ -276,13 +316,13 @@ export default function PayEntryPage() {
                 </button>
               </div>
             )}
-          </div>
-        )}
+            </div>
 
-        {/* ── Recurring ────────────────────────────────────────────────────── */}
-        {mode === "recurring" && (
-          <div className="glass-card rounded-card p-5 sm:p-6 mb-8">
-            {!recurringMulti ? (
+            {/* ── Recurring ──────────────────────────────────────────────────── */}
+            <div className={`col-start-1 row-start-1 p-5 sm:p-6 transition-opacity duration-150 ${
+              mode === "recurring" ? "opacity-100" : "invisible opacity-0 pointer-events-none"
+            }`}>
+                {!recurringMulti ? (
               <div className="space-y-4">
                 <div>
                   <h2 className="text-base font-semibold text-text-primary mb-1">Recurring payment</h2>
@@ -300,6 +340,16 @@ export default function PayEntryPage() {
                     className={FIELD_CLS}
                   />
                 </Field>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRecurringMulti(true);
+                    setPayrollRows(recipient.trim() ? [{ to: recipient.trim(), amount: amount.trim() }, { to: "", amount: "" }] : emptyRows());
+                  }}
+                  className="w-full flex items-center justify-center gap-1.5 rounded-input border border-dashed border-white/[0.14] py-2.5 text-sm font-medium text-text-secondary/50 hover:text-blue-primary hover:border-blue-primary/30 hover:bg-blue-primary/[0.04] transition-colors"
+                >
+                  <span className="text-base leading-none">+</span> Add recipient
+                </button>
                 <Field label="Amount per payment" htmlFor="recurring-amount">
                   <div className="relative">
                     <input
@@ -337,15 +387,6 @@ export default function PayEntryPage() {
                 )}
                 {recurringError && <p className="text-sm text-red-400">{recurringError}</p>}
                 <Button onClick={startRecurringSingle}>Create recurring payment</Button>
-                <button
-                  onClick={() => {
-                    setRecurringMulti(true);
-                    setPayrollRows(recipient.trim() ? [{ to: recipient.trim(), amount: amount.trim() }, { to: "", amount: "" }] : emptyRows());
-                  }}
-                  className="w-full text-center text-xs text-text-secondary/40 hover:text-blue-primary transition-colors"
-                >
-                  + Add recipient (run payroll instead)
-                </button>
               </div>
             ) : (
               <div className="space-y-4">
@@ -391,24 +432,39 @@ export default function PayEntryPage() {
                 </button>
               </div>
             )}
+            </div>
+            </div>
           </div>
-        )}
 
-        {/* ── Recurring payments already running ──────────────────────────── */}
-        {mode === "recurring" && (
-          <div>
-            <h2 className="text-sm font-semibold text-text-primary mb-3">Your recurring payments</h2>
+          {/* ── Recurring payments already running ────────────────────────────
+              Shown regardless of Once/Recurring mode: it reflects payments that
+              already exist, not the form currently in view, so the right column
+              never sits empty while you're on the Once tab. Header row uses the same
+              min-height + mb-6 as the left column's PageHeader row so the two cards'
+              top edges align on a shared baseline. */}
+          <div className="mt-8 lg:mt-0">
+            <div className="mb-6 min-h-[2.25rem] flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-text-primary">Your recurring payments</h2>
+              <RefreshButton onRefresh={handleRefresh} isRefreshing={isRefreshing} />
+            </div>
             {strategiesLoading ? (
               <div className="glass-card rounded-card p-4">
                 <div className="h-4 w-40 bg-border rounded animate-pulse mb-3" />
                 <div className="h-3 w-full bg-border/60 rounded animate-pulse" />
               </div>
+            ) : strategiesError ? (
+              <EmptyState
+                glyph="!"
+                primary="Couldn't load your recurring payments."
+                secondary="There was a problem reading from the network. Try again in a moment."
+                className="rounded-card border border-white/[0.05] p-6 text-center min-h-[220px] flex flex-col items-center justify-center"
+              />
             ) : active.length === 0 && closed.length === 0 ? (
               <EmptyState
                 glyph="↻"
                 primary="No recurring payments yet."
-                secondary="Set one up above, a fixed amount to one person or a payroll to several, on a schedule."
-                className="glass-card rounded-card p-6 text-center"
+                secondary="Set one up on the left, a fixed amount to one person or a payroll to several, on a schedule."
+                className="rounded-card border border-white/[0.05] p-6 text-center min-h-[220px] flex flex-col items-center justify-center"
               />
             ) : (
               <div>
@@ -449,7 +505,7 @@ export default function PayEntryPage() {
               </div>
             )}
           </div>
-        )}
+        </div>
       </div>
       <Footer />
 
