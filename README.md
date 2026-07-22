@@ -2,7 +2,7 @@
 
 > Send a link. Get paid in seconds.
 
-**Live on Arc Testnet: [wooshapp.xyz](https://wooshapp.xyz)** — a working app, not a mockup.
+**Live on Arc Testnet: [wooshapp.xyz](https://wooshapp.xyz)**
 
 USDC payment platform for humans and AI agents. Built on [Arc](https://arc.network), the only chain where USDC is the native gas token, no ETH, no second token, ever.
 
@@ -15,7 +15,7 @@ USDC payment platform for humans and AI agents. Built on [Arc](https://arc.netwo
 - **Woosh Agent:** natural-language chat, *"send $25 to @sara"*, *"request $80 from @mike"*, *"buy bitcoin for 10 USDC"* → confirmation → done
 - **Invoices:** create an invoice, share the link, get paid in USDC. Stored onchain, nothing in the URL can be tampered with
 - **Automations:** recurring USDC payments and payroll (one-off batch or on a schedule) from Send, DCA auto-buys (cirBTC, EURC) from Swap. Set once, runs on schedule, no PIN each time
-- **Savings:** an onchain vault for USDC/EURC/cirBTC, separate from your spendable balance. Deposit and withdraw anytime, or turn on auto-sweep to move everything above a wallet minimum in automatically
+- **Savings:** an onchain USDC vault, separate from your spendable balance. Deposit and withdraw anytime, or turn on auto-sweep to move everything above a wallet minimum in automatically. Yield on the balance is planned
 
 ---
 
@@ -59,7 +59,7 @@ Send, Swap and Savings as distinct surfaces; the standalone Automations page is 
 
 - **Send (`/pay`):** single, batch, recurring and payroll USDC payments. One-off batch sends go through `WooshBatchPay`; recurring payroll lives in `WooshStrategyRegistry` (registry v2, adds memo + batch payments + vault delivery)
 - **Swap (`/dashboard/swap`):** one-off swaps and recurring DCA auto-buys
-- **Savings (`/dashboard/savings`):** a real `WooshSavingsVault` contract holding USDC/EURC/cirBTC separate from the spendable balance. Deposit and withdraw anytime, no lockup. **Funding methods:** manual deposit (always on) and **auto-sweep** (move everything above an owner-set wallet minimum into the vault on a schedule). More funding methods (e.g. DCA delivering straight to the vault) are planned but not yet shipped
+- **Savings (`/dashboard/savings`):** a `WooshSavingsVault` contract, separate from the spendable balance. Deposits are USDC (the contract can custody EURC/cirBTC, but deposit is USDC-only today). Withdraw anytime, no lockup. **Funding methods:** manual deposit (always on) and **auto-sweep** (move everything above an owner-set wallet minimum into the vault on a schedule). Planned, not yet shipped: yield on the balance (USYC or similar, undecided), multi-asset deposits, and DCA delivering straight to the vault
 - Agent tools cover it all: `savings_deposit`, `savings_withdraw`, `savings_sweep_setup`, `send_batch_payment`, `create_payroll`
 
 ---
