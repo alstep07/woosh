@@ -2,21 +2,24 @@
 
 > Send a link. Get paid in seconds.
 
+**Live on Arc Testnet: [wooshapp.xyz](https://wooshapp.xyz)** — a working app, not a mockup.
+
 USDC payment platform for humans and AI agents. Built on [Arc](https://arc.network), the only chain where USDC is the native gas token, no ETH, no second token, ever.
 
 ---
 
 ## What it does
 
-- **Wallet:** sign up with email → Circle embedded wallet + human-readable payment link (`woosh.app/pay/yourname`)
+- **Wallet:** sign up with email → Circle embedded wallet + human-readable payment link (`wooshapp.xyz/pay/yourname`)
 - **Transfers:** send and receive USDC by name or link, instant, fees paid in USDC
 - **Woosh Agent:** natural-language chat, *"send $25 to @sara"*, *"request $80 from @mike"*, *"buy bitcoin for 10 USDC"* → confirmation → done
 - **Invoices:** create an invoice, share the link, get paid in USDC. Stored onchain, nothing in the URL can be tampered with
-- **Strategies:** recurring USDC payments, DCA auto-buys (cirBTC, EURC) and portfolio allocations (keep a target percent mix, from a deposit or by sweeping the wallet balance above a threshold). Set once, runs on schedule, no PIN each time
+- **Automations:** recurring USDC payments and payroll (one-off batch or on a schedule) from Send, DCA auto-buys (cirBTC, EURC) from Swap. Set once, runs on schedule, no PIN each time
+- **Savings:** an onchain vault for USDC/EURC/cirBTC, separate from your spendable balance. Deposit and withdraw anytime, or turn on auto-sweep to move everything above a wallet minimum in automatically
 
 ---
 
-## Shipped (v3.0)
+## Shipped (v3.2)
 
 ### V1: Email wallet + payment links
 Email OTP sign-in. Circle User-Controlled embedded wallet. Payment link at `/pay/0x...`.
@@ -48,14 +51,16 @@ Automated onchain strategies, no PIN after setup.
 - Recurring payments manage from `/pay` (Send), auto-buys from `/dashboard/swap` (Swap). Agent tools: `create_strategy`, `get_strategies`
 - Runs via Vercel Cron (`/api/cron/execute-strategies`), idempotent, daily granularity on free tier
 
-### V3.1: Portfolio strategies (target allocation)
-Keep a target percent mix across USDC, EURC and cirBTC, rebalanced on schedule.
+### V3.1: Portfolio strategies (retired)
+`Kind.Portfolio` was a target-percent allocation across USDC/EURC/cirBTC (weighted legs in basis points, deposit or sweep funded). It has been **retired** in favor of the V3.2 savings vault: no new portfolios can be created anywhere (UI removed, chat declines, `/api/wallet/create-strategy` rejects `kind: portfolio`). The onchain mechanism and cron execution path remain so any pre-existing plans keep running, but the feature is not surfaced in the product. Use the savings vault (deposit or auto-sweep) or a plain single-asset DCA instead.
 
-- New `Kind.Portfolio` in `WooshStrategyRegistry`: weighted legs in basis points (sum 10000), USDC leg = `address(0)`
-- **Deposit mode:** a custodied budget allocates a fixed USDC amount per period; the USDC share goes straight from the contract to the owner, only the swap share touches the executor
-- **Sweep mode:** no deposit; the strategy allocates whatever the wallet holds above an owner-set threshold, pulled via a one-time allowance on the USDC ERC-20 precompile. The threshold and a per-period cap are enforced onchain; only the non-USDC share is ever pulled
-- Cron quotes every leg before moving funds (all-or-skip) and refunds failed legs by exact amount
-- Create from the Portfolio tab in the strategies modal or via chat ("keep 50% usdc, 30% bitcoin, 20% euro")
+### V3.2: Product split + Savings vault
+Send, Swap and Savings as distinct surfaces; the standalone Automations page is gone.
+
+- **Send (`/pay`):** single, batch, recurring and payroll USDC payments. One-off batch sends go through `WooshBatchPay`; recurring payroll lives in `WooshStrategyRegistry` (registry v2, adds memo + batch payments + vault delivery)
+- **Swap (`/dashboard/swap`):** one-off swaps and recurring DCA auto-buys
+- **Savings (`/dashboard/savings`):** a real `WooshSavingsVault` contract holding USDC/EURC/cirBTC separate from the spendable balance. Deposit and withdraw anytime, no lockup. **Funding methods:** manual deposit (always on) and **auto-sweep** (move everything above an owner-set wallet minimum into the vault on a schedule). More funding methods (e.g. DCA delivering straight to the vault) are planned but not yet shipped
+- Agent tools cover it all: `savings_deposit`, `savings_withdraw`, `savings_sweep_setup`, `send_batch_payment`, `create_payroll`
 
 ---
 
@@ -84,6 +89,8 @@ Keep a target percent mix across USDC, EURC and cirBTC, rebalanced on schedule.
 | `WooshSlugRegistry` | `NEXT_PUBLIC_SLUG_REGISTRY_ADDRESS` |
 | `WooshInvoiceRegistry` | `NEXT_PUBLIC_INVOICE_REGISTRY_ADDRESS` |
 | `WooshStrategyRegistry` | `NEXT_PUBLIC_STRATEGY_REGISTRY_ADDRESS` |
+| `WooshSavingsVault` | `NEXT_PUBLIC_SAVINGS_VAULT_ADDRESS` |
+| `WooshBatchPay` | `NEXT_PUBLIC_BATCH_PAY_ADDRESS` |
 | USDC (native) | `0x3600000000000000000000000000000000000000` |
 | EURC | `0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a` |
 | cirBTC | `0xf0C4a4CE82A5746AbAAd9425360Ab04fbBA432BF` (testnet) |
@@ -121,6 +128,9 @@ NEXT_PUBLIC_CIRCLE_APP_ID=
 NEXT_PUBLIC_SLUG_REGISTRY_ADDRESS=
 NEXT_PUBLIC_INVOICE_REGISTRY_ADDRESS=
 NEXT_PUBLIC_STRATEGY_REGISTRY_ADDRESS=
+NEXT_PUBLIC_SAVINGS_VAULT_ADDRESS=
+NEXT_PUBLIC_BATCH_PAY_ADDRESS=
+NEXT_PUBLIC_EURC_ADDRESS=
 NEXT_PUBLIC_CIRBTC_ADDRESS=
 
 # Strategies executor (server only)
@@ -157,6 +167,12 @@ forge create contracts/src/WooshStrategyRegistry.sol:WooshStrategyRegistry \
   --rpc-url https://rpc.testnet.arc.network --private-key $PRIVATE_KEY
 # then: POST /api/admin/provision-executor → set EXECUTOR_* →
 #       cast send <addr> "setExecutor(address)" $EXECUTOR_ADDRESS → fund executor with USDC
+
+forge create contracts/src/WooshSavingsVault.sol:WooshSavingsVault \
+  --rpc-url https://rpc.testnet.arc.network --private-key $PRIVATE_KEY
+
+forge create contracts/src/WooshBatchPay.sol:WooshBatchPay \
+  --rpc-url https://rpc.testnet.arc.network --private-key $PRIVATE_KEY
 ```
 
 ---
@@ -167,5 +183,5 @@ forge create contracts/src/WooshStrategyRegistry.sol:WooshStrategyRegistry \
 - **UCW, not custodial:** user holds keys encrypted by PIN; Woosh never sees the secret
 - **Native USDC on Arc:** 18 decimals; all `parseUnits` / `formatUnits` calls use `18`
 - **challenge/execute pattern:** every onchain action goes: server creates challenge → client `sdk.execute(challengeId)` → PIN iframe → done
-- **Agentic loop:** `/api/chat` runs a manual tool-use loop (max 4 iters) over 9 tools; action tools (`send_payment`, `create_payment_request`, `swap`, `create_strategy`) always return a `pendingAction` confirmation card, never auto-execute. The agent understands aliases ("bitcoin" = cirBTC, "euro" = EURC) and sees action outcomes (completed/cancelled) in its context
+- **Agentic loop:** `/api/chat` runs a manual tool-use loop (max 4 iters) over 15 tools; action tools (`send_payment`, `send_batch_payment`, `create_payment_request`, `swap`, `create_strategy`, `create_payroll`, `savings_deposit`, `savings_withdraw`, `savings_sweep_setup`) always return a `pendingAction` confirmation card, never auto-execute. The agent understands aliases ("bitcoin" = cirBTC, "euro" = EURC) and sees action outcomes (completed/cancelled) in its context
 - **Every feature ships with a chat tool** so the agent can guide the user or execute on their behalf

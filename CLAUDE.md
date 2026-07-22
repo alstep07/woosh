@@ -23,7 +23,7 @@ integration (UCW, CCTP, StableFX, USYC). "No second token ever" is the killer fe
 | V2b | ✅ | Direct payment execution from chat (PIN inline) |
 | V2.2 | ✅ | Payment requests / invoices, onchain via `WooshInvoiceRegistry` (`/i/[id]` links, "My invoices" list, chat tools) |
 | V3.0 | ✅ | Automated strategies, onchain via `WooshStrategyRegistry`: recurring USDC payments + DCA auto-buys (EURC/cirBTC). DCW executor (no PIN), Vercel Cron, swaps via Synthra SynRoute API. Managed from Send (`/pay`) and Swap (`/dashboard/swap`), chat tools. |
-| V3.1 | 🔄 | Portfolio strategies (hackathon DeFi track): target percent allocation across USDC/EURC/cirBTC. `Kind.Portfolio` is now frozen (no new creation in UI, existing plans still manageable from `/dashboard/savings`) in favor of the V3.2 savings vault. |
+| V3.1 | ⛔ | Portfolio strategies (target percent allocation across USDC/EURC/cirBTC) were explored, then **retired** in favor of the V3.2 savings vault. `Kind.Portfolio` creation is blocked everywhere (UI removed, chat declines, `/api/wallet/create-strategy` rejects it) and not surfaced in the product. The onchain mechanism + cron execution path remain only so any pre-existing plans keep running. |
 | V3.2 | 🔄 | Product split: Send (`/pay`, once/batch/recurring/payroll payments), Swap (`/dashboard/swap`, once/recurring DCA), Savings (`/dashboard/savings`, `WooshSavingsVault` deposit/withdraw). The standalone Automations page is gone, recurring lists moved onto Send/Swap. `WooshBatchPay` for one-off batch sends, `createBatchPayment`/memo/`deliverToVault` added to `WooshStrategyRegistry` (registry v2). See `memory/savings-vault-roadmap.md` for the phased plan. |
 
 ---
